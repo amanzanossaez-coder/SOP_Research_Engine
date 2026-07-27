@@ -1,0 +1,6 @@
+print("=" * 50)
+print("SOP Research Engine")
+print("Versión 0.1")
+print("=" * 50)
+print()
+print("✅ Motor iniciado correctamente")
