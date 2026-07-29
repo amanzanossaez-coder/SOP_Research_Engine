@@ -1,0 +1,175 @@
+RUN.PY
+SnapshotEngine cargado desde:
+/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/engine/snapshot_engine.py
+
+
+========== POSIBLES COLUMNAS MACRO ==========
+
+CPI
+Rate GS10
+Earnings
+Earnings.1
+Yield
+
+=============================================
+
+======================================================================
+SOP RESEARCH ENGINE
+======================================================================
+
+DECISION ENGINE
+----------------------------------------------------------------------
+Zona mercado        : CARO
+Retorno esperado    : 74.53%
+Potencial máximo    : 295.52%
+Peor caso histórico : -5.34%
+Confianza           : BAJA
+
+DEBUG SPEED
+----------------------------------------------------------------------
+Snapshot drawdown : 0.00%
+Snapshot duration : 0
+Snapshot speed    : None
+
+TOP EPISODIOS SIMILARES
+----------------------------------------------------------------------
+ 75.7% | 2025.02 -> 2025.04 | -11.08%
+    Event (76.9%)
+       - Drawdown      63.1%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (68.4%)
+       - CAPE          56.3%
+       - Trend 3Y      69.6%
+       - Volatility    91.6%
+
+    Outcome (100.0%)
+       - Recovery     100.0%
+
+ 73.2% | 1998.07 -> 1998.09 | -11.75%
+    Event (75.5%)
+       - Drawdown      60.8%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (64.2%)
+       - CAPE          60.8%
+       - Trend 3Y      51.7%
+       - Volatility    83.4%
+
+    Outcome (100.0%)
+       - Recovery     100.0%
+
+ 71.4% | 2018.09 -> 2018.12 | -11.52%
+    Event (76.0%)
+       - Drawdown      61.6%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (64.1%)
+       - CAPE          34.6%
+       - Trend 3Y      92.3%
+       - Volatility    95.0%
+
+    Outcome (81.7%)
+       - Recovery      81.7%
+
+ 63.6% | 1880.03 -> 1880.05 | -10.00%
+    Event (79.2%)
+       - Drawdown      66.7%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (39.4%)
+       - CAPE           0.0%
+       - Trend 3Y      57.5%
+       - Volatility   100.0%
+
+    Outcome (98.3%)
+       - Recovery      98.3%
+
+ 57.7% | 1966.01 -> 1966.10 | -17.35%
+    Event (62.3%)
+       - Drawdown      42.2%
+       - Duration      95.8%
+       - Speed          0.0%
+
+    Context (47.5%)
+       - CAPE           0.0%
+       - Trend 3Y      93.1%
+       - Volatility    97.1%
+
+    Outcome (80.0%)
+       - Recovery      80.0%
+
+ 57.5% | 2020.01 -> 2020.03 | -19.09%
+    Event (60.2%)
+       - Drawdown      36.4%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (44.5%)
+       - CAPE          17.2%
+       - Trend 3Y      86.6%
+       - Volatility    56.7%
+
+    Outcome (98.3%)
+       - Recovery      98.3%
+
+ 56.0% | 1990.06 -> 1990.10 | -14.78%
+    Event (69.2%)
+       - Drawdown      50.7%
+       - Duration     100.0%
+       - Speed          0.0%
+
+    Context (36.3%)
+       - CAPE           0.0%
+       - Trend 3Y      58.4%
+       - Volatility    86.8%
+
+    Outcome (81.7%)
+       - Recovery      81.7%
+
+ 54.8% | 1959.07 -> 1960.10 | -10.06%
+    Event (60.3%)
+       - Drawdown      66.5%
+       - Duration      50.0%
+       - Speed          0.0%
+
+    Context (42.6%)
+       - CAPE           0.0%
+       - Trend 3Y      71.5%
+       - Volatility    98.8%
+
+    Outcome (81.7%)
+       - Recovery      81.7%
+
+ 50.6% | 2021.12 -> 2022.10 | -20.29%
+    Event (39.0%)
+       - Drawdown      32.4%
+       - Duration      50.0%
+       - Speed          0.0%
+
+    Context (54.9%)
+       - CAPE          28.6%
+       - Trend 3Y      84.2%
+       - Volatility    78.3%
+
+    Outcome (80.0%)
+       - Recovery      80.0%
+
+ 42.8% | 1961.12 -> 1962.06 | -22.46%
+    Event (36.0%)
+       - Drawdown      25.1%
+       - Duration      54.2%
+       - Speed          0.0%
+
+    Context (40.2%)
+       - CAPE           0.0%
+       - Trend 3Y      85.1%
+       - Volatility    75.6%
+
+    Outcome (80.0%)
+       - Recovery      80.0%
+

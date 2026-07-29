@@ -1,0 +1,261 @@
+from core.constants import (
+    SIMILARITY_SCALES,
+    SIMILARITY_WEIGHTS,
+)
+from core.similarity_metrics import (
+    LinearMetric,
+    PercentileMetric,
+)
+from models.explanation import (
+    Explanation,
+    ExplanationItem,
+)
+from models.similarity import Similarity
+
+
+class SimilarityEngine:
+
+    def __init__(self, dataset):
+
+        self.dataset = dataset
+
+        self.drawdown_metric = LinearMetric(
+            SIMILARITY_SCALES["drawdown"]
+        )
+
+        self.duration_metric = LinearMetric(
+            SIMILARITY_SCALES["duration"]
+        )
+
+        self.speed_metric = LinearMetric(
+            SIMILARITY_SCALES["speed"]
+        )
+
+        self.recovery_metric = LinearMetric(
+            SIMILARITY_SCALES["recovery"]
+        )
+
+        self.cape_metric = PercentileMetric(
+
+            episode.context.cape
+
+            for episode in dataset.episodes
+
+            if (
+                episode.context is not None
+                and episode.context.cape is not None
+            )
+
+        )
+
+        self.pre_crash_return_3y_metric = LinearMetric(
+            SIMILARITY_SCALES["pre_crash_return_3y"]
+        )
+
+        self.volatility_metric = LinearMetric(
+            SIMILARITY_SCALES["volatility"]
+        )
+
+    def _weighted_score(self, scores):
+
+        active = {
+            name: value
+            for name, value in scores.items()
+            if value is not None
+        }
+
+        if not active:
+            return 0.0
+
+        total_weight = sum(
+            SIMILARITY_WEIGHTS[name]
+            for name in active
+        )
+
+        result = 0.0
+
+        for name, value in active.items():
+
+            result += (
+                value
+                * SIMILARITY_WEIGHTS[name]
+                / total_weight
+            )
+
+        return result
+
+    def compare(self, snapshot):
+
+        results = []
+
+        snapshot_speed = None
+
+        if (
+            snapshot.duration_months is not None
+            and snapshot.duration_months > 0
+        ):
+            snapshot_speed = (
+                abs(snapshot.drawdown)
+                / snapshot.duration_months
+            )
+
+        snapshot_context = snapshot.context
+
+        for episode in self.dataset.episodes:
+
+            episode_context = episode.context
+
+            drawdown_score = self.drawdown_metric.compare(
+                snapshot.drawdown,
+                episode.drawdown,
+            )
+
+            duration_score = self.duration_metric.compare(
+                snapshot.duration_months,
+                episode.duration_months,
+            )
+
+            speed_score = self.speed_metric.compare(
+                snapshot_speed,
+                episode.speed_down,
+            )
+
+            cape_score = self.cape_metric.compare(
+                snapshot_context.cape,
+                episode_context.cape,
+            )
+
+            pre_crash_return_3y_score = (
+                self.pre_crash_return_3y_metric.compare(
+                    snapshot_context.pre_crash_return_3y,
+                    episode_context.pre_crash_return_3y,
+                )
+            )
+
+            volatility_score = (
+                self.volatility_metric.compare(
+                    snapshot_context.pre_crash_volatility_1y,
+                    episode_context.pre_crash_volatility_1y,
+                )
+            )
+
+            recovery_score = self.recovery_metric.compare(
+                0,
+                episode.recovery_months,
+            )
+
+            event_score = self._weighted_score(
+                {
+                    "drawdown": drawdown_score,
+                    "duration": duration_score,
+                    "speed": speed_score,
+                }
+            )
+
+            context_score = self._weighted_score(
+                {
+                    "cape": cape_score,
+                    "pre_crash_return_3y": pre_crash_return_3y_score,
+                    "volatility": volatility_score,
+                }
+            )
+
+            outcome_score = self._weighted_score(
+                {
+                    "recovery": recovery_score,
+                }
+            )
+
+            score = self._weighted_score(
+                {
+                    "drawdown": drawdown_score,
+                    "duration": duration_score,
+                    "speed": speed_score,
+                    "cape": cape_score,
+                    "pre_crash_return_3y": pre_crash_return_3y_score,
+                    "volatility": volatility_score,
+                    "recovery": recovery_score,
+                }
+            )
+
+            event = Explanation(
+                title="Event",
+                score=event_score,
+                items=[
+                    ExplanationItem(
+                        name="Drawdown",
+                        score=drawdown_score or 0.0,
+                    ),
+                    ExplanationItem(
+                        name="Duration",
+                        score=duration_score or 0.0,
+                    ),
+                    ExplanationItem(
+                        name="Speed",
+                        score=speed_score or 0.0,
+                    ),
+                ],
+            )
+
+            context = Explanation(
+                title="Context",
+                score=context_score,
+                items=[
+                    ExplanationItem(
+                        name="CAPE",
+                        score=cape_score or 0.0,
+                    ),
+                    ExplanationItem(
+                        name="Trend 3Y",
+                        score=pre_crash_return_3y_score or 0.0,
+                    ),
+                    ExplanationItem(
+                        name="Volatility",
+                        score=volatility_score or 0.0,
+                    ),
+                ],
+            )
+
+            outcome = Explanation(
+                title="Outcome",
+                score=outcome_score,
+                items=[
+                    ExplanationItem(
+                        name="Recovery",
+                        score=recovery_score or 0.0,
+                    ),
+                ],
+            )
+
+            results.append(
+                Similarity(
+                    episode=episode,
+                    score=score,
+                    event=event,
+                    context=context,
+                    outcome=outcome,
+                    drawdown_score=drawdown_score or 0.0,
+                    duration_score=duration_score or 0.0,
+                    speed_score=speed_score or 0.0,
+                    cape_score=cape_score or 0.0,
+                    pre_crash_return_3y_score=pre_crash_return_3y_score or 0.0,
+                    volatility_score=volatility_score or 0.0,
+                    recovery_score=recovery_score or 0.0,
+                )
+            )
+
+        results.sort(
+            key=lambda x: x.score,
+            reverse=True,
+        )
+
+        return results
+
+    def top(self, snapshot, n=10, exclude_recent_months=24):
+        # RE-004: excluye episodios cuyo peak_date esté en los últimos 24 meses
+        cutoff = snapshot.date - (exclude_recent_months / 12)
+        results = [
+            s for s in self.compare(snapshot)
+            if s.episode.peak_date < cutoff
+        ]
+        return results[:n]
