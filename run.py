@@ -84,9 +84,18 @@ def main():
             s.outcome,
         ):
 
-            for line in explanation.lines():
+            print(
+                f"    {explanation.title}"
+                f" ({explanation.score:.1%})"
+            )
 
-                print(f"    {line}")
+            for item in explanation.items:
+
+                print(
+                    f"      "
+                    f"{item.name:<15}"
+                    f"{item.score:.1%}"
+                )
 
             print()
 

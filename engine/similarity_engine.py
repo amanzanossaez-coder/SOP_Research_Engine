@@ -6,9 +6,9 @@ from core.similarity_metrics import (
     LinearMetric,
     PercentileMetric,
 )
-from models.explanation import (
-    Explanation,
-    ExplanationItem,
+from models.similarity_explanation import (
+    SimilarityExplanation,
+    SimilarityExplanationItem,
 )
 from models.similarity import Similarity
 
@@ -178,49 +178,49 @@ class SimilarityEngine:
                 }
             )
 
-            event = Explanation(
+            event = SimilarityExplanation(
                 title="Event",
                 score=event_score,
                 items=[
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Drawdown",
                         score=drawdown_score or 0.0,
                     ),
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Duration",
                         score=duration_score or 0.0,
                     ),
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Speed",
                         score=speed_score or 0.0,
                     ),
                 ],
             )
 
-            context = Explanation(
+            context = SimilarityExplanation(
                 title="Context",
                 score=context_score,
                 items=[
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="CAPE",
                         score=cape_score or 0.0,
                     ),
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Trend 3Y",
                         score=pre_crash_return_3y_score or 0.0,
                     ),
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Volatility",
                         score=volatility_score or 0.0,
                     ),
                 ],
             )
 
-            outcome = Explanation(
+            outcome = SimilarityExplanation(
                 title="Outcome",
                 score=outcome_score,
                 items=[
-                    ExplanationItem(
+                    SimilarityExplanationItem(
                         name="Recovery",
                         score=recovery_score or 0.0,
                     ),

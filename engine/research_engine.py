@@ -1,39 +1,48 @@
-from core.dataset_builder import DatasetBuilder
 from engine.snapshot_engine import SnapshotEngine
 from engine.similarity_engine import SimilarityEngine
 from engine.evidence_engine import EvidenceEngine
+from engine.explanation_engine import ExplanationEngine
 from engine.assessment_engine import AssessmentEngine
 
 
 class ResearchEngine:
     """
-    Orquestador del Research Engine.
+    Orchestrates the complete research pipeline.
 
-    Coordina la ejecución del pipeline completo respetando
-    los contratos definidos por el SOP.
+    The Research Engine never manipulates DataFrames directly.
+    It coordinates the domain engines.
     """
 
     def __init__(self):
 
-        self.dataset_builder = DatasetBuilder()
         self.snapshot_engine = SnapshotEngine()
         self.evidence_engine = EvidenceEngine()
+        self.explanation_engine = ExplanationEngine()
         self.assessment_engine = AssessmentEngine()
 
-    def run(self, dataframe):
+    def run(self, dataset):
 
-        # Contrato 1
-        dataset = self.dataset_builder.build(dataframe)
+        # 1. Build current market snapshot
 
-        # Contrato 2
-        snapshot = self.snapshot_engine.build(dataframe)
+        snapshot = self.snapshot_engine.build(dataset)
 
-        # Contrato 3
+        # 2. Find similar historical episodes
+
         similarity_engine = SimilarityEngine(dataset)
         similarities = similarity_engine.compare(snapshot)
 
-        # De momento el resto del pipeline permanece igual.
-        # En próximas iteraciones sustituiremos esta parte
-        # por los nuevos contratos.
+        # 3. Generate historical evidence
 
-        return similarities
+        evidence = self.evidence_engine.build(similarities)
+
+        # 4. Generate explanation
+
+        explanation = self.explanation_engine.build(similarities)
+
+        # Assessment and inference will be incorporated
+        # in future iterations.
+
+        return {
+            "evidence": evidence,
+            "explanation": explanation,
+        }

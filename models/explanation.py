@@ -1,45 +1,34 @@
-from dataclasses import dataclass, field
+from __future__ import annotations
 
-
-@dataclass
-class ExplanationItem:
-
-    # Nombre de la dimensión
-
-    name: str
-
-    # Score normalizado (0-1)
-
-    score: float
+from dataclasses import dataclass
 
 
 @dataclass
 class Explanation:
+    """
+    Human-readable explanation of the historical evidence.
 
-    # Nombre del bloque
+    This object exists only to explain
+    how the Research Engine reached its evidence.
 
-    title: str
+    It never contains recommendations
+    or portfolio decisions.
+    """
 
-    # Score agregado
+    # Historical sample
 
-    score: float
+    sample_size: int
 
-    # Explicación detallada
+    # Similar historical episodes
 
-    items: list[ExplanationItem] = field(default_factory=list)
+    top_matches: list["Similarity"]
 
-    def lines(self) -> list[str]:
+    # Dimensions ranked by importance
 
-        lines = []
+    strongest_dimensions: list[tuple[str, float]]
 
-        lines.append(
-            f"{self.title} ({self.score:.1%})"
-        )
+    weakest_dimensions: list[tuple[str, float]]
 
-        for item in self.items:
+    # Optional observations
 
-            lines.append(
-                f"   - {item.name:<12} {item.score:6.1%}"
-            )
-
-        return lines
+    notes: list[str]

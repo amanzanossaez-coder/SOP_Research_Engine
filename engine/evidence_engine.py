@@ -4,22 +4,21 @@ from models.evidence import Evidence
 
 
 class EvidenceEngine:
+    """
+    Builds objective historical evidence from similar episodes.
+    """
 
-    def __init__(self, matches):
-
-        self.matches = matches
-
-    def build(self):
+    def build(self, matches):
 
         returns = [
             s.episode.future_return_5y
-            for s in self.matches
+            for s in matches
             if s.episode.future_return_5y is not None
         ]
 
         recoveries = [
             s.episode.recovery_months
-            for s in self.matches
+            for s in matches
             if s.episode.recovery_months is not None
         ]
 
@@ -31,7 +30,12 @@ class EvidenceEngine:
 
         return Evidence(
 
-            matches=self.matches,
+            # Historical sample
+
+            matches=matches,
+            episodes_count=len(matches),
+
+            # Return statistics
 
             average_return_5y=(
                 mean(returns)
@@ -57,6 +61,8 @@ class EvidenceEngine:
                 len(positive) / len(returns)
                 if returns else 0.0
             ),
+
+            # Recovery statistics
 
             average_recovery_months=(
                 mean(recoveries)
