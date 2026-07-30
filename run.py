@@ -99,6 +99,39 @@ def main():
 
             print()
 
+    print("=" * 70)
+    print("SIMILARITY DIAGNOSTICS")
+    print("=" * 70)
+
+    n = len(similares)
+
+    if n > 0:
+
+        def avg(attribute):
+            return (
+                sum(getattr(s, attribute) for s in similares)
+                / n
+            )
+
+        diagnostics = [
+            ("Drawdown", avg("drawdown_score")),
+            ("Duration", avg("duration_score")),
+            ("Speed", avg("speed_score")),
+            ("CAPE", avg("cape_score")),
+            ("Trend 3Y", avg("pre_crash_return_3y_score")),
+            ("Volatility", avg("volatility_score")),
+            ("Recovery", avg("recovery_score")),
+        ]
+
+        print()
+
+        for name, value in diagnostics:
+
+            print(
+                f"{name:<15}"
+                f"{value:>8.1%}"
+            )
+
 
 if __name__ == "__main__":
 
