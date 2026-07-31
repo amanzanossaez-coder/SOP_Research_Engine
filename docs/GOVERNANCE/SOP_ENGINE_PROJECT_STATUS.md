@@ -1,7 +1,7 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.1\
-**Status:** Core Stable
+**Version:** 1.2\
+**Status:** Core Stable — Temporal Layer In Progress
 
 ------------------------------------------------------------------------
 
@@ -18,6 +18,20 @@ The SOP (Sistema Operativo Patrimonial) is the product.
 
 The Constitution and the governance protocols decide how that evidence
 is used.
+
+------------------------------------------------------------------------
+
+# Source of Truth Declaration (RE-DOC-001)
+
+This document is the single official source of truth for the status
+of the Research Engine.
+
+`docs/ROADMAP.md` and `docs/PROJECT_STATE.md` are **not** authoritative.
+They predate this declaration, contain roadmap information that no
+longer matches this document, and are marked pending consolidation.
+They should not be updated as a substitute for this file. A future,
+dedicated iteration will merge or retire them — not before the
+Observable Universe block (RE-023.x) is stabilized.
 
 ------------------------------------------------------------------------
 
@@ -100,15 +114,25 @@ cleaner design is possible.
 
 Changes require objective justification.
 
+## Exceptions invoked
+
+-   **RE-021.** Similarity Engine (frozen) was modified to remove
+    `recovery` (an Outcome variable) from the global similarity
+    score. Justification: objective evidence of a data-leakage
+    defect — Outcome participating in episode selection biased the
+    resulting evidence. Authorized under "a functional defect
+    exists."
+
 ------------------------------------------------------------------------
 
 # Component Status
 
   Component           Status
-  ------------------- ---------
+  ------------------- ------------------------------------------
   Dataset Engine      Stable
   Snapshot Engine     Stable
-  Similarity Engine   Stable
+  Similarity Engine   Stable (RE-021 exception — see Frozen Core Policy)
+  Observable Universe In progress (RE-023.1–023.4 done, not wired)
   Evidence Engine     v1
   Assessment Engine   v1
   Inference Engine    Planned
@@ -185,6 +209,52 @@ Confidence is part of the Evidence object.
 
 No standalone Confidence Engine will exist.
 
+## RE-021
+
+Outcome (`recovery`) removed from the global similarity score in
+`SimilarityEngine`. Recovery remains under Outcome, descriptive only
+— it must never influence which episodes are selected as matches.
+See Frozen Core Policy exception above.
+
+## RE-022
+
+`SimilarityEngine.__init__` accepts an optional `cape_metric`
+parameter, so a calibration built from observable episodes only can
+be injected instead of recalculating over the full canonical
+Dataset. Not yet wired to any caller.
+
+## RE-023.1 — ObservableEpisode
+
+New, independent type (does not inherit from `Episode`) representing
+an episode as it could be observed at a given instant. Deliberately
+not a subtype of `Episode`, to make it impossible for a canonical
+and an observable episode to be substituted for one another by
+accident.
+
+## RE-023.2 — ObservableUniverse (skeleton)
+
+`ObservableUniverse(dataset, as_of)` introduced. `episodes()` is an
+identity transformation at this stage — validates the plumbing
+before any temporal rule is added. Internally stores a copy of
+`dataset.data` already filtered to `as_of`, never a reference to the
+full canonical Dataset, so future methods cannot forget to filter it.
+
+## RE-023.3 — Temporal masking of Outcome
+
+`ObservableUniverse` masks Outcome fields (`recovery_*`,
+`future_return_Xy`, `probability_positive_Xy`) to `None` when they
+would not yet be observable at `as_of`, evaluated per field/horizon
+— not per episode. Event and Context are never masked.
+
+## RE-023.4 — Temporal existence of episodes
+
+`ObservableUniverse.episodes()` now excludes episodes whose
+`bottom_date > as_of` entirely. Cutoff uses `bottom_date`, not
+`peak_date`: Event/Context are only fixed once the bottom is
+reached. This does not yet replace the `peak_date`-based filter in
+`SimilarityEngine.top()` — that removal is scoped for RE-023.6,
+after wiring (RE-023.5) exists.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -228,6 +298,15 @@ Dashboard
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.2
+
+-   Declared this document the single source of truth (RE-DOC-001);
+    `ROADMAP.md` and `PROJECT_STATE.md` marked non-authoritative
+    pending future consolidation.
+-   Logged RE-021 through RE-023.4.
+-   Recorded the Frozen Core Policy exception invoked by RE-021.
+-   Added Observable Universe to Component Status.
 
 ## Version 1.1
 

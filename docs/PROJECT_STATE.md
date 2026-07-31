@@ -1,5 +1,13 @@
 # SOP — Project State
 
+> **Non-authoritative.** Per RE-DOC-001, the single source of truth
+> for Research Engine status is `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`.
+> This document is pending consolidation and may not reflect current
+> state.
+
+---
+
+
 Última actualización: Julio 2026
 
 ---

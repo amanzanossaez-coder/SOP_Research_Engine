@@ -91,10 +91,16 @@ def main():
 
             for item in explanation.items:
 
+                score = (
+                    "---"
+                    if item.score is None
+                    else f"{item.score:.1%}"
+                )
+
                 print(
                     f"      "
                     f"{item.name:<15}"
-                    f"{item.score:.1%}"
+                    f"{score:>8}"
                 )
 
             print()
@@ -108,10 +114,17 @@ def main():
     if n > 0:
 
         def avg(attribute):
-            return (
-                sum(getattr(s, attribute) for s in similares)
-                / n
-            )
+
+            values = [
+                getattr(s, attribute)
+                for s in similares
+                if getattr(s, attribute) is not None
+            ]
+
+            if not values:
+                return None
+
+            return sum(values) / len(values)
 
         diagnostics = [
             ("Drawdown", avg("drawdown_score")),
@@ -127,9 +140,15 @@ def main():
 
         for name, value in diagnostics:
 
+            text = (
+                "N/A"
+                if value is None
+                else f"{value:.1%}"
+            )
+
             print(
                 f"{name:<15}"
-                f"{value:>8.1%}"
+                f"{text:>8}"
             )
 
 

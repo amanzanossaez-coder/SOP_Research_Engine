@@ -15,37 +15,18 @@ class SnapshotEngine:
 
         return (end / start) - 1.0
 
-    def latest(self) -> Snapshot:
+    def _build_snapshot(self, index) -> Snapshot:
 
         data = self.dataset.data
 
-        print("\n========== POSIBLES COLUMNAS MACRO ==========\n")
-
-        for column in data.columns:
-
-            name = str(column).upper()
-
-            if (
-                "CPI" in name
-                or "RATE" in name
-                or "GS" in name
-                or "YIELD" in name
-                or "INTEREST" in name
-            ):
-                print(column)
-
-        print("\n=============================================\n")
-
-        current_index = len(data) - 1
-
-        row = data.iloc[current_index]
+        row = data.iloc[index]
 
         peak_index = (
-            data.iloc[: current_index + 1]["Price.1"]
+            data.iloc[: index + 1]["Price.1"]
             .idxmax()
         )
 
-        duration_months = current_index - peak_index
+        duration_months = index - peak_index
 
         pre_crash_return_3y = None
 
@@ -82,7 +63,7 @@ class SnapshotEngine:
 
         return Snapshot(
 
-            index=current_index,
+            index=index,
 
             date=row["Date"],
 
@@ -95,3 +76,30 @@ class SnapshotEngine:
             context=context,
 
         )
+
+    def at(self, index) -> Snapshot:
+
+        return self._build_snapshot(index)
+
+    def latest(self) -> Snapshot:
+
+        data = self.dataset.data
+
+        print("\n========== POSIBLES COLUMNAS MACRO ==========\n")
+
+        for column in data.columns:
+
+            name = str(column).upper()
+
+            if (
+                "CPI" in name
+                or "RATE" in name
+                or "GS" in name
+                or "YIELD" in name
+                or "INTEREST" in name
+            ):
+                print(column)
+
+        print("\n=============================================\n")
+
+        return self._build_snapshot(len(data) - 1)

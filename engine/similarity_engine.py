@@ -15,7 +15,11 @@ from models.similarity import Similarity
 
 class SimilarityEngine:
 
-    def __init__(self, dataset):
+    def __init__(
+        self,
+        dataset,
+        cape_metric=None,
+    ):
 
         self.dataset = dataset
 
@@ -35,18 +39,24 @@ class SimilarityEngine:
             SIMILARITY_SCALES["recovery"]
         )
 
-        self.cape_metric = PercentileMetric(
+        if cape_metric is None:
 
-            episode.context.cape
+            self.cape_metric = PercentileMetric(
 
-            for episode in dataset.episodes
+                episode.context.cape
 
-            if (
-                episode.context is not None
-                and episode.context.cape is not None
+                for episode in dataset.episodes
+
+                if (
+                    episode.context is not None
+                    and episode.context.cape is not None
+                )
+
             )
 
-        )
+        else:
+
+            self.cape_metric = cape_metric
 
         self.pre_crash_return_3y_metric = LinearMetric(
             SIMILARITY_SCALES["pre_crash_return_3y"]
@@ -174,7 +184,6 @@ class SimilarityEngine:
                     "cape": cape_score,
                     "pre_crash_return_3y": pre_crash_return_3y_score,
                     "volatility": volatility_score,
-                    "recovery": recovery_score,
                 }
             )
 
@@ -184,15 +193,15 @@ class SimilarityEngine:
                 items=[
                     SimilarityExplanationItem(
                         name="Drawdown",
-                        score=drawdown_score or 0.0,
+                        score=drawdown_score,
                     ),
                     SimilarityExplanationItem(
                         name="Duration",
-                        score=duration_score or 0.0,
+                        score=duration_score,
                     ),
                     SimilarityExplanationItem(
                         name="Speed",
-                        score=speed_score or 0.0,
+                        score=speed_score,
                     ),
                 ],
             )
@@ -203,15 +212,15 @@ class SimilarityEngine:
                 items=[
                     SimilarityExplanationItem(
                         name="CAPE",
-                        score=cape_score or 0.0,
+                        score=cape_score,
                     ),
                     SimilarityExplanationItem(
                         name="Trend 3Y",
-                        score=pre_crash_return_3y_score or 0.0,
+                        score=pre_crash_return_3y_score,
                     ),
                     SimilarityExplanationItem(
                         name="Volatility",
-                        score=volatility_score or 0.0,
+                        score=volatility_score,
                     ),
                 ],
             )
@@ -222,7 +231,7 @@ class SimilarityEngine:
                 items=[
                     SimilarityExplanationItem(
                         name="Recovery",
-                        score=recovery_score or 0.0,
+                        score=recovery_score,
                     ),
                 ],
             )
@@ -234,13 +243,13 @@ class SimilarityEngine:
                     event=event,
                     context=context,
                     outcome=outcome,
-                    drawdown_score=drawdown_score or 0.0,
-                    duration_score=duration_score or 0.0,
-                    speed_score=speed_score or 0.0,
-                    cape_score=cape_score or 0.0,
-                    pre_crash_return_3y_score=pre_crash_return_3y_score or 0.0,
-                    volatility_score=volatility_score or 0.0,
-                    recovery_score=recovery_score or 0.0,
+                    drawdown_score=drawdown_score,
+                    duration_score=duration_score,
+                    speed_score=speed_score,
+                    cape_score=cape_score,
+                    pre_crash_return_3y_score=pre_crash_return_3y_score,
+                    volatility_score=volatility_score,
+                    recovery_score=recovery_score,
                 )
             )
 
