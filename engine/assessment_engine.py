@@ -12,7 +12,12 @@ class AssessmentEngine:
 
         self.snapshot = SnapshotEngine(dataset).latest()
 
-        self.similarity = SimilarityEngine(dataset)
+        # RE-023.5: ajuste mecánico -- SimilarityEngine ya no acepta
+        # un Dataset completo. AssessmentEngine sigue sin conectarse a
+        # ObservableUniverse (fuera de alcance de RE-023.5); usa
+        # dataset.episodes directo, con el mismo riesgo temporal que ya
+        # tenía antes de hoy, ni más ni menos.
+        self.similarity = SimilarityEngine(dataset.episodes)
 
         self.matches = self.similarity.top(
             self.snapshot,

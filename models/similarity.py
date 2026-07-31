@@ -1,13 +1,23 @@
 from dataclasses import dataclass
 
-from models.episode import Episode
+from models.observable_episode import ObservableEpisode
 from models.explanation import Explanation
 
 
 @dataclass
 class Similarity:
+    """
+    RE-023.5: episode pasa a tipar ObservableEpisode, no Episode.
+    Desde que SimilarityEngine construye Similarity a partir de los
+    episodios que le entrega ObservableUniverse, este campo contiene
+    de verdad proyecciones observables -- el tipo declarado ahora
+    coincide con lo que realmente circula. Ver ADR-004: si esto
+    siguiera diciendo Episode, un Episode canonico pasaria el chequeo
+    de tipos exactamente igual que un ObservableEpisode, y esa es la
+    ambiguedad que se decidio hacer irrepresentable.
+    """
 
-    episode: Episode
+    episode: ObservableEpisode
 
     score: float
 

@@ -1,9 +1,18 @@
 from engine.snapshot_engine import SnapshotEngine
 from engine.probability_engine import ProbabilityEngine
 from engine.similarity_engine import SimilarityEngine
+from engine.observable_universe import ObservableUniverse
 
 
 class DecisionEngine:
+    """
+    RE-023.5: la similitud pasa a consumir ObservableUniverse en vez
+    de dataset.episodes directamente. as_of = self.snapshot.date --
+    la fecha de la snapshot evaluada, que en el flujo real de run.py
+    es "latest". probability sigue sobre el Dataset completo; no es
+    parte del alcance de esta iteración (queda pendiente, con el
+    mismo tipo de riesgo temporal, para una iteración futura).
+    """
 
     def __init__(self, dataset):
 
@@ -11,9 +20,14 @@ class DecisionEngine:
 
         self.snapshot = SnapshotEngine(dataset).latest()
 
+        self.universe = ObservableUniverse(
+            dataset,
+            as_of=self.snapshot.date,
+        )
+
         self.probability = ProbabilityEngine(dataset)
 
-        self.similarity = SimilarityEngine(dataset)
+        self.similarity = SimilarityEngine(self.universe.episodes())
 
     def market_position(self):
         # RE-003: posición en ciclo — solo depende del drawdown

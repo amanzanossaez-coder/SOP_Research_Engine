@@ -14,14 +14,28 @@ from models.similarity import Similarity
 
 
 class SimilarityEngine:
+    """
+    RE-023.5: deja de depender de un Dataset completo. Acepta
+    directamente una coleccion de episodios ya resuelta por quien la
+    construye -- hoy, ObservableUniverse.episodes() en el flujo real
+    (DecisionEngine), o dataset.episodes en AssessmentEngine, que
+    todavia no esta conectado a Universe (fuera de alcance de
+    RE-023.5).
+
+    cape_metric se calibra sobre esa misma coleccion salvo que se
+    proporcione un override explicito (RE-022). Al recibir episodios
+    ya temporalmente seguros, la calibracion queda segura sin tener
+    que saber nada de as_of ni de ObservableUniverse -- la seguridad
+    la aporta quien construye la coleccion, no este motor.
+    """
 
     def __init__(
         self,
-        dataset,
+        episodes,
         cape_metric=None,
     ):
 
-        self.dataset = dataset
+        self._episodes = list(episodes)
 
         self.drawdown_metric = LinearMetric(
             SIMILARITY_SCALES["drawdown"]
@@ -45,7 +59,7 @@ class SimilarityEngine:
 
                 episode.context.cape
 
-                for episode in dataset.episodes
+                for episode in self._episodes
 
                 if (
                     episode.context is not None
@@ -111,7 +125,7 @@ class SimilarityEngine:
 
         snapshot_context = snapshot.context
 
-        for episode in self.dataset.episodes:
+        for episode in self._episodes:
 
             episode_context = episode.context
 
@@ -261,7 +275,12 @@ class SimilarityEngine:
         return results
 
     def top(self, snapshot, n=10, exclude_recent_months=24):
-        # RE-004: excluye episodios cuyo peak_date esté en los últimos 24 meses
+        # RE-004: excluye episodios cuyo peak_date esté en los últimos 24 meses.
+        # RE-023.5: redundante en parte con el corte temporal que ya aplica
+        # ObservableUniverse (bottom_date <= as_of) cuando el llamante
+        # proviene de ahi -- se mantiene deliberadamente hasta RE-023.6,
+        # que retirará solo la mitad de fuga temporal y conservará la
+        # exclusión de episodios solapados.
         cutoff = snapshot.date - (exclude_recent_months / 12)
         results = [
             s for s in self.compare(snapshot)
