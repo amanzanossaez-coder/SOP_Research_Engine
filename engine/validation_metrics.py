@@ -19,10 +19,7 @@ def mean_absolute_error(
 
     for record in records:
 
-        if record.forecast is None:
-            continue
-
-        if record.actual is None:
+        if not record.evaluable:
             continue
 
         errors.append(abs(record.forecast - record.actual))
