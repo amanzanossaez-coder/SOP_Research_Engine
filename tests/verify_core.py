@@ -83,7 +83,7 @@ def main():
             [
                 "engine/snapshot_engine.py",
                 "engine/similarity_engine.py",
-                "engine/probability_engine.py",
+                "engine/validation_harness.py",
                 "engine/evidence_engine.py",
                 "engine/assessment_engine.py",
                 "engine/inference_engine.py",
