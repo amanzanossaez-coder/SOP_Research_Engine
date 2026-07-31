@@ -1,20 +1,45 @@
 from statistics import mean, median
 
-from models.evidence import Evidence
+from core.constants import OUTCOME_HORIZONS_YEARS
+from models.evidence import Evidence, percentile_from_sorted
 
 
 class EvidenceEngine:
     """
     Builds objective historical evidence from similar episodes.
+
+    RE-024.1: build() acepta el horizonte (years) como parametro --
+    antes estaba fijo a future_return_5y. Selecciona el campo
+    future_return_{years}y correspondiente al horizonte pedido.
+
+    Deliberadamente NO se toca hoy: DecisionEngine, AssessmentEngine,
+    ProbabilityEngine, SimilarityEngine, ObservableUniverse. Nadie
+    consume todavia este Evidence generalizado -- eso es RE-024.2.
     """
 
-    def build(self, matches):
+    def build(self, matches, years: int = 5):
 
-        returns = [
-            s.episode.future_return_5y
-            for s in matches
-            if s.episode.future_return_5y is not None
-        ]
+        if years not in OUTCOME_HORIZONS_YEARS:
+
+            raise ValueError(
+                f"years={years!r} no es un horizonte valido -- "
+                f"Episode solo almacena future_return_Xy para "
+                f"{OUTCOME_HORIZONS_YEARS}"
+            )
+
+        field = f"future_return_{years}y"
+
+        returns = sorted(
+
+            value
+
+            for value in (
+                getattr(s.episode, field) for s in matches
+            )
+
+            if value is not None
+
+        )
 
         recoveries = [
             s.episode.recovery_months
@@ -34,26 +59,35 @@ class EvidenceEngine:
 
             matches=matches,
             episodes_count=len(matches),
+            horizon_years=years,
 
             # Return statistics
+            #
+            # median/worst/best usan percentile_from_sorted -- el
+            # mismo calculo que expone Evidence.percentile() -- para
+            # que evidence.median_return == evidence.percentile(0.5)
+            # se cumpla siempre, sin dos algoritmos que puedan
+            # desalinearse (statistics.median() promedia el par
+            # central en listas de tamaño par; percentile_from_sorted
+            # no, y top() suele devolver listas de tamaño par).
 
-            average_return_5y=(
+            average_return=(
                 mean(returns)
                 if returns else 0.0
             ),
 
-            median_return_5y=(
-                median(returns)
+            median_return=(
+                percentile_from_sorted(returns, 0.50)
                 if returns else 0.0
             ),
 
-            worst_return_5y=(
-                min(returns)
+            worst_return=(
+                percentile_from_sorted(returns, 0.0)
                 if returns else 0.0
             ),
 
-            best_return_5y=(
-                max(returns)
+            best_return=(
+                percentile_from_sorted(returns, 1.0)
                 if returns else 0.0
             ),
 
@@ -63,6 +97,9 @@ class EvidenceEngine:
             ),
 
             # Recovery statistics
+            #
+            # Sin cambios respecto a la version anterior -- fuera de
+            # alcance de RE-024.1.
 
             average_recovery_months=(
                 mean(recoveries)

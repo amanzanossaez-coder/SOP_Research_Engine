@@ -3,6 +3,33 @@ from dataclasses import dataclass
 from models.similarity import Similarity
 
 
+def percentile_from_sorted(values: list[float], p: float) -> float | None:
+    """
+    Percentil por indice sobre una lista ya ordenada.
+
+    Selecciona un valor real de la muestra (no promedia posiciones
+    adyacentes). Es el mismo criterio que ya usaba ProbabilityEngine
+    -- RE-024.1 mantiene ese comportamiento a propósito, porque el
+    objetivo es que Evidence pueda sustituirlo sin discrepancias.
+
+    Vive fuera de la clase porque EvidenceEngine.build() necesita el
+    mismo calculo exacto para median_return/worst_return/best_return
+    -- una sola fuente de verdad para el algoritmo de percentil, no
+    dos implementaciones que podrian desalinearse con listas de
+    tamaño par.
+    """
+
+    if not 0.0 <= p <= 1.0:
+        raise ValueError(f"p debe estar entre 0.0 y 1.0, recibido {p!r}")
+
+    if not values:
+        return None
+
+    index = int((len(values) - 1) * p)
+
+    return values[index]
+
+
 @dataclass
 class Evidence:
     """
@@ -10,19 +37,27 @@ class Evidence:
 
     This object is descriptive only.
     It never contains recommendations or decisions.
+
+    RE-024.1: horizon_years hace explicito a que plazo pertenecen
+    average_return/median_return/worst_return/best_return. Antes el
+    horizonte estaba fijo a 5 años y el propio nombre del campo lo
+    delataba (`average_return_5y`); ahora que el horizonte es
+    parametrizable, el objeto tiene que declararlo el mismo -- el
+    nombre del campo ya no puede hacerlo por si solo.
     """
 
     # Historical sample
 
     matches: list[Similarity]
     episodes_count: int
+    horizon_years: int
 
     # Return statistics
 
-    average_return_5y: float
-    median_return_5y: float
-    worst_return_5y: float
-    best_return_5y: float
+    average_return: float
+    median_return: float
+    worst_return: float
+    best_return: float
 
     positive_probability: float
 
@@ -30,3 +65,31 @@ class Evidence:
 
     average_recovery_months: float | None = None
     median_recovery_months: float | None = None
+
+    def percentile(self, p: float) -> float | None:
+        """
+        Percentil de las rentabilidades futuras al horizonte de este
+        Evidence (horizon_years), calculado sobre matches.
+
+        Calculado bajo demanda, no almacenado: asi ningun caso de
+        uso futuro (por ejemplo, un p=0.90 para "upside potential")
+        obliga a tocar EvidenceEngine.build() para anticiparlo.
+        """
+
+        returns = sorted(
+
+            value
+
+            for value in (
+                getattr(
+                    s.episode,
+                    f"future_return_{self.horizon_years}y",
+                )
+                for s in self.matches
+            )
+
+            if value is not None
+
+        )
+
+        return percentile_from_sorted(returns, p)

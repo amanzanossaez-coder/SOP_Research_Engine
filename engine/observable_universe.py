@@ -1,12 +1,15 @@
 import dataclasses
 
+from core.constants import OUTCOME_HORIZONS_YEARS
 from models.observable_episode import from_episode
 
 
-# Horizontes de las rentabilidades y probabilidades futuras que
-# almacena Episode / ObservableEpisode. Un valor "future_return_Xy"
-# solo es observable en as_of si bottom_date + X <= as_of.
-_OUTCOME_HORIZONS_YEARS = (1, 3, 5, 10)
+# RE-024.1: horizontes movidos a core.constants.OUTCOME_HORIZONS_YEARS
+# -- antes vivian aqui como una tupla local propia de este archivo,
+# duplicados con la lista que EvidenceEngine necesitaba declarar
+# por su cuenta.
+# Un valor "future_return_Xy" solo es observable en as_of si
+# bottom_date + X <= as_of.
 
 
 def _mask_horizon(value, bottom_date: float, years: int, as_of: float):
@@ -46,7 +49,7 @@ def _mask_outcome(episode, as_of: float):
             years,
             as_of,
         )
-        for years in _OUTCOME_HORIZONS_YEARS
+        for years in OUTCOME_HORIZONS_YEARS
     }
 
     probability_fields = {
@@ -56,7 +59,7 @@ def _mask_outcome(episode, as_of: float):
             years,
             as_of,
         )
-        for years in _OUTCOME_HORIZONS_YEARS
+        for years in OUTCOME_HORIZONS_YEARS
     }
 
     return dataclasses.replace(

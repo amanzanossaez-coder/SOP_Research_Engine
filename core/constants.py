@@ -34,3 +34,11 @@ SIMILARITY_SCALES = {
 
     "recovery": 60.0,
 }
+
+# Horizontes para los que Episode / ObservableEpisode almacenan
+# future_return_Xy / probability_positive_Xy. Fuente unica de verdad:
+# ObservableUniverse (masking por horizonte, RE-023.3) y
+# EvidenceEngine (validacion de horizonte, RE-024.1) importan esto
+# en vez de declarar cada uno su propia lista.
+
+OUTCOME_HORIZONS_YEARS = (1, 3, 5, 10)
