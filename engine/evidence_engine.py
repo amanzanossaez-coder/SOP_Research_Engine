@@ -63,6 +63,9 @@ class EvidenceEngine:
 
             # Return statistics
             #
+            # Ausencia de evidencia -> None, nunca 0.0 (regla de
+            # diseño del Research Engine, ver models/evidence.py).
+            #
             # median/worst/best usan percentile_from_sorted -- el
             # mismo calculo que expone Evidence.percentile() -- para
             # que evidence.median_return == evidence.percentile(0.5)
@@ -70,30 +73,23 @@ class EvidenceEngine:
             # desalinearse (statistics.median() promedia el par
             # central en listas de tamaño par; percentile_from_sorted
             # no, y top() suele devolver listas de tamaño par).
+            # percentile_from_sorted ya devuelve None si returns esta
+            # vacia -- no hace falta un "if returns else ..." aparte.
 
             average_return=(
                 mean(returns)
-                if returns else 0.0
+                if returns else None
             ),
 
-            median_return=(
-                percentile_from_sorted(returns, 0.50)
-                if returns else 0.0
-            ),
+            median_return=percentile_from_sorted(returns, 0.50),
 
-            worst_return=(
-                percentile_from_sorted(returns, 0.0)
-                if returns else 0.0
-            ),
+            worst_return=percentile_from_sorted(returns, 0.0),
 
-            best_return=(
-                percentile_from_sorted(returns, 1.0)
-                if returns else 0.0
-            ),
+            best_return=percentile_from_sorted(returns, 1.0),
 
             positive_probability=(
                 len(positive) / len(returns)
-                if returns else 0.0
+                if returns else None
             ),
 
             # Recovery statistics

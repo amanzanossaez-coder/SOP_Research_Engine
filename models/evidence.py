@@ -44,6 +44,13 @@ class Evidence:
     delataba (`average_return_5y`); ahora que el horizonte es
     parametrizable, el objeto tiene que declararlo el mismo -- el
     nombre del campo ya no puede hacerlo por si solo.
+
+    Regla de diseño del Research Engine, no solo de este objeto:
+    ausencia de evidencia se representa con None, nunca con 0.0. Un
+    0.0 es una afirmación estadística (retorno esperado cero); la
+    ausencia de datos no lo es. Por eso todos los campos de retorno
+    son float | None -- None significa "no hay episodios de los
+    que extraer esto", no "el episodio produjo un cero".
     """
 
     # Historical sample
@@ -53,13 +60,15 @@ class Evidence:
     horizon_years: int
 
     # Return statistics
+    #
+    # float | None: None significa ausencia de evidencia, nunca 0.0.
 
-    average_return: float
-    median_return: float
-    worst_return: float
-    best_return: float
+    average_return: float | None
+    median_return: float | None
+    worst_return: float | None
+    best_return: float | None
 
-    positive_probability: float
+    positive_probability: float | None
 
     # Recovery statistics
 
