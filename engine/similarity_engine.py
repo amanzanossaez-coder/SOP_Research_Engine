@@ -275,12 +275,26 @@ class SimilarityEngine:
         return results
 
     def top(self, snapshot, n=10, exclude_recent_months=24):
-        # RE-004: excluye episodios cuyo peak_date esté en los últimos 24 meses.
-        # RE-023.5: redundante en parte con el corte temporal que ya aplica
-        # ObservableUniverse (bottom_date <= as_of) cuando el llamante
-        # proviene de ahi -- se mantiene deliberadamente hasta RE-023.6,
-        # que retirará solo la mitad de fuga temporal y conservará la
-        # exclusión de episodios solapados.
+        # RE-004 -- unica responsabilidad de este filtro desde RE-023.6:
+        # excluir episodios demasiado cercanos en el tiempo a la consulta,
+        # para no comparar contra evidencia solapada / no independiente.
+        # NO es, ni debe tratarse como, un mecanismo de proteccion contra
+        # fuga temporal -- esa responsabilidad es exclusiva de
+        # ObservableUniverse (bottom_date <= as_of), que es quien decide
+        # que episodios llegan hasta aqui cuando el llamante lo usa
+        # (hoy: DecisionEngine).
+        #
+        # peak_date < cutoff, por construccion aritmetica, tambien excluye
+        # cualquier episodio futuro respecto a snapshot.date -- pero es un
+        # efecto secundario de esta formula, no una segunda clausula que
+        # se pueda separar. Ese efecto secundario es impreciso (usa
+        # peak_date, no bottom_date: un episodio que llevase mucho tiempo
+        # cayendo sin haber tocado fondo pasaria este filtro con su
+        # Event/Context todavia sin cerrar). No se retira, porque sigue
+        # siendo la unica proteccion, aunque imperfecta, para quien llama
+        # a SimilarityEngine sin pasar por ObservableUniverse -- hoy,
+        # AssessmentEngine. Retirarla activamente seria debilitar esa
+        # ruta sin sustituirla por nada.
         cutoff = snapshot.date - (exclude_recent_months / 12)
         results = [
             s for s in self.compare(snapshot)
