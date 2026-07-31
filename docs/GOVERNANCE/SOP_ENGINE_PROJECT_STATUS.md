@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.3\
+**Version:** 1.4\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -70,7 +70,7 @@ Observable Universe block (RE-023.x) is stabilized.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-024.2)
+# Execution State (as of RE-025.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -124,6 +124,23 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
+  Research Validation  Exists (RE-025.1/RE-025.2), fully independent of
+  Harness               run.py -- invoked manually, no wiring exists or
+                        is planned yet. Deliberately offline: for each
+                        historical episode it replays DecisionEngine's
+                        own methodology -- ObservableUniverse(as_of=
+                        episode.bottom_date) for comparables,
+                        SimilarityEngine.top() for matches,
+                        EvidenceEngine.build() for the forecast -- so it
+                        validates the system that actually runs, not a
+                        hypothetical one. Self-exclusion of the episode
+                        under evaluation is by bottom_index, never by
+                        object identity (ObservableUniverse.episodes()
+                        returns ObservableEpisode, a type deliberately
+                        distinct from Episode -- RE-023.1/ADR-004 --
+                        so `is not` would never have excluded anything).
+                        Unrelated to ValidationEngine above despite the
+                        similar name -- see Component Status.
 
 ## Matches the diagram's named objects: not yet
 
@@ -201,22 +218,45 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
+RE-025.1/RE-025.2 invoke no exception: the Research Validation
+Harness consumes `ObservableUniverse`, `SimilarityEngine` and
+`EvidenceEngine` exactly as published, through their existing public
+interfaces. No frozen component was modified to build it.
+
 ------------------------------------------------------------------------
 
 # Component Status
 
-  Component           Status
-  ------------------- ------------------------------------------
-  Dataset Engine      Stable
-  Snapshot Engine     Stable
-  Similarity Engine   Stable (RE-021 exception — see Frozen Core Policy)
-  Observable Universe Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine pending, RE-024.3)
-  Evidence Engine     v1
-  Assessment Engine   v1
-  Inference Engine    Planned
-  Constitution        Planned
-  Protocol Engine     Planned
-  Dashboard           Planned
+  Component                    Status
+  ---------------------------- ------------------------------------
+  Dataset Engine               Stable
+  Snapshot Engine               Stable
+  Similarity Engine             Stable (RE-021 exception — see Frozen Core Policy)
+  Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine pending, RE-024.3)
+  Evidence Engine                v1
+  Assessment Engine              v1
+  Inference Engine               Planned
+  Constitution                   Planned
+  Protocol Engine                Planned
+  Dashboard                      Planned
+  Research Validation Harness    v1 — harness + MAE (RE-025.1/RE-025.2). Offline only, not wired into run.py. Hit-rate and rank correlation planned (RE-025.3/RE-025.4).
+
+**Note — naming collision, not a duplication of function.**
+`ValidationEngine` (`engine/validation_engine.py`) and the Research
+Validation Harness (`engine/validation_harness.py` +
+`engine/validation_metrics.py`) are two unrelated components that
+happen to share a name fragment:
+
+-   `ValidationEngine` scores the *confidence* of a single, present-day
+    decision (coverage/consistency/diversity/stability), and feeds
+    `AssessmentEngine.confidence()` -- itself outside the operative
+    flow (see Execution State).
+-   The Research Validation Harness backtests the *historical accuracy*
+    of the Similarity/Evidence pipeline itself, across all past
+    episodes, offline. It does not compute confidence and is not
+    consumed by `AssessmentEngine` or `DecisionEngine`.
+
+Do not conflate the two when reading the codebase or this document.
 
 ------------------------------------------------------------------------
 
@@ -388,6 +428,91 @@ verified against an independent, by-hand recomputation from the
 displayed episodes, not just against passing tests. `run.py` diff
 confirmed targeted to exactly the affected lines.
 
+## RE-025.1 — Research Validation Harness
+
+`engine/validation_harness.py` introduces `ValidationHarness`. For
+each historical episode it builds the forecast the system would have
+produced by replaying, exactly, the same methodology `DecisionEngine`
+uses for the present: `ObservableUniverse(dataset,
+as_of=episode.bottom_date)` supplies temporally-safe comparables,
+`SimilarityEngine.top()` selects matches, `EvidenceEngine.build()`
+yields the forecast (`median_return`). Framed as "Research
+Validation", not "statistical validation" — the sample is small and
+episodes are not independent; see RE-025.2's disclaimer.
+
+Two design constraints are load-bearing, not stylistic:
+
+**Point-in-time, not global leave-one-out.** Comparables for episode
+X are restricted to episodes observable as of X's own `bottom_date`.
+Comparing X against all other 22 episodes regardless of chronology
+would validate a hypothetical system that already knows 2020 while
+evaluating 1962 — a different, easier system than the one that
+actually runs. `ObservableUniverse` also masks each comparable's own
+`future_return_Xy` per RE-023.3, so no comparable can leak a future
+outcome that would not yet have been known either.
+
+**Self-exclusion by `bottom_index`, not object identity.**
+`ObservableUniverse.episodes()` returns `ObservableEpisode`, a type
+deliberately distinct from `Episode` and never substitutable for it
+(RE-023.1/ADR-004). Because of that, the episode under evaluation is
+never the same object as its projection inside the universe —
+`s.episode is not target_episode` would silently exclude nothing.
+`bottom_index` is the one field that survives the `Episode ->
+ObservableEpisode` projection unchanged and is unique per episode; it
+is used as the exclusion key instead.
+
+`sample_size()` (episodes with a real, realized `future_return_Xy`)
+and `evaluated_count()` (episodes that additionally produced a
+forecast) are computed methods, not asserted constants — the gap
+between them is itself diagnostic. Verified against the live Shiller
+dataset: 23 episodes total, `sample_size` = 21 (2022.10 and 2025.04
+have no realized 5y return yet), `evaluated_count` = 19 (1877.06 and
+1880.05 additionally had 0 and 1 comparable respectively in their own
+instant, and produced no forecast).
+
+Produces `ValidationRecord(episode, horizon_years, forecast, actual,
+comparable_count, evaluable)` only. No aggregate statistic — that is
+RE-025.2.
+
+Naming risk, flagged deliberately: unrelated to the pre-existing
+`engine/validation_engine.py` (`ValidationEngine`). See the note under
+Component Status.
+
+## RE-025.2 — MAE (canonical Research Validation metric)
+
+`engine/validation_metrics.py` adds `mean_absolute_error()`: the mean
+of `|forecast - actual|` over the `evaluable` records produced by
+RE-025.1, in the same annualized-CAGR units as
+`EvidenceEngine.median_return` — no unit conversion, no new
+assumption. `None` if no record is evaluable, following the same
+Research-Engine-wide rule as `Evidence` (RE-024.1): absence of
+evidence is `None`, never `0.0`. Ships together with
+`EXPLORATORY_DISCLAIMER`, a literal string callers must surface
+alongside the number — this harness produces exploratory evidence
+over a small, non-independent sample, not statistical validation in
+the strict sense.
+
+Measured against the live dataset: MAE = 7.05% over the 19 evaluated
+episodes. Read with caution before treating it as a stable figure —
+it is a mean over 19 points, and a single one (1932.06, bottom of the
+Great Depression) contributes 18.91 points of error on its own, more
+than double any other episode's. Hit-rate (RE-025.3) and rank
+correlation (RE-025.4) are the intended check on whether 7.05% is
+representative or driven by that outlier.
+
+**Deviation resolved.** The first shipped version of
+`mean_absolute_error()` filtered records with two explicit `is None`
+checks on `forecast` and `actual`, instead of reading
+`record.evaluable` — the flag RE-025.1 already computes for exactly
+this purpose. The two criteria agreed on the live dataset, so no
+measured result was ever wrong, but the function held its own,
+duplicate notion of "is this record usable" and could have silently
+diverged from `ValidationHarness` if `evaluable`'s definition ever
+changed (e.g., a minimum `comparable_count`). Fixed: the loop now
+reads `if not record.evaluable: continue`. Re-verified against the
+live dataset after the fix — sample_size=21, evaluated_count=19,
+MAE=7.05%, unchanged.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -416,6 +541,12 @@ Protocol Engine
 
 Dashboard
 
+Research Validation (RE-025.x) runs alongside these phases as a
+cross-cutting concern — it evaluates the accuracy of what Evidence
+Engine already produces, rather than belonging to any single phase.
+Not yet reflected as its own phase; revisit if RE-025.3/RE-025.4 grow
+the harness enough to justify one.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -431,6 +562,28 @@ Dashboard
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.4
+
+-   Added `engine/validation_harness.py` (RE-025.1): Research
+    Validation Harness, an offline, point-in-time backtest of the
+    Similarity/Evidence pipeline against realized historical
+    outcomes. Not wired into `run.py`. Verified against the live
+    dataset: sample_size=21, evaluated_count=19 of 23 episodes.
+-   Added `engine/validation_metrics.py` (RE-025.2): MAE as the
+    canonical Research Validation metric, with a mandatory
+    exploratory-evidence disclaimer. Measured MAE=7.05%, flagged as
+    outlier-sensitive at this sample size (n=19).
+-   Logged, then fixed within the same version, a duplication risk in
+    the shipped MAE implementation: `mean_absolute_error()` now reads
+    `ValidationRecord.evaluable` instead of recomputing the same
+    criterion inline. Re-verified: MAE unchanged at 7.05%.
+-   Clarified, in Component Status and Execution State, that the
+    Research Validation Harness is unrelated to the pre-existing
+    `ValidationEngine` (confidence scoring for `AssessmentEngine`)
+    despite the naming collision.
+-   Frozen Core Policy: recorded that RE-025.1/RE-025.2 invoke no
+    exception — built entirely on existing public interfaces.
 
 ## Version 1.3
 
