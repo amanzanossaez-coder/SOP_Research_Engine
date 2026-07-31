@@ -1,4 +1,5 @@
-from engine.probability_engine import ProbabilityEngine
+from engine.evidence_engine import EvidenceEngine
+from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
 from engine.snapshot_engine import SnapshotEngine
 from engine.validation_engine import ValidationEngine
@@ -12,12 +13,22 @@ class AssessmentEngine:
 
         self.snapshot = SnapshotEngine(dataset).latest()
 
-        # RE-023.5: ajuste mecánico -- SimilarityEngine ya no acepta
-        # un Dataset completo. AssessmentEngine sigue sin conectarse a
-        # ObservableUniverse (fuera de alcance de RE-023.5); usa
-        # dataset.episodes directo, con el mismo riesgo temporal que ya
-        # tenía antes de hoy, ni más ni menos.
-        self.similarity = SimilarityEngine(dataset.episodes)
+        # RE-024.3:
+        # AssessmentEngine adopta el mismo flujo operativo que
+        # DecisionEngine:
+        #
+        # Dataset -> ObservableUniverse -> Similarity -> Evidence
+        #
+        # ValidationEngine permanece sin cambios en esta iteración.
+
+        self.universe = ObservableUniverse(
+            dataset,
+            as_of=self.snapshot.date,
+        )
+
+        self.similarity = SimilarityEngine(
+            self.universe.episodes(),
+        )
 
         self.matches = self.similarity.top(
             self.snapshot,
@@ -30,7 +41,10 @@ class AssessmentEngine:
             self.matches,
         )
 
-        self.probability = ProbabilityEngine(dataset)
+        self.evidence = EvidenceEngine().build(
+            self.matches,
+            years=5,
+        )
 
     def drawdown_zone(self):
 
@@ -49,12 +63,12 @@ class AssessmentEngine:
 
     def expected_return_5y(self):
 
-        return self.probability.median(5)
+        return self.evidence.median_return
 
     def upside_potential(self):
 
-        return self.probability.percentile(5, 0.90)
+        return self.evidence.percentile(0.90)
 
     def downside_risk(self):
 
-        return self.probability.worst_case(5)
+        return self.evidence.worst_return
