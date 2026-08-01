@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.5\
+**Version:** 1.6\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -70,7 +70,7 @@ Observable Universe block (RE-023.x) is stabilized.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.3)
+# Execution State (as of RE-025.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -124,7 +124,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1/RE-025.3), fully independent of
+  Research Validation  Exists (RE-025.1-RE-025.4), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -218,7 +218,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1/RE-025.3 invoke no exception: the Research Validation
+RE-025.1-RE-025.4 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -239,7 +239,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate (RE-025.1/RE-025.3). Offline only, not wired into run.py. Rank correlation planned (RE-025.4).
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation (RE-025.1-RE-025.4). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -541,6 +541,33 @@ This finding increases the importance of RE-025.4: rank correlation
 is expected to be more informative here because it evaluates ordering
 of forecast strength against realized outcomes, not just sign.
 
+## RE-025.4 — Rank Correlation
+
+`engine/validation_metrics.py` adds `rank_correlation()`: Spearman
+rank correlation between forecast and realized return over evaluable
+validation records. Unlike `directional_hit_rate()`, zero values are
+not excluded: a zero is a valid value to rank, not an absence of
+direction.
+
+Ranks use average-rank tie handling. This is not cosmetic in the live
+dataset: the 19 evaluable records contain only 7 unique forecast
+values, because `EvidenceEngine.median_return()` can repeat when the
+effective match set produces the same median. Average ranks avoid
+letting input order decide ties silently.
+
+Measured against the live dataset: rank_count=19,
+unique_forecasts=7, unique_actuals=19, Spearman rank correlation =
+-0.2290. MAE remained 7.05% and directional hit-rate remained
+94.74% in the same verification run.
+
+Interpretation remains exploratory. The negative value is a weak
+negative rank relationship in this small, non-independent sample: in
+this validation slice, higher forecast ranks did not correspond to
+higher realized-return ranks. It should not be read as a formal
+statistical rejection of the method, but it is materially more
+informative than RE-025.3 because it tests ordering rather than
+merely sign.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -572,8 +599,8 @@ Dashboard
 Research Validation (RE-025.x) runs alongside these phases as a
 cross-cutting concern — it evaluates the accuracy of what Evidence
 Engine already produces, rather than belonging to any single phase.
-Not yet reflected as its own phase; revisit if RE-025.4 grows the
-harness enough to justify one.
+Not yet reflected as its own phase; revisit if the harness grows
+enough to justify one.
 
 ------------------------------------------------------------------------
 
@@ -590,6 +617,23 @@ harness enough to justify one.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.6
+
+-   Added `rank_correlation()` to `engine/validation_metrics.py`
+    (RE-025.4): Spearman rank correlation between forecast and
+    realized return over evaluable validation records.
+-   Implemented average-rank tie handling because the live validation
+    set has repeated forecasts: 19 evaluable records, 7 unique
+    forecasts, 19 unique actuals.
+-   Verified against the live dataset: rank_count=19,
+    rank_correlation=-0.2290, MAE unchanged at 7.05%, directional
+    hit-rate unchanged at 94.74%.
+-   Documented the interpretation limit: the result is exploratory,
+    weakly negative, and more informative than directional hit-rate
+    for this sample, but not formal statistical validation.
+-   Normalized Research Validation references to RE-025.1-RE-025.4
+    now that the whole initial validation metric block is present.
 
 ## Version 1.5
 
