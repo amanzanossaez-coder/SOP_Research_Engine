@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.4\
+**Version:** 1.5\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -70,7 +70,7 @@ Observable Universe block (RE-023.x) is stabilized.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.2)
+# Execution State (as of RE-025.3)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -124,7 +124,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1/RE-025.2), fully independent of
+  Research Validation  Exists (RE-025.1/RE-025.3), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -218,7 +218,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1/RE-025.2 invoke no exception: the Research Validation
+RE-025.1/RE-025.3 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -239,7 +239,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE (RE-025.1/RE-025.2). Offline only, not wired into run.py. Hit-rate and rank correlation planned (RE-025.3/RE-025.4).
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate (RE-025.1/RE-025.3). Offline only, not wired into run.py. Rank correlation planned (RE-025.4).
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -513,6 +513,34 @@ reads `if not record.evaluable: continue`. Re-verified against the
 live dataset after the fix — sample_size=21, evaluated_count=19,
 MAE=7.05%, unchanged.
 
+## RE-025.3 — Directional Hit Rate
+
+`engine/validation_metrics.py` adds `directional_hit_rate()`: the
+share of evaluable validation records where forecast and realized
+return have the same sign. It uses `ValidationRecord.evaluable`,
+like `mean_absolute_error()`, and excludes zero-valued forecast or
+actual returns because zero does not express a direction.
+
+Measured against the live dataset: directional hit-rate = 94.74%
+(18/19). Supporting counts: 19 directional records, 19 positive
+forecasts, 0 negative forecasts, 18 positive actuals, 1 negative
+actual, 18 hits, 1 miss. MAE was rechecked in the same run and
+remained unchanged at 7.05%.
+
+Interpretation is deliberately constrained. This high hit-rate is
+not evidence, by itself, that `SimilarityEngine` has meaningful
+directional skill. In this sample, `EvidenceEngine.median_return`
+never produced a negative forecast: 0/19 forecasts were negative.
+The metric therefore mostly reflects the fact that 18/19 realized
+5-year returns in the evaluated sample were positive. A naive rule
+that always predicted "positive" would have produced almost the same
+directional result. RE-025.3 is useful as a diagnostic check, not as
+a strong validation claim.
+
+This finding increases the importance of RE-025.4: rank correlation
+is expected to be more informative here because it evaluates ordering
+of forecast strength against realized outcomes, not just sign.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -544,8 +572,8 @@ Dashboard
 Research Validation (RE-025.x) runs alongside these phases as a
 cross-cutting concern — it evaluates the accuracy of what Evidence
 Engine already produces, rather than belonging to any single phase.
-Not yet reflected as its own phase; revisit if RE-025.3/RE-025.4 grow
-the harness enough to justify one.
+Not yet reflected as its own phase; revisit if RE-025.4 grows the
+harness enough to justify one.
 
 ------------------------------------------------------------------------
 
@@ -562,6 +590,22 @@ the harness enough to justify one.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.5
+
+-   Added `directional_hit_rate()` to `engine/validation_metrics.py`
+    (RE-025.3): directional agreement between forecast and realized
+    return over evaluable validation records, excluding zeros.
+-   Verified against the live dataset: directional_count=19,
+    forecast_positive=19, forecast_negative=0, actual_positive=18,
+    actual_negative=1, hits=18, misses=1, hit-rate=94.74%.
+-   Documented the key interpretation limit: because 0/19 forecasts
+    were negative, the high hit-rate is not strong evidence of
+    directional skill; it mostly reflects that almost all realized
+    5-year returns in the evaluated sample were positive.
+-   Rechecked MAE in the same validation run: unchanged at 7.05%.
+-   Left RE-025.4 rank correlation as the next validation metric and
+    the more informative follow-up for this sample.
 
 ## Version 1.4
 
