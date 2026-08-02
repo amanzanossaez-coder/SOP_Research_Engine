@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.23\
+**Version:** 1.24\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.1)
+# Execution State (as of RE-029.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -119,20 +119,21 @@ verified:
 
   Component           State
   ------------------- ------------------------------------------------
-  AssessmentEngine     Exists, compiles. Not called by run.py. As of
-                        RE-024.3 it does use ObservableUniverse(as_of=
-                        snapshot.date), so the older temporal-safety
-                        concern is resolved. It still rebuilds the
-                        Snapshot -> ObservableUniverse ->
-                        SimilarityEngine.top() -> EvidenceEngine flow
-                        locally instead of delegating to
-                        build_research_result(), so the remaining issue
-                        is source-of-truth duplication, not temporal
-                        leakage. Also uses ValidationEngine for
-                        confidence (coverage/consistency/diversity/
-                        stability, with stability hardcoded to 1.0) --
-                        a second, different confidence computation than
-                        DecisionEngine's.
+  AssessmentEngine     Exists, compiles. Not called by run.py. RE-029.2
+                        audits its current boundary: it uses
+                        ObservableUniverse(as_of=snapshot.date), so the
+                        temporal-safety concern is resolved; however it
+                        still rebuilds the Snapshot ->
+                        ObservableUniverse -> SimilarityEngine.top() ->
+                        EvidenceEngine flow locally instead of
+                        delegating to build_research_result(). It also
+                        uses ValidationEngine for confidence
+                        (coverage/consistency/diversity/stability, with
+                        stability hardcoded to 1.0), a separate
+                        confidence computation outside the current
+                        DecisionEngine path. The remaining issue is
+                        boundary and source-of-truth duplication, not
+                        temporal leakage.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -282,7 +283,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-028.2 invoke no exception: the Research Validation
+RE-025.1-RE-026.1.2 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. RE-027.1 is documentation-only audit work, and
@@ -294,6 +295,8 @@ Validation, to verify its canonical metrics, or to close the
 `ResearchEngine` gap. RE-028.1 is documentation-only scope work for a
 future Evidence Engine v2. RE-028.2 implements that Evidence v2 as an
 additive Evidence-layer change, not a frozen Core modification.
+RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
+governance scope audits.
 
 ------------------------------------------------------------------------
 
@@ -309,7 +312,10 @@ additive Evidence-layer change, not a frozen Core modification.
                                   fields added in RE-028.2. Existing
                                   v1 fields and semantics preserved.
   Research Engine                v1 — rebuilt facade over the shared verified research pipeline (RE-027.2-RE-027.5). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
-  Assessment Engine              v1
+  Assessment Engine              v1 — scope audited in RE-029.2.
+                                  Temporal-safety issue resolved since
+                                  RE-024.3; remaining issue is boundary
+                                  and source-of-truth duplication.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -1341,6 +1347,44 @@ Boundary:
 The Engine may surface flags and descriptive evidence. It must not
 decide capital deployment by itself.
 
+## RE-029.2 — AssessmentEngine boundary audit
+
+RE-029.2 audits `engine/assessment_engine.py` against the RE-029.1
+boundary before changing code.
+
+Verified current behaviour:
+
+-   `AssessmentEngine` is not called by `run.py`.
+-   It does use `ObservableUniverse(dataset, as_of=snapshot.date)`, so
+    the older temporal-safety concern is resolved.
+-   It builds evidence from `SimilarityEngine.top(..., n=10)` and
+    `EvidenceEngine().build(..., years=5)`.
+-   It still implements that research flow locally instead of
+    delegating to the shared `build_research_result()` pipeline used by
+    `DecisionEngine` and `ResearchEngine`.
+-   It computes confidence through `ValidationEngine`, using
+    coverage/consistency/diversity/stability, with stability currently
+    hardcoded to 1.0.
+-   It exposes interpretive helpers such as `drawdown_zone()`,
+    `expected_return_5y()`, `upside_potential()` and `downside_risk()`.
+
+Boundary conclusion:
+
+-   Evidence production belongs to the shared Research pipeline.
+-   Evidence description belongs to `EvidenceEngine`.
+-   Evidence interpretation may belong to `AssessmentEngine`.
+-   Capital posture, dry-powder deployment, portfolio reallocation and
+    human approval belong to SOP governance, not to `AssessmentEngine`.
+
+Therefore `AssessmentEngine` v2 should not become a decision engine. Its
+next code iteration should first remove source-of-truth duplication by
+consuming `build_research_result()` or `ResearchResult`, then expose
+assessment flags about evidence quality, fragility and applicability.
+It must not produce portfolio actions, capital amounts or automatic
+deployment instructions.
+
+This is documentation-only scope control. No code changed.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1367,13 +1411,20 @@ Interpretation moves to Assessment / SOP governance.
 
 ## Phase 2
 
-Assessment Engine v2 — opened with RE-029.1 scope audit.
+Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
+audited in RE-029.2.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
 initial invalidation gates, and mandatory human approval for capital
 deployment. It deliberately does not define numeric thresholds or
 automatic actions.
+
+RE-029.2 audits the current `AssessmentEngine`: temporal safety is
+already resolved, but it still duplicates the Research pipeline locally
+and computes confidence through a separate `ValidationEngine` path. The
+next code step should make `AssessmentEngine` consume the shared
+Research result before adding new assessment flags.
 
 ## Phase 3
 
@@ -1463,6 +1514,22 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.24
+
+-   Added RE-029.2: `AssessmentEngine` boundary audit.
+-   Verified that `AssessmentEngine` is not called by `run.py`.
+-   Verified that the older temporal-safety issue is already resolved:
+    it uses `ObservableUniverse(dataset, as_of=snapshot.date)`.
+-   Documented the remaining issue: `AssessmentEngine` still duplicates
+    the Research pipeline locally instead of consuming
+    `build_research_result()` / `ResearchResult`.
+-   Documented that `AssessmentEngine` computes confidence through a
+    separate `ValidationEngine` path, including hardcoded stability.
+-   Clarified the v2 boundary: Assessment may interpret evidence quality,
+    fragility and applicability, but must not decide capital posture,
+    deployment size, dry-powder usage or portfolio reallocation.
+-   No code changed.
 
 ## Version 1.23
 
