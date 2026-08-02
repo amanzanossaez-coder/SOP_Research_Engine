@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.22\
+**Version:** 1.23\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-028.2)
+# Execution State (as of RE-029.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -1256,6 +1256,91 @@ Known boundary after RE-028.4:
 
 This closes Evidence Engine v2 for the current architecture pass.
 
+## RE-029.1 — Assessment / SOP governance scope audit
+
+RE-029.1 opens the Assessment / SOP governance block as documentation-only
+scope work.
+
+The purpose is to define the boundary before writing rules:
+
+-   Evidence describes objective historical observations.
+-   Assessment interprets evidence quality, fragility and applicability.
+-   SOP governance maps that interpretation into capital posture.
+-   Human approval remains the final control for any capital deployment.
+
+Primary objective hierarchy:
+
+1.  Avoid irreversible error.
+2.  Preserve capital in real terms.
+3.  Maximize long-term return only after the first two constraints are
+    respected.
+
+This hierarchy is a governance choice, not an output of the model. If
+the order changes, the rest of the SOP changes with it.
+
+Dry powder definition:
+
+`Dry powder` means deployable investable liquidity available within a
+short operational window without principal impairment. It is not limited
+to literal cash; it may include money-market instruments, T-bills or
+credit lines that the owner is explicitly willing to use
+countercyclically.
+
+Protocol separation:
+
+-   Dry Powder Protocol: idle or reserved deployable capital becomes
+    invested capital. It increases net risk exposure and is governed by
+    the capital posture language below.
+-   Portfolio Reallocation Protocol: one risk asset is sold to buy
+    another risk asset. It does not necessarily increase net risk
+    exposure; it changes concentration and requires its own future
+    invalidators, including liquidity and risk of the asset sold,
+    correlation between the asset sold and the asset bought, and the
+    cost of crystallizing the loss on the asset sold.
+
+These are separate SOP protocols. They must not be collapsed into one
+rule merely because both can occur during a drawdown.
+
+Capital posture language:
+
+-   Conserve.
+-   Prepare.
+-   Deploy partially.
+-   Deploy aggressively.
+
+`Blocked` is not a fifth intensity level. It is an orthogonal veto flag
+that can override any posture when the framework itself is not reliable
+enough to act.
+
+Initial invalidation gates:
+
+-   Evidence quality: weak or degraded historical evidence, including
+    validation diagnostics, sample fragility, dispersion or insufficient
+    comparable support.
+-   Regime comparability: the current drawdown must have structurally
+    meaningful precedent, not only numerical proximity.
+-   Personal capacity: even good evidence is unusable if deployable
+    liquidity, operational readiness or personal constraints make action
+    inappropriate.
+
+Human approval policy:
+
+-   `Conserve` and `Prepare` may be logged without committing capital.
+-   `Deploy partially` and `Deploy aggressively` require explicit human
+    approval with timestamp before execution.
+-   A `Blocked` flag always forces human review before any deployment
+    action.
+
+Boundary:
+
+-   No code changes in RE-029.1.
+-   No thresholds are defined yet.
+-   No automatic capital decisions are introduced.
+-   No `AssessmentEngine` rewrite is performed in this iteration.
+
+The Engine may surface flags and descriptive evidence. It must not
+decide capital deployment by itself.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1282,7 +1367,13 @@ Interpretation moves to Assessment / SOP governance.
 
 ## Phase 2
 
-Assessment Engine v2
+Assessment Engine v2 — opened with RE-029.1 scope audit.
+
+RE-029.1 defines the first governance boundary for Assessment / SOP:
+four capital-intensity postures, one orthogonal `Blocked` veto, three
+initial invalidation gates, and mandatory human approval for capital
+deployment. It deliberately does not define numeric thresholds or
+automatic actions.
 
 ## Phase 3
 
@@ -1372,6 +1463,26 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.23
+
+-   Added RE-029.1: Assessment / SOP governance scope audit.
+-   Defined the primary objective hierarchy: avoid irreversible error,
+    preserve real capital, then maximize long-term return.
+-   Defined dry powder as deployable investable liquidity, not merely
+    literal cash.
+-   Separated the Dry Powder Protocol from the Portfolio Reallocation
+    Protocol: increasing net exposure is not the same decision as
+    rotating between risk assets.
+-   Established four capital-intensity postures: Conserve, Prepare,
+    Deploy partially and Deploy aggressively.
+-   Established `Blocked` as an orthogonal veto flag, not a fifth
+    intensity level.
+-   Added three initial invalidation gates: evidence quality, regime
+    comparability and personal capacity.
+-   Required explicit human approval with timestamp for partial or
+    aggressive deployment.
+-   No code changed.
 
 ## Version 1.22
 
