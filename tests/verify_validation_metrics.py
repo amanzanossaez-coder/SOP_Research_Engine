@@ -8,6 +8,12 @@ It verifies the canonical values established by RE-025 under the pinned
 runtime in requirements.txt.
 """
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from engine.drawdown_engine import run_drawdown_engine
 from engine.validation_harness import ValidationHarness
 from engine.validation_metrics import (
