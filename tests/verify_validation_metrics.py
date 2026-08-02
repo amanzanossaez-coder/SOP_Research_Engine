@@ -9,6 +9,7 @@ runtime in requirements.txt.
 """
 
 from pathlib import Path
+from importlib.metadata import PackageNotFoundError, version
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,51 @@ EXPECTED_REPEATED_FORECAST_GROUPS = [
 ]
 
 
+def pinned_runtime() -> dict[str, str]:
+    requirements = {}
+
+    for line in (ROOT / "requirements.txt").read_text().splitlines():
+        line = line.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        if "==" not in line:
+            continue
+
+        package, expected_version = line.split("==", 1)
+        requirements[package] = expected_version
+
+    return requirements
+
+
+def verify_runtime() -> None:
+    expected = pinned_runtime()
+    mismatches = []
+
+    for package, expected_version in expected.items():
+        try:
+            actual_version = version(package)
+        except PackageNotFoundError:
+            actual_version = "not installed"
+
+        if actual_version != expected_version:
+            mismatches.append(
+                f"Expected {package}=={expected_version}, got {actual_version}"
+            )
+
+    if mismatches:
+        print("RUNTIME : MISMATCH")
+
+        for mismatch in mismatches:
+            print(mismatch)
+
+        print("Cannot verify canonical metrics outside pinned runtime.")
+        raise SystemExit(1)
+
+    print("RUNTIME : PINNED")
+
+
 def assert_close(label: str, actual: float, expected: float) -> None:
     if abs(actual - expected) > 1e-12:
         raise AssertionError(
@@ -73,6 +119,8 @@ def bottom_date(record) -> float:
 
 
 def main() -> None:
+    verify_runtime()
+
     dataset = run_drawdown_engine()
     harness = ValidationHarness(dataset)
     records = harness.run()
