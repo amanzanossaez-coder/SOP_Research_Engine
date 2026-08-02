@@ -84,6 +84,7 @@ def main():
                 "engine/snapshot_engine.py",
                 "engine/similarity_engine.py",
                 "engine/validation_harness.py",
+                "engine/validation_metrics.py",
                 "engine/evidence_engine.py",
                 "engine/assessment_engine.py",
                 "engine/inference_engine.py",
