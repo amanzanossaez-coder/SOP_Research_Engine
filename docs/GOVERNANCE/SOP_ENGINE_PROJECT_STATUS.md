@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.24\
+**Version:** 1.25\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -1385,6 +1385,33 @@ deployment instructions.
 
 This is documentation-only scope control. No code changed.
 
+
+## RE-DOC-004 — Assessment / SOP boundary follow-up notes
+
+RE-DOC-004 records two scope notes discovered after RE-029.2.
+
+First, `AssessmentEngine.drawdown_zone()` and SOP capital posture are
+separate axes. `drawdown_zone()` currently labels market severity
+(`NORMAL`, `CORRECTION`, `BEAR MARKET`, `CRISIS`). Capital posture labels
+(`Conserve`, `Prepare`, `Deploy partially`, `Deploy aggressively`) govern
+action intensity. Market severity may become one input into posture, but
+it is not itself a deployment decision. These taxonomies must not be
+merged silently just because both describe drawdown context.
+
+Second, stepped error tolerance remains explicitly pending. The intended
+governance direction is conservative by default and aggressive only when
+independent signals converge. RE-029.1 deliberately defines no thresholds
+and no trigger logic, so this principle is recorded here as future SOP
+governance work, not as current executable behavior.
+
+Boundary:
+
+-   No code changes.
+-   No thresholds are defined.
+-   No automatic capital decisions are introduced.
+-   Future posture logic must preserve the distinction between market
+    severity, evidence quality, personal capacity and capital action.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1422,9 +1449,12 @@ automatic actions.
 
 RE-029.2 audits the current `AssessmentEngine`: temporal safety is
 already resolved, but it still duplicates the Research pipeline locally
-and computes confidence through a separate `ValidationEngine` path. The
-next code step should make `AssessmentEngine` consume the shared
-Research result before adding new assessment flags.
+and computes confidence through a separate `ValidationEngine` path.
+RE-DOC-004 records two follow-up boundaries before trigger design:
+`drawdown_zone()` is market severity, not capital posture; and stepped
+error tolerance remains pending until SOP governance defines trigger
+logic. The next code step should make `AssessmentEngine` consume the
+shared Research result before adding new assessment flags.
 
 ## Phase 3
 
@@ -1514,6 +1544,18 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.25
+
+-   Added RE-DOC-004: Assessment / SOP boundary follow-up notes.
+-   Clarified that `AssessmentEngine.drawdown_zone()` is a market
+    severity taxonomy, not a capital posture taxonomy.
+-   Recorded stepped error tolerance as pending SOP governance work:
+    conservative by default, aggressive only when independent signals
+    converge.
+-   Reaffirmed that no thresholds, trigger logic or automatic capital
+    decisions are introduced in this documentation pass.
+-   No code changed.
 
 ## Version 1.24
 
