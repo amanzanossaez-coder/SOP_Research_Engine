@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.20\
+**Version:** 1.21\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -1189,6 +1189,40 @@ not yet have a realized return at the requested horizon. Evidence v2
 makes that sample coverage visible without turning it into an
 assessment score.
 
+## RE-028.3 — Evidence percentile field gate
+
+RE-028.3 decides not to add new named percentile fields yet.
+
+Current verified behavior:
+
+-   `Evidence.percentile(p)` already exposes arbitrary downside/upside
+    return percentiles on demand.
+-   `median_return`, `worst_return`, `best_return` and
+    `percentile(p)` share the same `percentile_from_sorted()` rule.
+-   Evidence v2 already describes the current sample shape through
+    return_count, positive/negative/zero counts,
+    non_positive_probability and return_spread.
+
+Design decision:
+
+-   Explicit named percentile fields such as p10/p25/p75/p90 are
+    deferred until Assessment or SOP governance defines why those exact
+    thresholds are needed.
+-   Evidence must not make arbitrary interpretive cutoffs look
+    canonical just because they were convenient to compute.
+-   Until a protocol needs named thresholds, `percentile(p)` remains
+    the correct descriptive interface.
+
+Boundary:
+
+-   Evidence can describe a distribution.
+-   Evidence must not decide which percentile is "defensive",
+    "aggressive", "safe" or "actionable".
+-   Those labels belong to Assessment / SOP governance, not to
+    EvidenceEngine.
+
+This is documentation-only scope control. No code changed.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1277,6 +1311,12 @@ shape of the realized return sample observable while preserving the
 Evidence boundary: description only, no confidence score, no portfolio
 recommendation and no SOP action.
 
+RE-028.3 closes the next Evidence v2 scope question without adding
+code: named percentile fields are deferred. `Evidence.percentile(p)`
+already provides the descriptive surface; fixed percentile names should
+only be added after Assessment / SOP governance defines the thresholds
+it actually needs.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -1292,6 +1332,17 @@ recommendation and no SOP action.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.21
+
+-   Added RE-028.3: Evidence percentile field gate.
+-   Confirmed that `Evidence.percentile(p)` remains the active
+    descriptive interface for arbitrary distribution markers.
+-   Deferred named percentile fields such as p10/p25/p75/p90 until
+    Assessment / SOP governance defines their interpretation.
+-   Reaffirmed the Evidence boundary: describe distributions, do not
+    label them as actionable.
+-   No code changed.
 
 ## Version 1.20
 
