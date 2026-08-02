@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.7\
+**Version:** 1.8\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -70,7 +70,7 @@ Observable Universe block (RE-023.x) is stabilized.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.5)
+# Execution State (as of RE-025.6)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -124,7 +124,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1-RE-025.5), fully independent of
+  Research Validation  Exists (RE-025.1-RE-025.6), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -218,7 +218,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-025.5 invoke no exception: the Research Validation
+RE-025.1-RE-025.6 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -239,7 +239,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies (RE-025.1-RE-025.5). Offline only, not wired into run.py.
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat (RE-025.1-RE-025.6). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -596,7 +596,46 @@ when the computational environment is reproducible.
 
 This does not solve effective sample size. `n=19` remains an
 operative count of evaluable records, not a claim that 19 independent
-observations exist. Effective N is deferred to RE-025.6.
+observations exist. Effective N is addressed conceptually in
+RE-025.6, but not converted into a numeric correction yet.
+
+## RE-025.6 — Effective sample size caveat
+
+Research Validation now explicitly separates operational count from
+independent evidence. The live validation set contains 19 evaluable
+records, but `n=19` is only a count of records that produced both a
+forecast and a realized 5-year return. It is not, by itself, a claim
+that 19 statistically independent observations exist.
+
+The first source of dependence is mechanical and outcome-side:
+overlap between realized 5-year return windows. If two evaluated
+episodes share part of their future 5-year window, part of their
+`actual` return is literally measured over the same market interval.
+That makes the two validation records less independent than two
+non-overlapping observations, even if the forecast procedure is
+otherwise point-in-time safe.
+
+This 5-year-window overlap criterion is necessary, but not sufficient.
+RE-025.4 exposed a second, forecast-side dependence channel: repeated
+forecasts. The 19 evaluable records contain only 7 unique forecast
+values. For example, 1998.09 and 2009.03 do not overlap in their
+future 5-year realized-return windows, but both received the exact
+same forecast value: 0.113866763522. That can happen when
+`SimilarityEngine.top()` produces match sets whose median return is
+effectively the same, and it means rows that look independent on the
+outcome side can still share forecast structure.
+
+RE-025.6 therefore does not publish a numeric effective N. It records
+the methodological boundary: current Research Validation metrics are
+exploratory diagnostics over 19 evaluable records, with known
+dependence through at least two channels:
+
+-   overlapping realized 5-year return windows;
+-   repeated forecasts / potentially overlapping comparable sets.
+
+Future work may quantify these channels separately. Until then,
+MAE, directional hit-rate and rank correlation must not be described
+as if they were computed over 19 independent observations.
 
 ------------------------------------------------------------------------
 
@@ -632,9 +671,10 @@ Engine already produces, rather than belonging to any single phase.
 Not yet reflected as its own phase; revisit if the harness grows
 enough to justify one.
 
-Effective sample size remains pending. Until RE-025.6 defines it,
-Research Validation metrics should keep treating `n=19` as an
-operative count, not as an independent statistical sample.
+Effective sample size is documented conceptually in RE-025.6, but no
+numeric effective-N correction exists yet. Research Validation metrics
+should keep treating `n=19` as an operative count, not as an
+independent statistical sample.
 
 ------------------------------------------------------------------------
 
@@ -651,6 +691,22 @@ operative count, not as an independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.8
+
+-   Added RE-025.6: effective sample size caveat for Research
+    Validation.
+-   Documented that `n=19` is an operative count of evaluable records,
+    not an independent sample-size claim.
+-   Identified overlapping realized 5-year return windows as the
+    first mechanical source of dependence.
+-   Recorded a second, forecast-side dependence channel: repeated
+    forecasts / potentially overlapping comparable sets. Live dataset
+    currently has 19 evaluable records but only 7 unique forecast
+    values; 1998.09 and 2009.03 share forecast=0.113866763522 despite
+    non-overlapping future 5-year windows.
+-   Kept RE-025.6 conceptual only: no numeric effective-N correction
+    is published yet.
 
 ## Version 1.7
 
