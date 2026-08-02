@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.25\
+**Version:** 1.26\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.2)
+# Execution State (as of RE-029.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -119,21 +119,18 @@ verified:
 
   Component           State
   ------------------- ------------------------------------------------
-  AssessmentEngine     Exists, compiles. Not called by run.py. RE-029.2
-                        audits its current boundary: it uses
-                        ObservableUniverse(as_of=snapshot.date), so the
-                        temporal-safety concern is resolved; however it
-                        still rebuilds the Snapshot ->
-                        ObservableUniverse -> SimilarityEngine.top() ->
-                        EvidenceEngine flow locally instead of
-                        delegating to build_research_result(). It also
-                        uses ValidationEngine for confidence
+  AssessmentEngine     Exists, compiles. Not called by run.py. As of
+                        RE-029.3 it consumes build_research_result(),
+                        the same shared Research pipeline used by
+                        DecisionEngine and ResearchEngine. RE-029.4
+                        verifies its public helper outputs after that
+                        refactor. The temporal-safety and research
+                        source-of-truth duplication concerns are
+                        resolved. Confidence remains a separate
+                        ValidationEngine path
                         (coverage/consistency/diversity/stability, with
-                        stability hardcoded to 1.0), a separate
-                        confidence computation outside the current
-                        DecisionEngine path. The remaining issue is
-                        boundary and source-of-truth duplication, not
-                        temporal leakage.
+                        stability hardcoded to 1.0) and must not drive
+                        SOP capital gates until a later calibration pass.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -296,7 +293,10 @@ Validation, to verify its canonical metrics, or to close the
 future Evidence Engine v2. RE-028.2 implements that Evidence v2 as an
 additive Evidence-layer change, not a frozen Core modification.
 RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
-governance scope audits.
+governance scope audits. RE-029.3 refactors `AssessmentEngine` to
+consume the shared Research pipeline without modifying frozen Core
+components. RE-029.4 adds verification for the public Assessment helper
+surface.
 
 ------------------------------------------------------------------------
 
@@ -312,10 +312,13 @@ governance scope audits.
                                   fields added in RE-028.2. Existing
                                   v1 fields and semantics preserved.
   Research Engine                v1 — rebuilt facade over the shared verified research pipeline (RE-027.2-RE-027.5). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
-  Assessment Engine              v1 — scope audited in RE-029.2.
-                                  Temporal-safety issue resolved since
-                                  RE-024.3; remaining issue is boundary
-                                  and source-of-truth duplication.
+  Assessment Engine              v1 — consumes the shared Research
+                                  pipeline as of RE-029.3. Public
+                                  helpers smoke-tested in RE-029.4. Not
+                                  called by run.py. Remaining issue is
+                                  confidence calibration/boundary, not
+                                  temporal leakage or Research pipeline
+                                  duplication.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -1412,6 +1415,45 @@ Boundary:
 -   Future posture logic must preserve the distinction between market
     severity, evidence quality, personal capacity and capital action.
 
+## RE-029.3 — AssessmentEngine consumes shared Research pipeline
+
+RE-029.3 refactors `engine/assessment_engine.py` so `AssessmentEngine`
+consumes `build_research_result(dataset, matches_count=10,
+horizon_years=5)` instead of rebuilding Snapshot -> ObservableUniverse
+-> SimilarityEngine.top() -> EvidenceEngine locally.
+
+This closes the source-of-truth duplication identified in RE-029.2.
+`AssessmentEngine`, `DecisionEngine` and `ResearchEngine` now share the
+same objective Research pipeline for evidence production.
+
+Boundary:
+
+-   No capital posture.
+-   No dry-powder deployment.
+-   No portfolio reallocation.
+-   No automatic recommendations.
+
+Confidence remains out of scope. `AssessmentEngine.confidence()` still
+uses `ValidationEngine`, including stability hardcoded to 1.0. That
+score must not feed SOP capital gates until a later
+governance/calibration pass defines it.
+
+## RE-029.4 — AssessmentEngine public helper verification
+
+RE-029.4 verifies that the public Assessment helper surface remains
+stable after RE-029.3.
+
+Verified result:
+
+-   `drawdown_zone`: NORMAL
+-   `expected_return_5y`: 0.113866763521769
+-   `upside_potential`: 0.132855208016562
+-   `downside_risk`: -0.010919489332530
+-   `matches`: 10
+
+This verifies the public helper outputs, not confidence calibration and
+not SOP capital posture.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1439,7 +1481,8 @@ Interpretation moves to Assessment / SOP governance.
 ## Phase 2
 
 Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
-audited in RE-029.2.
+audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
+public helpers verified in RE-029.4.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1453,8 +1496,14 @@ and computes confidence through a separate `ValidationEngine` path.
 RE-DOC-004 records two follow-up boundaries before trigger design:
 `drawdown_zone()` is market severity, not capital posture; and stepped
 error tolerance remains pending until SOP governance defines trigger
-logic. The next code step should make `AssessmentEngine` consume the
-shared Research result before adding new assessment flags.
+logic.
+
+RE-029.3 makes `AssessmentEngine` consume the shared
+`build_research_result()` pipeline, closing the Research source-of-truth
+duplication identified in RE-029.2. RE-029.4 verifies the public helper
+outputs after that refactor. Remaining Assessment work is confidence
+calibration and governance boundary design, not temporal-safety repair
+or duplicate Research pipeline migration.
 
 ## Phase 3
 
@@ -1544,6 +1593,23 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.26
+
+-   Added RE-029.3: `AssessmentEngine` now consumes the shared
+    `build_research_result()` Research pipeline instead of rebuilding
+    Snapshot / Observable Universe / Similarity / Evidence locally.
+-   Documented that source-of-truth duplication is resolved for
+    Assessment evidence production.
+-   Added RE-029.4: verified `AssessmentEngine` public helper outputs
+    after the refactor.
+-   Recorded verified outputs: `drawdown_zone=NORMAL`,
+    `expected_return_5y=0.113866763521769`,
+    `upside_potential=0.132855208016562`,
+    `downside_risk=-0.010919489332530`, `matches=10`.
+-   Clarified that confidence remains a separate unresolved path through
+    `ValidationEngine`, including hardcoded stability, and must not drive
+    SOP capital gates yet.
 
 ## Version 1.25
 
