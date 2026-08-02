@@ -1,49 +1,42 @@
-from engine.evidence_engine import EvidenceEngine
-from engine.observable_universe import ObservableUniverse
-from engine.similarity_engine import SimilarityEngine
-from engine.snapshot_engine import SnapshotEngine
+from engine.research_pipeline import build_research_result
 from engine.validation_engine import ValidationEngine
 
 
 class AssessmentEngine:
+    """
+    Interprets Research evidence without rebuilding the Research pipeline.
+
+    RE-029.3 makes AssessmentEngine consume build_research_result(), the
+    same source of truth used by DecisionEngine and ResearchEngine. This
+    keeps Snapshot -> ObservableUniverse -> SimilarityEngine.top() ->
+    EvidenceEngine in one place.
+
+    Confidence remains out of scope for RE-029.3. It is still computed
+    by ValidationEngine, including the current stability placeholder
+    that returns 1.0. That score must not be used as a capital-allocation
+    gate until the placeholder is replaced or explicitly governed.
+    """
 
     def __init__(self, dataset):
 
         self.dataset = dataset
 
-        self.snapshot = SnapshotEngine(dataset).latest()
-
-        # RE-024.3:
-        # AssessmentEngine adopta el mismo flujo operativo que
-        # DecisionEngine:
-        #
-        # Dataset -> ObservableUniverse -> Similarity -> Evidence
-        #
-        # ValidationEngine permanece sin cambios en esta iteración.
-
-        self.universe = ObservableUniverse(
+        self.research = build_research_result(
             dataset,
-            as_of=self.snapshot.date,
+            matches_count=10,
+            horizon_years=5,
         )
 
-        self.similarity = SimilarityEngine(
-            self.universe.episodes(),
-        )
+        self.snapshot = self.research.snapshot
 
-        self.matches = self.similarity.top(
-            self.snapshot,
-            n=10,
-        )
+        self.matches = self.research.matches
+
+        self.evidence = self.research.evidence
 
         self.validation = ValidationEngine()
 
         self.confidence = self.validation.confidence(
             self.matches,
-        )
-
-        self.evidence = EvidenceEngine().build(
-            self.matches,
-            years=5,
         )
 
     def drawdown_zone(self):
