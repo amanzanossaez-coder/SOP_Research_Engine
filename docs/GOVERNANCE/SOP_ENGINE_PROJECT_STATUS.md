@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.9\
+**Version:** 1.10\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.6)
+# Execution State (as of RE-025.8)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -144,7 +144,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1-RE-025.6), fully independent of
+  Research Validation  Exists (RE-025.1-RE-025.8), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -238,7 +238,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-025.6 invoke no exception: the Research Validation
+RE-025.1-RE-025.8 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -259,7 +259,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat (RE-025.1-RE-025.6). Offline only, not wired into run.py.
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic (RE-025.1-RE-025.8). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -657,6 +657,56 @@ Future work may quantify these channels separately. Until then,
 MAE, directional hit-rate and rank correlation must not be described
 as if they were computed over 19 independent observations.
 
+## RE-025.8 — Overlapping outcome window diagnostic
+
+`engine/validation_metrics.py` adds
+`overlapping_outcome_windows(records)`: a diagnostic that returns
+pairs of evaluable validation records whose realized 5-year outcome
+windows overlap. It is a dependency diagnostic, not a new accuracy
+metric.
+
+The function deliberately returns pairs, not just a count, to preserve
+explainability. It filters with `record.evaluable`, matching the
+canonical Research Validation criterion used by MAE, directional
+hit-rate and rank correlation. It does not change `ValidationHarness`
+and does not alter any existing metric.
+
+Window overlap is defined as:
+
+    start_a < end_b and start_b < end_a
+
+where:
+
+    start = episode.bottom_date
+    end = episode.bottom_date + horizon_years
+
+The dataset stores dates as `YYYY.MM`, where `.01` through `.12`
+represent months, not year fractions. For this diagnostic, comparing
+dates and adding an integer 5-year horizon are valid operations:
+`1932.06 + 5 == 1937.06`. Direct subtraction of these floats is not
+valid for duration or ratio calculations: `1933.01 - 1932.12` would
+produce `0.89`, not one month. RE-025.8 therefore publishes no overlap
+duration and no overlap ratio.
+
+Measured against the live dataset: 23 episodes, sample_size=21,
+evaluated_count=19, overlap_pairs=10. The overlapping pairs are:
+
+-   1903.10 / 1907.11
+-   1957.12 / 1960.10
+-   1957.12 / 1962.06
+-   1960.10 / 1962.06
+-   1962.06 / 1966.10
+-   1966.10 / 1970.06
+-   1970.06 / 1974.12
+-   1987.12 / 1990.10
+-   1998.09 / 2003.02
+-   2018.12 / 2020.03
+
+This strengthens the RE-025.6 conclusion: `n=19` is an operative
+count, not an independent sample-size claim. RE-025.8 still does not
+publish a numeric effective N. It only makes one known dependence
+channel directly observable.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -691,9 +741,10 @@ Engine already produces, rather than belonging to any single phase.
 Not yet reflected as its own phase; revisit if the harness grows
 enough to justify one.
 
-Effective sample size is documented conceptually in RE-025.6, but no
-numeric effective-N correction exists yet. Research Validation metrics
-should keep treating `n=19` as an operative count, not as an
+Effective sample size is documented conceptually in RE-025.6 and one
+outcome-side dependence channel is now observable through RE-025.8,
+but no numeric effective-N correction exists yet. Research Validation
+metrics should keep treating `n=19` as an operative count, not as an
 independent statistical sample.
 
 ------------------------------------------------------------------------
@@ -711,6 +762,19 @@ independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.10
+
+-   Added RE-025.8: overlapping outcome window diagnostic.
+-   Added `overlapping_outcome_windows(records)` to
+    `engine/validation_metrics.py`, returning pairs of evaluable
+    records whose realized 5-year outcome windows overlap.
+-   Verified against the live dataset: 23 episodes, sample_size=21,
+    evaluated_count=19, overlap_pairs=10.
+-   Documented the `YYYY.MM` date constraint: comparisons and adding
+    an integer 5-year horizon are valid for boolean overlap detection;
+    direct subtraction is not valid for durations or ratios.
+-   Reaffirmed that no numeric effective N is published yet.
 
 ## Version 1.9
 
