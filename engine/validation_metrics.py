@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from engine.validation_harness import ValidationRecord
 
@@ -181,6 +181,44 @@ def rank_correlation(
         return None
 
     return covariance / denominator
+
+
+def overlapping_outcome_windows(
+    records: List[ValidationRecord],
+) -> List[Tuple[ValidationRecord, ValidationRecord]]:
+    """
+    Pares de records evaluables cuyas ventanas futuras de outcome se
+    solapan.
+
+    RE-025.8 usa esto como diagnostico de no-independencia entre
+    actuals, no como correccion numerica de N efectivo. Las fechas del
+    dataset usan notacion YYYY.MM; comparar y sumar un horizonte entero
+    en years es seguro para detectar solape booleano, pero no debe
+    usarse resta directa de floats para medir duraciones.
+    """
+
+    evaluable_records = [
+        record
+        for record in records
+        if record.evaluable
+    ]
+
+    pairs = []
+
+    for i, left in enumerate(evaluable_records):
+
+        left_start = left.episode.bottom_date
+        left_end = left_start + left.horizon_years
+
+        for right in evaluable_records[i + 1:]:
+
+            right_start = right.episode.bottom_date
+            right_end = right_start + right.horizon_years
+
+            if left_start < right_end and right_start < left_end:
+                pairs.append((left, right))
+
+    return pairs
 
 
 EXPLORATORY_DISCLAIMER = (
