@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.8\
+**Version:** 1.9\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -32,6 +32,26 @@ longer matches this document, and are marked pending consolidation.
 They should not be updated as a substitute for this file. A future,
 dedicated iteration will merge or retire them — not before the
 Observable Universe block (RE-023.x) is stabilized.
+
+------------------------------------------------------------------------
+
+# Documentation History Policy (RE-DOC-002)
+
+The changelog preserves project history. It should record what was
+known, claimed or shipped at the time of each version, not silently
+rewrite past entries to match later knowledge.
+
+When a later iteration supersedes a prior metric, interpretation or
+claim, the correction should be documented forward in the new version
+that discovered or authorized the change. Prior changelog entries may
+only be edited when they contain a dangerous factual error that would
+mislead current use of the system if left unqualified.
+
+This policy follows from RE-025.5: earlier documentation had reported
+MAE=7.05%, and the pinned runtime later established MAE=7.03% as the
+canonical value. The correct governance pattern is to preserve the
+fact that the value changed and explain why, not make the historical
+path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
@@ -691,6 +711,16 @@ independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.9
+
+-   Added RE-DOC-002: documentation history policy.
+-   Established that changelog entries preserve historical project
+    state; corrections should be documented forward in the version
+    that discovers or authorizes them.
+-   Recorded the RE-025.5 MAE correction as the motivating example:
+    previous documentation reported 7.05%, while the pinned runtime
+    established 7.03% as canonical.
 
 ## Version 1.8
 
