@@ -1,48 +1,57 @@
-from engine.snapshot_engine import SnapshotEngine
-from engine.similarity_engine import SimilarityEngine
 from engine.evidence_engine import EvidenceEngine
-from engine.explanation_engine import ExplanationEngine
-from engine.assessment_engine import AssessmentEngine
+from engine.observable_universe import ObservableUniverse
+from engine.similarity_engine import SimilarityEngine
+from engine.snapshot_engine import SnapshotEngine
+from models.research_result import ResearchResult
 
 
 class ResearchEngine:
     """
-    Orchestrates the complete research pipeline.
+    Orchestrates the objective Research pipeline.
 
-    The Research Engine never manipulates DataFrames directly.
-    It coordinates the domain engines.
+    RE-027.3 rebuilds ResearchEngine as a thin facade over the same
+    operative flow already verified through DecisionEngine:
+
+    SnapshotEngine
+    -> ObservableUniverse
+    -> SimilarityEngine.top()
+    -> EvidenceEngine
+    -> ResearchResult
+
+    ResearchEngine produces evidence. It never produces portfolio
+    decisions, recommendations or protocol actions.
     """
 
-    def __init__(self):
+    def run(
+        self,
+        dataset,
+        matches_count: int = 10,
+        horizon_years: int = 5,
+    ) -> ResearchResult:
 
-        self.snapshot_engine = SnapshotEngine()
-        self.evidence_engine = EvidenceEngine()
-        self.explanation_engine = ExplanationEngine()
-        self.assessment_engine = AssessmentEngine()
+        snapshot = SnapshotEngine(dataset).latest()
 
-    def run(self, dataset):
+        universe = ObservableUniverse(
+            dataset,
+            as_of=snapshot.date,
+        )
 
-        # 1. Build current market snapshot
+        similarity = SimilarityEngine(
+            universe.episodes(),
+        )
 
-        snapshot = self.snapshot_engine.build(dataset)
+        matches = similarity.top(
+            snapshot,
+            n=matches_count,
+        )
 
-        # 2. Find similar historical episodes
+        evidence = EvidenceEngine().build(
+            matches,
+            years=horizon_years,
+        )
 
-        similarity_engine = SimilarityEngine(dataset)
-        similarities = similarity_engine.compare(snapshot)
-
-        # 3. Generate historical evidence
-
-        evidence = self.evidence_engine.build(similarities)
-
-        # 4. Generate explanation
-
-        explanation = self.explanation_engine.build(similarities)
-
-        # Assessment and inference will be incorporated
-        # in future iterations.
-
-        return {
-            "evidence": evidence,
-            "explanation": explanation,
-        }
+        return ResearchResult(
+            snapshot=snapshot,
+            matches=matches,
+            evidence=evidence,
+        )
