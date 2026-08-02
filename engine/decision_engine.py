@@ -1,7 +1,4 @@
-from engine.snapshot_engine import SnapshotEngine
-from engine.observable_universe import ObservableUniverse
-from engine.similarity_engine import SimilarityEngine
-from engine.evidence_engine import EvidenceEngine
+from engine.research_pipeline import build_research_result
 
 
 class DecisionEngine:
@@ -20,39 +17,27 @@ class DecisionEngine:
     evidencia y la presenta -- igual que ya hacia con Snapshot,
     Universe y Similarity.
 
-    Contrato: DecisionEngine reutiliza una unica coleccion de
-    matches para toda la evidencia del analisis -- Evidence.matches
-    y lo que devuelve historical_matches() son, con certeza, la
-    misma coleccion, nunca el resultado de dos invocaciones
-    separadas de SimilarityEngine.top() (que aunque coincidieran en
-    contenido no serian los mismos objetos). Hoy eso se logra
-    calculando self._matches una unica vez en __init__; si mañana
-    cambia la implementacion, esta propiedad debe seguir
-    cumpliendose.
+    RE-027.5: DecisionEngine deja de reimplementar el pipeline de
+    Research. Consume la misma fuente de verdad que ResearchEngine:
+    build_research_result(). Asi, Snapshot -> ObservableUniverse ->
+    SimilarityEngine.top() -> EvidenceEngine vive en un solo sitio.
     """
 
     def __init__(self, dataset):
 
         self.dataset = dataset
 
-        self.snapshot = SnapshotEngine(dataset).latest()
-
-        self.universe = ObservableUniverse(
+        self.research = build_research_result(
             dataset,
-            as_of=self.snapshot.date,
+            matches_count=10,
+            horizon_years=5,
         )
 
-        self.similarity = SimilarityEngine(self.universe.episodes())
+        self.snapshot = self.research.snapshot
 
-        self._matches = self.similarity.top(
-            self.snapshot,
-            n=10,
-        )
+        self._matches = self.research.matches
 
-        self.evidence = EvidenceEngine().build(
-            self._matches,
-            years=5,
-        )
+        self.evidence = self.research.evidence
 
     def market_position(self):
         # RE-003: posición en ciclo — solo depende del drawdown

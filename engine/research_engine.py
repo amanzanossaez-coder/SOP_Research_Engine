@@ -1,7 +1,4 @@
-from engine.evidence_engine import EvidenceEngine
-from engine.observable_universe import ObservableUniverse
-from engine.similarity_engine import SimilarityEngine
-from engine.snapshot_engine import SnapshotEngine
+from engine.research_pipeline import build_research_result
 from models.research_result import ResearchResult
 
 
@@ -9,14 +6,8 @@ class ResearchEngine:
     """
     Orchestrates the objective Research pipeline.
 
-    RE-027.3 rebuilds ResearchEngine as a thin facade over the same
-    operative flow already verified through DecisionEngine:
-
-    SnapshotEngine
-    -> ObservableUniverse
-    -> SimilarityEngine.top()
-    -> EvidenceEngine
-    -> ResearchResult
+    RE-027.5 makes ResearchEngine delegate to the shared Research
+    pipeline, so it cannot drift from DecisionEngine.
 
     ResearchEngine produces evidence. It never produces portfolio
     decisions, recommendations or protocol actions.
@@ -29,29 +20,8 @@ class ResearchEngine:
         horizon_years: int = 5,
     ) -> ResearchResult:
 
-        snapshot = SnapshotEngine(dataset).latest()
-
-        universe = ObservableUniverse(
+        return build_research_result(
             dataset,
-            as_of=snapshot.date,
-        )
-
-        similarity = SimilarityEngine(
-            universe.episodes(),
-        )
-
-        matches = similarity.top(
-            snapshot,
-            n=matches_count,
-        )
-
-        evidence = EvidenceEngine().build(
-            matches,
-            years=horizon_years,
-        )
-
-        return ResearchResult(
-            snapshot=snapshot,
-            matches=matches,
-            evidence=evidence,
+            matches_count=matches_count,
+            horizon_years=horizon_years,
         )
