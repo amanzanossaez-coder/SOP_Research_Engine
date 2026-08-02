@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.11\
+**Version:** 1.12\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.8)
+# Execution State (as of RE-025.9)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -144,7 +144,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1-RE-025.8), fully independent of
+  Research Validation  Exists (RE-025.1-RE-025.9), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -238,7 +238,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-025.8 invoke no exception: the Research Validation
+RE-025.1-RE-025.9 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -259,7 +259,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic (RE-025.1-RE-025.8). Offline only, not wired into run.py.
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic + repeated forecast diagnostic (RE-025.1-RE-025.9). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -721,6 +721,38 @@ count, not an independent sample-size claim. RE-025.8 still does not
 publish a numeric effective N. It only makes one known dependence
 channel directly observable.
 
+## RE-025.9 — Repeated forecast group diagnostic
+
+`engine/validation_metrics.py` adds
+`repeated_forecast_groups(records)`: a diagnostic that groups
+evaluable validation records sharing the exact same forecast value.
+It returns only groups with more than one record.
+
+This is a forecast-side dependency diagnostic, not a new accuracy
+metric and not a proof that the underlying comparable sets are
+identical. `ValidationRecord` stores `comparable_count`, but not the
+actual matched episodes selected by `SimilarityEngine.top()`. RE-025.9
+therefore makes repeated forecasts observable without claiming to
+measure comparable-set overlap directly.
+
+Measured against the live dataset: 23 episodes, sample_size=21,
+evaluated_count=19, unique_forecasts=7,
+repeated_forecast_groups=4, records_in_repeated_groups=16.
+
+The repeated forecast groups are:
+
+-   0.090162141571: 1982.07 / 1987.12 / 2018.12 (3 records)
+-   0.113866763522: 1990.10 / 1998.09 / 2009.03 / 2020.03 (4 records)
+-   0.127427505966: 1921.08 / 1932.06 / 1970.06 / 1974.12 (4 records)
+-   0.158567951617: 1903.10 / 1907.11 / 1957.12 / 1960.10 / 1962.06 (5 records)
+
+This materially strengthens the RE-025.6 caveat. Of 19 evaluable
+records, 16 fall into repeated forecast groups. Only 3 records have a
+forecast value that is unique within the evaluated sample. This does
+not invalidate MAE, directional hit-rate or rank correlation, but it
+does mean those diagnostics must not be read as if each row carried a
+fully independent forecast signal.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -755,8 +787,9 @@ Engine already produces, rather than belonging to any single phase.
 Not yet reflected as its own phase; revisit if the harness grows
 enough to justify one.
 
-Effective sample size is documented conceptually in RE-025.6 and one
-outcome-side dependence channel is now observable through RE-025.8,
+Effective sample size is documented conceptually in RE-025.6. One
+outcome-side dependence channel is observable through RE-025.8, and
+one forecast-side dependence channel is observable through RE-025.9,
 but no numeric effective-N correction exists yet. Research Validation
 metrics should keep treating `n=19` as an operative count, not as an
 independent statistical sample.
@@ -776,6 +809,20 @@ independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.12
+
+-   Added RE-025.9: repeated forecast group diagnostic.
+-   Added `repeated_forecast_groups(records)` to
+    `engine/validation_metrics.py`, grouping evaluable records by exact
+    repeated forecast value.
+-   Verified against the live dataset: 23 episodes, sample_size=21,
+    evaluated_count=19, unique_forecasts=7,
+    repeated_forecast_groups=4, records_in_repeated_groups=16.
+-   Documented the four repeated forecast groups and clarified that
+    this is a forecast-side dependency diagnostic, not proof of
+    identical comparable sets.
+-   Reaffirmed that no numeric effective N is published yet.
 
 ## Version 1.11
 
