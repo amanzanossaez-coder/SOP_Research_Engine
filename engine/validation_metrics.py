@@ -221,6 +221,39 @@ def overlapping_outcome_windows(
     return pairs
 
 
+def repeated_forecast_groups(
+    records: List[ValidationRecord],
+) -> List[List[ValidationRecord]]:
+    """
+    Grupos de records evaluables que comparten forecast exacto.
+
+    RE-025.9 usa esto como diagnostico de dependencia por el lado del
+    forecast. No demuestra por si mismo que los sets de comparables
+    sean identicos: ValidationRecord no guarda los matches. Si muestra
+    cuando varias filas terminan haciendo la misma prediccion.
+    """
+
+    groups = {}
+
+    for record in records:
+
+        if not record.evaluable:
+            continue
+
+        groups.setdefault(record.forecast, []).append(record)
+
+    repeated = [
+        group
+        for group in groups.values()
+        if len(group) > 1
+    ]
+
+    return sorted(
+        repeated,
+        key=lambda group: group[0].forecast,
+    )
+
+
 EXPLORATORY_DISCLAIMER = (
     "Resultados exploratorios. Tamaño muestral reducido y episodios "
     "no necesariamente independientes entre sí. No constituyen "
