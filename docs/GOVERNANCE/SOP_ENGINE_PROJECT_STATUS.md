@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.13\
+**Version:** 1.14\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.10)
+# Execution State (as of RE-026.1.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -144,7 +144,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1-RE-025.10), fully independent of
+  Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -238,10 +238,11 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-025.10 invoke no exception: the Research Validation
+RE-025.1-RE-026.1.2 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
-interfaces. No frozen component was modified to build it.
+interfaces. No frozen component was modified to build it or to verify
+its canonical metrics.
 
 ------------------------------------------------------------------------
 
@@ -259,7 +260,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic + repeated forecast diagnostic + synthesis (RE-025.1-RE-025.10). Offline only, not wired into run.py.
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic + repeated forecast diagnostic + synthesis + functional smoke test (RE-025.1-RE-026.1.2). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -795,6 +796,40 @@ sample-size number. Future work may quantify effective N, comparable
 set overlap, or other dependence structures, but RE-025 closes the
 current block as exploratory validation with explicit limitations.
 
+## RE-026.1 — Research Validation metrics functional smoke test
+
+`tests/verify_validation_metrics.py` adds a functional smoke test for
+the canonical Research Validation surface established by RE-025. It is
+not a replacement for the offline harness; it is a regression guard
+around the values that the harness and metrics now publish.
+
+The test verifies:
+
+-   episodes = 23;
+-   sample_size = 21;
+-   evaluated_count = 19;
+-   MAE = 0.07025011023213769;
+-   directional_hit_rate = 0.9473684210526315;
+-   rank_correlation = -0.22902466816870654;
+-   overlap_pairs = 10;
+-   repeated_forecast_groups = 4.
+
+RE-026.1.1 made the test executable directly from `tests/` by adding
+the repository root to `sys.path` before importing `engine.*` modules.
+
+RE-026.1.2 added a runtime gate before metric assertions. The test now
+reads `requirements.txt`, compares the pinned package versions against
+the active Python environment, and refuses to verify canonical metrics
+outside the pinned runtime. This is deliberate: RE-025.5 showed that
+different pandas/numpy versions can change validation outputs. A
+runtime mismatch must therefore fail as an environment problem, not as
+an ambiguous metric regression.
+
+Verified result:
+
+-   `RUNTIME : PINNED`
+-   `RESEARCH VALIDATION METRICS : STABLE`
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -837,6 +872,11 @@ validation with explicit limitations. No numeric effective-N correction
 exists yet; Research Validation metrics should keep treating `n=19` as
 an operative count, not as an independent statistical sample.
 
+RE-026.1 adds a functional smoke test for that canonical Research
+Validation surface. It first verifies the pinned runtime from
+`requirements.txt`, then verifies the canonical RE-025 metrics and
+dependency diagnostics.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -852,6 +892,18 @@ an operative count, not as an independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.14
+
+-   Added RE-026.1: functional smoke test for the canonical Research
+    Validation metrics and diagnostics.
+-   Documented RE-026.1.1: the test is executable directly from
+    `tests/`.
+-   Documented RE-026.1.2: the test verifies the pinned runtime before
+    comparing canonical metric values, so environment mismatches fail
+    as environment errors rather than ambiguous metric regressions.
+-   Verified result: `RUNTIME : PINNED` and
+    `RESEARCH VALIDATION METRICS : STABLE`.
 
 ## Version 1.13
 
