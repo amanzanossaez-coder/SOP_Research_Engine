@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.10\
+**Version:** 1.11\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -657,6 +657,20 @@ Future work may quantify these channels separately. Until then,
 MAE, directional hit-rate and rank correlation must not be described
 as if they were computed over 19 independent observations.
 
+## RE-025.7 — Core verification coverage for validation metrics
+
+`tests/verify_core.py` now includes `engine/validation_metrics.py`
+in its structural Engine checks.
+
+This is not a functional test of MAE, directional hit-rate, rank
+correlation or dependency diagnostics. `verify_core.py` only checks
+that expected project paths exist. The purpose of RE-025.7 is narrower:
+once `validation_metrics.py` became a real Research Validation module,
+the core verification suite should at least recognize its existence.
+
+Verified result: `python3 tests/verify_core.py` passes 6/6 checks and
+reports `CORE STATUS : STABLE`.
+
 ## RE-025.8 — Overlapping outcome window diagnostic
 
 `engine/validation_metrics.py` adds
@@ -763,6 +777,17 @@ independent statistical sample.
 
 # Changelog
 
+## Version 1.11
+
+-   Added missing RE-025.7 documentation: `tests/verify_core.py` now
+    includes `engine/validation_metrics.py` in the structural Engine
+    checks.
+-   Applied RE-DOC-002 to this document's own changelog: restored the
+    historical v1.4, v1.5 and v1.6 MAE references to 7.05%, the value
+    documented at the time.
+-   Left RE-025.5 as the forward correction that supersedes those
+    historical values with the pinned-runtime canonical MAE=7.03%.
+
 ## Version 1.10
 
 -   Added RE-025.8: overlapping outcome window diagnostic.
@@ -828,7 +853,7 @@ independent statistical sample.
     set has repeated forecasts: 19 evaluable records, 7 unique
     forecasts, 19 unique actuals.
 -   Verified against the live dataset: rank_count=19,
-    rank_correlation=-0.2290, MAE unchanged at 7.03%, directional
+    rank_correlation=-0.2290, MAE unchanged at 7.05%, directional
     hit-rate unchanged at 94.74%.
 -   Documented the interpretation limit: the result is exploratory,
     weakly negative, and more informative than directional hit-rate
@@ -848,7 +873,7 @@ independent statistical sample.
     were negative, the high hit-rate is not strong evidence of
     directional skill; it mostly reflects that almost all realized
     5-year returns in the evaluated sample were positive.
--   Rechecked MAE in the same validation run: unchanged at 7.03%.
+-   Rechecked MAE in the same validation run: unchanged at 7.05%.
 -   Left RE-025.4 rank correlation as the next validation metric and
     the more informative follow-up for this sample.
 
@@ -861,12 +886,12 @@ independent statistical sample.
     dataset: sample_size=21, evaluated_count=19 of 23 episodes.
 -   Added `engine/validation_metrics.py` (RE-025.2): MAE as the
     canonical Research Validation metric, with a mandatory
-    exploratory-evidence disclaimer. Measured MAE=7.03%, flagged as
+    exploratory-evidence disclaimer. Measured MAE=7.05%, flagged as
     outlier-sensitive at this sample size (n=19).
 -   Logged, then fixed within the same version, a duplication risk in
     the shipped MAE implementation: `mean_absolute_error()` now reads
     `ValidationRecord.evaluable` instead of recomputing the same
-    criterion inline. Re-verified: MAE unchanged at 7.03%.
+    criterion inline. Re-verified: MAE unchanged at 7.05%.
 -   Clarified, in Component Status and Execution State, that the
     Research Validation Harness is unrelated to the pre-existing
     `ValidationEngine` (confidence scoring for `AssessmentEngine`)
