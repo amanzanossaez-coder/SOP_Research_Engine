@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.18\
+**Version:** 1.19\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-027.5)
+# Execution State (as of RE-028.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -276,7 +276,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-027.5 invoke no exception: the Research Validation
+RE-025.1-RE-028.1 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. RE-027.1 is documentation-only audit work, and
@@ -285,7 +285,8 @@ smoke tests, and extract the shared research pipeline around the same
 published Snapshot, Observable Universe, Similarity and Evidence
 surfaces. No frozen component was modified to build Research
 Validation, to verify its canonical metrics, or to close the
-`ResearchEngine` gap.
+`ResearchEngine` gap. RE-028.1 is documentation-only scope work for a
+future Evidence Engine v2.
 
 ------------------------------------------------------------------------
 
@@ -297,7 +298,9 @@ Validation, to verify its canonical metrics, or to close the
   Snapshot Engine               Stable
   Similarity Engine             Stable (RE-021 exception — see Frozen Core Policy)
   Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine wired in RE-024.3)
-  Evidence Engine                v1
+  Evidence Engine                v1 — RE-028.1 scoped v2 as an additive
+                                  explainability upgrade, not a contract
+                                  rewrite.
   Research Engine                v1 — rebuilt facade over the shared verified research pipeline (RE-027.2-RE-027.5). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
   Assessment Engine              v1
   Inference Engine               Planned
@@ -1075,6 +1078,58 @@ Corrected interpretation:
 
 This correction is documentation-only. No code changed.
 
+## RE-028.1 — Evidence Engine v2 scope audit
+
+RE-028.1 scopes Evidence Engine v2 before code changes.
+
+Current verified Evidence contract:
+
+-   `EvidenceEngine.build(matches, years=5)` consumes selected
+    similarity matches and returns a descriptive `Evidence` object.
+-   `Evidence` stores the historical sample (`matches`,
+    `episodes_count`, `horizon_years`), return statistics
+    (`average_return`, `median_return`, `worst_return`,
+    `best_return`, `positive_probability`), recovery statistics and
+    `percentile(p)`.
+-   Absence of evidence is represented by `None`, never `0.0`.
+-   `percentile(p)`, `median_return`, `worst_return` and `best_return`
+    share the same percentile rule through `percentile_from_sorted()`.
+
+Current verified consumers:
+
+-   `build_research_result()` consumes `EvidenceEngine` as the shared
+    source of truth for `DecisionEngine` and `ResearchEngine`.
+-   `AssessmentEngine` still consumes `EvidenceEngine` separately
+    until it is migrated to `build_research_result()`.
+-   `ValidationHarness` consumes `EvidenceEngine.median_return` as the
+    canonical forecast in offline Research Validation.
+
+RE-028 v2 must therefore be additive and backwards-compatible:
+
+-   Existing public fields must keep their names and semantics.
+-   Existing consumers must continue to work without code changes.
+-   New fields should describe the evidence sample more explicitly;
+    they must not encode recommendations, portfolio decisions or
+    assessment/confidence.
+-   `EvidenceEngine` may compute richer descriptive diagnostics, but
+    interpretation of those diagnostics belongs to Assessment / SOP
+    governance, not to Evidence.
+
+Candidate v2 additions are sample-shape and explainability fields such
+as return count, positive/negative counts, dispersion, downside/upside
+distribution markers or explicit sample coverage. Final field selection
+is deliberately deferred to RE-028.2 after this contract boundary.
+
+Out of scope for RE-028.1:
+
+-   no change to `models/evidence.py`;
+-   no change to `engine/evidence_engine.py`;
+-   no AssessmentEngine migration;
+-   no SimilarityEngine v2 work;
+-   no new portfolio or recommendation logic.
+
+This is a scope gate, not an implementation iteration.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1149,6 +1204,13 @@ confirms that RE-024.3 already connected it to `ObservableUniverse`.
 The remaining `AssessmentEngine` issue is duplication of the Research
 pipeline, not temporal-safety leakage.
 
+RE-028.1 opens Evidence Engine v2 with a scope audit only. The current
+Evidence contract is stable and already consumed by the shared Research
+pipeline, the offline Research Validation harness and `AssessmentEngine`.
+Evidence v2 must therefore be additive: richer objective description of
+the evidence sample, without changing existing fields or moving
+assessment/recommendation logic into Evidence.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -1164,6 +1226,17 @@ pipeline, not temporal-safety leakage.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.19
+
+-   Added RE-028.1: Evidence Engine v2 scope audit before code changes.
+-   Documented the current verified Evidence contract and consumers.
+-   Established the RE-028 boundary: v2 must be additive and
+    backwards-compatible because `EvidenceEngine` is consumed by the
+    shared Research pipeline, Research Validation and `AssessmentEngine`.
+-   Explicitly excluded recommendations, portfolio decisions and
+    confidence/assessment logic from Evidence v2.
+-   No code changed.
 
 ## Version 1.18
 
