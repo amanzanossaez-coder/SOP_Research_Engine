@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.21\
+**Version:** 1.22\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -1223,6 +1223,39 @@ Boundary:
 
 This is documentation-only scope control. No code changed.
 
+## RE-028.4 — Evidence Engine v2 closure gate
+
+RE-028.4 closes the current Evidence Engine v2 block.
+
+Verified Evidence v2 surface:
+
+-   existing return statistics remain unchanged;
+-   `return_count` makes realized sample coverage explicit;
+-   positive / negative / zero counts describe the sign distribution;
+-   `non_positive_probability` describes observed downside frequency;
+-   `return_spread` describes observed return range;
+-   `percentile(p)` remains available for arbitrary distribution
+    inspection without promoting any threshold to canonical status.
+
+Closure decision:
+
+-   No additional Evidence fields are added in this block.
+-   Evidence v2 is now descriptive enough for the next layer to consume.
+-   Further interpretation belongs to Assessment / SOP governance:
+    capital tranches, dry-powder deployment, invalidation flags and
+    confidence language must be defined outside Evidence.
+
+Known boundary after RE-028.4:
+
+-   Evidence can say what happened in comparable historical episodes.
+-   Evidence can expose sample coverage, sign mix, downside frequency,
+    spread and arbitrary percentiles.
+-   Evidence cannot say whether to deploy capital, how much to deploy,
+    whether evidence is sufficient, or whether a SOP protocol should
+    be activated.
+
+This closes Evidence Engine v2 for the current architecture pass.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1243,7 +1276,9 @@ without being blocked by a stale named architecture object.
 
 ## Phase 1
 
-Evidence Engine v2
+Evidence Engine v2 — closed for the current architecture pass
+(RE-028.1-RE-028.4). Evidence now exposes a stable descriptive surface.
+Interpretation moves to Assessment / SOP governance.
 
 ## Phase 2
 
@@ -1317,6 +1352,11 @@ already provides the descriptive surface; fixed percentile names should
 only be added after Assessment / SOP governance defines the thresholds
 it actually needs.
 
+RE-028.4 closes Evidence Engine v2 for the current architecture pass:
+the Evidence layer now has enough objective descriptive shape for the
+next layer to consume. Remaining questions are interpretive and belong
+to Assessment / SOP governance, not Evidence.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -1332,6 +1372,18 @@ it actually needs.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.22
+
+-   Added RE-028.4: Evidence Engine v2 closure gate.
+-   Declared Evidence v2 closed for the current architecture pass.
+-   Confirmed that no additional Evidence fields are added now.
+-   Moved remaining interpretive work to Assessment / SOP governance:
+    capital tranches, dry-powder deployment, invalidation flags and
+    confidence language.
+-   Updated Phase 1 roadmap status: Evidence Engine v2 closed for the
+    current pass.
+-   No code changed.
 
 ## Version 1.21
 
