@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.14\
+**Version:** 1.15\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-026.1.2)
+# Execution State (as of RE-027.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -165,15 +165,40 @@ verified:
 ## Matches the diagram's named objects: not yet
 
 The architecture above names `ResearchEngine` producing a
-`ResearchResult`. That object does not reflect the work done in
-RE-023/RE-024: its constructor calls are inconsistent with current
-signatures, it calls a `SnapshotEngine.build()` method that does not
-exist, and it is not part of `run.py`.
+`ResearchResult`. RE-027.1 verifies that the object currently in the
+repository does not match the architecture and should not be repaired
+by isolated argument fixes.
+
+`ResearchEngine.__init__()` cannot instantiate successfully:
+
+-   `SnapshotEngine()` is called without `dataset`, although the real
+    constructor requires it.
+-   `ExplanationEngine()` is called without `matches`, although the
+    real constructor requires it.
+-   `AssessmentEngine()` is called without `dataset`, although the
+    real constructor requires it.
+
+`ResearchEngine.run()` also does not represent the operative pipeline:
+
+-   it calls `SnapshotEngine.build(dataset)`, a method that does not
+    exist;
+-   it builds similarity directly from `SimilarityEngine(dataset)`,
+    while the operative flow uses `ObservableUniverse(...).episodes()`;
+-   it calls `SimilarityEngine.compare(snapshot)` instead of
+    `SimilarityEngine.top(snapshot, n=10)`, which would make evidence
+    use all compared episodes rather than the selected nearest
+    historical matches if the constructor errors were patched away;
+-   it calls `EvidenceEngine.build(similarities)` without making the
+    horizon explicit;
+-   it routes through `ExplanationEngine`, which is already documented
+    as broken if called;
+-   it returns a plain dictionary instead of a `ResearchResult`.
 
 What is aligned with the architecture today is the *conceptual* flow
 executed inside `DecisionEngine` -- not the `ResearchEngine` object
-the documentation names. Rebuilding `ResearchEngine` so it matches
-what `DecisionEngine` already does correctly remains open work.
+the documentation names. The rebuilt `ResearchEngine` should therefore
+be a thin facade over the already verified operative pipeline, not a
+second independent implementation that can drift from `DecisionEngine`.
 
 ## Other known-broken, disconnected code
 
@@ -238,11 +263,12 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-026.1.2 invoke no exception: the Research Validation
+RE-025.1-RE-027.1 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
-interfaces. No frozen component was modified to build it or to verify
-its canonical metrics.
+interfaces, and RE-027.1 is documentation-only audit work. No frozen
+component was modified to build it, to verify its canonical metrics, or
+to audit the `ResearchEngine` gap.
 
 ------------------------------------------------------------------------
 
@@ -830,9 +856,74 @@ Verified result:
 -   `RUNTIME : PINNED`
 -   `RESEARCH VALIDATION METRICS : STABLE`
 
+## RE-027.1 — ResearchEngine audit and rebuild decision
+
+RE-027.1 audits `engine/research_engine.py` against the operative flow
+that has actually been verified through `DecisionEngine` and Research
+Validation.
+
+The current `ResearchEngine` is not a partially working engine. It is
+a stale architectural placeholder whose constructor and runtime logic
+no longer match the rest of the repository:
+
+-   `SnapshotEngine()` is instantiated without `dataset`;
+-   `ExplanationEngine()` is instantiated without `matches`;
+-   `AssessmentEngine()` is instantiated without `dataset`;
+-   `SnapshotEngine.build(dataset)` is called even though no such
+    method exists;
+-   `SimilarityEngine` is built directly from `dataset`, bypassing
+    `ObservableUniverse`;
+-   `SimilarityEngine.compare(snapshot)` is used instead of
+    `SimilarityEngine.top(snapshot, n=10)`;
+-   evidence would therefore be built from all compared episodes, not
+    only from the selected nearest matches, if the constructor errors
+    were patched in isolation;
+-   `ExplanationEngine` remains broken if called;
+-   the method returns a plain dictionary instead of a `ResearchResult`.
+
+The dangerous failure mode is not only that the current object crashes.
+If its constructor errors were fixed without correcting the pipeline
+contract, it could run while producing evidence from the wrong sample.
+That would be worse than an explicit exception, because the system
+would appear operational while silently mixing irrelevant historical
+episodes into the evidence layer.
+
+Design decision: the rebuilt `ResearchEngine` must be a thin facade
+over the pipeline already verified through `DecisionEngine`:
+
+    SnapshotEngine(dataset).latest()
+        │
+    ObservableUniverse(dataset, as_of=snapshot.date)
+        │
+    SimilarityEngine(universe.episodes()).top(snapshot, n=10)
+        │
+    EvidenceEngine().build(matches, years=5)
+        │
+    ResearchResult
+
+It must not become a second independent implementation of the same
+pipeline. A duplicated pipeline would create another place where
+architecture and execution can drift apart.
+
+Next intended sequence:
+
+1.  RE-027.2 — redefine `models/research_result.py` so it represents
+    the real Research output.
+2.  RE-027.3 — rebuild `engine/research_engine.py` around the verified
+    operative pipeline.
+3.  RE-027.4 — add a functional smoke test for the rebuilt
+    `ResearchEngine`.
+
 ------------------------------------------------------------------------
 
 # Roadmap
+
+## Pre-Phase Gate
+
+Rebuild `ResearchEngine` so the named architecture matches the
+verified operative pipeline. This gate begins with RE-027.1 and should
+be closed before starting Evidence Engine v2 or Similarity Engine v2
+work.
 
 ## Phase 1
 
@@ -877,6 +968,11 @@ Validation surface. It first verifies the pinned runtime from
 `requirements.txt`, then verifies the canonical RE-025 metrics and
 dependency diagnostics.
 
+RE-027.1 audits the gap between the documented `ResearchEngine` object
+and the operative pipeline already verified through `DecisionEngine`.
+The rebuild must be a thin facade over the verified pipeline, not a
+second independent implementation.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -892,6 +988,23 @@ dependency diagnostics.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.15
+
+-   Added RE-027.1: audit of the current `ResearchEngine` against the
+    verified operative pipeline.
+-   Documented that `ResearchEngine.__init__()` currently has three
+    independent constructor mismatches: `SnapshotEngine`,
+    `ExplanationEngine` and `AssessmentEngine`.
+-   Documented that `ResearchEngine.run()` would use
+    `SimilarityEngine.compare()` rather than `.top()`, creating a
+    silent evidence-sample risk if constructor errors were patched in
+    isolation.
+-   Established the rebuild decision: `ResearchEngine` must become a
+    thin facade over the already verified `DecisionEngine` pipeline,
+    not a second independent implementation.
+-   Added a Pre-Phase Gate: close the `ResearchEngine` rebuild before
+    starting Evidence Engine v2 or Similarity Engine v2 work.
 
 ## Version 1.14
 
