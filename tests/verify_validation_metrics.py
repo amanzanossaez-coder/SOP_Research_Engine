@@ -10,6 +10,7 @@ runtime in requirements.txt.
 
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
+from typing import Optional
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,18 +101,18 @@ def verify_runtime() -> None:
     print("RUNTIME : PINNED")
 
 
-def assert_close(label: str, actual: float, expected: float) -> None:
+def check_close(label: str, actual: float, expected: float) -> Optional[str]:
     if abs(actual - expected) > 1e-12:
-        raise AssertionError(
-            f"{label}: expected {expected}, got {actual}"
-        )
+        return f"{label}: expected {expected}, got {actual}"
+
+    return None
 
 
-def assert_equal(label: str, actual, expected) -> None:
+def check_equal(label: str, actual, expected) -> Optional[str]:
     if actual != expected:
-        raise AssertionError(
-            f"{label}: expected {expected}, got {actual}"
-        )
+        return f"{label}: expected {expected}, got {actual}"
+
+    return None
 
 
 def bottom_date(record) -> float:
@@ -125,31 +126,17 @@ def main() -> None:
     harness = ValidationHarness(dataset)
     records = harness.run()
 
-    assert_equal("episodes", len(dataset.episodes), EXPECTED_EPISODES)
-    assert_equal("sample_size", harness.sample_size(records), EXPECTED_SAMPLE_SIZE)
-    assert_equal(
-        "evaluated_count",
-        harness.evaluated_count(records),
-        EXPECTED_EVALUATED_COUNT,
-    )
-
-    assert_close("mae", mean_absolute_error(records), EXPECTED_MAE)
-    assert_close(
-        "directional_hit_rate",
-        directional_hit_rate(records),
-        EXPECTED_DIRECTIONAL_HIT_RATE,
-    )
-    assert_close(
-        "rank_correlation",
-        rank_correlation(records),
-        EXPECTED_RANK_CORRELATION,
-    )
+    episodes = len(dataset.episodes)
+    sample_size = harness.sample_size(records)
+    evaluated_count = harness.evaluated_count(records)
+    mae = mean_absolute_error(records)
+    hit_rate = directional_hit_rate(records)
+    rho = rank_correlation(records)
 
     overlap_pairs = [
         (bottom_date(left), bottom_date(right))
         for left, right in overlapping_outcome_windows(records)
     ]
-    assert_equal("overlap_pairs", overlap_pairs, EXPECTED_OVERLAP_PAIRS)
 
     repeated_groups = []
 
@@ -158,19 +145,46 @@ def main() -> None:
         bottoms = [bottom_date(record) for record in group]
         repeated_groups.append((forecast, bottoms))
 
-    assert_equal(
-        "repeated_forecast_groups",
-        repeated_groups,
-        EXPECTED_REPEATED_FORECAST_GROUPS,
-    )
+    regressions = [
+        check_equal("episodes", episodes, EXPECTED_EPISODES),
+        check_equal("sample_size", sample_size, EXPECTED_SAMPLE_SIZE),
+        check_equal("evaluated_count", evaluated_count, EXPECTED_EVALUATED_COUNT),
+        check_close("mae", mae, EXPECTED_MAE),
+        check_close(
+            "directional_hit_rate",
+            hit_rate,
+            EXPECTED_DIRECTIONAL_HIT_RATE,
+        ),
+        check_close("rank_correlation", rho, EXPECTED_RANK_CORRELATION),
+        check_equal("overlap_pairs", overlap_pairs, EXPECTED_OVERLAP_PAIRS),
+        check_equal(
+            "repeated_forecast_groups",
+            repeated_groups,
+            EXPECTED_REPEATED_FORECAST_GROUPS,
+        ),
+    ]
+
+    regressions = [
+        regression
+        for regression in regressions
+        if regression is not None
+    ]
+
+    if regressions:
+        print("RESEARCH VALIDATION METRICS : REGRESSION DETECTED")
+
+        for regression in regressions:
+            print(regression)
+
+        raise SystemExit(1)
 
     print("RESEARCH VALIDATION METRICS : STABLE")
-    print(f"episodes: {len(dataset.episodes)}")
-    print(f"sample_size: {harness.sample_size(records)}")
-    print(f"evaluated_count: {harness.evaluated_count(records)}")
-    print(f"mae: {mean_absolute_error(records):.14f}")
-    print(f"directional_hit_rate: {directional_hit_rate(records):.14f}")
-    print(f"rank_correlation: {rank_correlation(records):.14f}")
+    print(f"episodes: {episodes}")
+    print(f"sample_size: {sample_size}")
+    print(f"evaluated_count: {evaluated_count}")
+    print(f"mae: {mae:.14f}")
+    print(f"directional_hit_rate: {hit_rate:.14f}")
+    print(f"rank_correlation: {rho:.14f}")
     print(f"overlap_pairs: {len(overlap_pairs)}")
     print(f"repeated_forecast_groups: {len(repeated_groups)}")
 
