@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.17\
+**Version:** 1.18\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -119,11 +119,17 @@ verified:
 
   Component           State
   ------------------- ------------------------------------------------
-  AssessmentEngine     Exists, compiles. Not called by run.py. Builds its
-                        own SimilarityEngine directly from
-                        dataset.episodes -- never connected to
-                        ObservableUniverse. Also uses ValidationEngine
-                        for confidence (coverage/consistency/diversity/
+  AssessmentEngine     Exists, compiles. Not called by run.py. As of
+                        RE-024.3 it does use ObservableUniverse(as_of=
+                        snapshot.date), so the older temporal-safety
+                        concern is resolved. It still rebuilds the
+                        Snapshot -> ObservableUniverse ->
+                        SimilarityEngine.top() -> EvidenceEngine flow
+                        locally instead of delegating to
+                        build_research_result(), so the remaining issue
+                        is source-of-truth duplication, not temporal
+                        leakage. Also uses ValidationEngine for
+                        confidence (coverage/consistency/diversity/
                         stability, with stability hardcoded to 1.0) --
                         a second, different confidence computation than
                         DecisionEngine's.
@@ -290,7 +296,7 @@ Validation, to verify its canonical metrics, or to close the
   Dataset Engine               Stable
   Snapshot Engine               Stable
   Similarity Engine             Stable (RE-021 exception — see Frozen Core Policy)
-  Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine pending, RE-024.3)
+  Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine wired in RE-024.3)
   Evidence Engine                v1
   Research Engine                v1 — rebuilt facade over the shared verified research pipeline (RE-027.2-RE-027.5). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
   Assessment Engine              v1
@@ -446,15 +452,22 @@ without any change to the calibration logic itself.
 connected to `ObservableUniverse` — out of scope, tracked under
 RE-024.3.
 
+RE-DOC-003 later corrected this historical description: RE-024.3 did
+connect `AssessmentEngine` to `ObservableUniverse`. The current
+remaining issue is that `AssessmentEngine` still duplicates the
+research pipeline locally instead of delegating to the shared
+`build_research_result()` source of truth introduced in RE-027.5.
+
 ## RE-023.6 — Responsibility correction in SimilarityEngine.top()
 
 No behaviour change. The `peak_date < cutoff` filter cannot be split
 into a "leakage" clause and a "RE-004 independence" clause — it is
 one expression serving RE-004 alone, whose leakage-blocking effect is
 an imprecise (peak_date, not bottom_date) side effect, kept
-deliberately for callers that bypass ObservableUniverse (today,
-AssessmentEngine). Comment corrected to attribute temporal safety
-exclusively to ObservableUniverse.
+deliberately for callers that bypass ObservableUniverse. Comment
+corrected to attribute temporal safety exclusively to
+ObservableUniverse. RE-DOC-003 later verified that `AssessmentEngine`
+no longer belongs to that bypassing-caller category after RE-024.3.
 
 ## RE-024.1 — Evidence generalized
 
@@ -1033,6 +1046,35 @@ Verified:
 -   `DecisionEngine` keeps the existing public evidence surface while
     consuming the shared Research pipeline internally.
 
+## RE-DOC-003 — AssessmentEngine status correction
+
+RE-DOC-003 corrects the project status document after verifying
+`engine/assessment_engine.py` directly.
+
+Earlier status text continued to say that `AssessmentEngine` built
+`SimilarityEngine` directly from `dataset.episodes` and was never
+connected to `ObservableUniverse`. That was no longer true: RE-024.3
+already changed `AssessmentEngine` to build:
+
+    SnapshotEngine(dataset).latest()
+        │
+    ObservableUniverse(dataset, as_of=snapshot.date)
+        │
+    SimilarityEngine(universe.episodes()).top(snapshot, n=10)
+        │
+    EvidenceEngine().build(matches, years=5)
+
+Corrected interpretation:
+
+-   The temporal-safety concern is resolved for `AssessmentEngine`.
+-   `AssessmentEngine` remains outside `run.py`.
+-   `AssessmentEngine` still duplicates the Research pipeline locally
+    instead of consuming `build_research_result()`.
+-   The remaining issue is maintainability / source-of-truth drift, not
+    temporal leakage.
+
+This correction is documentation-only. No code changed.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1102,6 +1144,11 @@ RE-027.5 then closes the remaining architecture risk by extracting
 the shared `build_research_result()` pipeline consumed by both
 `DecisionEngine` and `ResearchEngine`.
 
+RE-DOC-003 corrects the status of `AssessmentEngine`: code inspection
+confirms that RE-024.3 already connected it to `ObservableUniverse`.
+The remaining `AssessmentEngine` issue is duplication of the Research
+pipeline, not temporal-safety leakage.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -1117,6 +1164,20 @@ the shared `build_research_result()` pipeline consumed by both
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.18
+
+-   Added RE-DOC-003: corrected stale `AssessmentEngine` documentation
+    after direct code inspection.
+-   Replaced the outdated claim that `AssessmentEngine` was never
+    connected to `ObservableUniverse`.
+-   Documented that RE-024.3 already made `AssessmentEngine` consume
+    `ObservableUniverse(dataset, as_of=snapshot.date)`.
+-   Clarified the current issue: `AssessmentEngine` still duplicates
+    the Research pipeline locally instead of delegating to
+    `build_research_result()`, so the risk is source-of-truth drift, not
+    temporal leakage.
+-   No code changed.
 
 ## Version 1.17
 
