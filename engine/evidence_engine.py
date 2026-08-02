@@ -53,6 +53,21 @@ class EvidenceEngine:
             if r > 0
         ]
 
+        negative = [
+            r
+            for r in returns
+            if r < 0
+        ]
+
+        zero = [
+            r
+            for r in returns
+            if r == 0
+        ]
+
+        worst_return = percentile_from_sorted(returns, 0.0)
+        best_return = percentile_from_sorted(returns, 1.0)
+
         return Evidence(
 
             # Historical sample
@@ -83,9 +98,9 @@ class EvidenceEngine:
 
             median_return=percentile_from_sorted(returns, 0.50),
 
-            worst_return=percentile_from_sorted(returns, 0.0),
+            worst_return=worst_return,
 
-            best_return=percentile_from_sorted(returns, 1.0),
+            best_return=best_return,
 
             positive_probability=(
                 len(positive) / len(returns)
@@ -105,6 +120,30 @@ class EvidenceEngine:
             median_recovery_months=(
                 median(recoveries)
                 if recoveries else None
+            ),
+
+            # Evidence v2 descriptive sample shape
+            #
+            # These fields describe the observed historical sample.
+            # They do not score confidence, recommend action, or
+            # decide whether evidence is sufficient.
+
+            return_count=len(returns),
+
+            positive_count=len(positive),
+
+            negative_count=len(negative),
+
+            zero_count=len(zero),
+
+            non_positive_probability=(
+                (len(negative) + len(zero)) / len(returns)
+                if returns else None
+            ),
+
+            return_spread=(
+                best_return - worst_return
+                if returns else None
             ),
 
         )

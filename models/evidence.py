@@ -75,6 +75,18 @@ class Evidence:
     average_recovery_months: float | None = None
     median_recovery_months: float | None = None
 
+    # Evidence v2 descriptive sample shape
+    #
+    # Added with defaults to preserve compatibility with any caller
+    # still constructing Evidence with the previous field set.
+
+    return_count: int = 0
+    positive_count: int = 0
+    negative_count: int = 0
+    zero_count: int = 0
+    non_positive_probability: float | None = None
+    return_spread: float | None = None
+
     def percentile(self, p: float) -> float | None:
         """
         Percentil de las rentabilidades futuras al horizonte de este

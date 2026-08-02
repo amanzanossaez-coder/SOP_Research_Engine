@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.19\
+**Version:** 1.20\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-028.1)
+# Execution State (as of RE-028.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -205,6 +205,12 @@ Verified result from `tests/verify_research_engine.py` after RE-027.5:
 -   `median_return: 0.11386676352177`
 -   `worst_return: -0.01091948933253`
 -   `best_return: 0.13767334934864`
+-   `return_count: 9`
+-   `positive_count: 8`
+-   `negative_count: 1`
+-   `zero_count: 0`
+-   `non_positive_probability: 0.11111111111111`
+-   `return_spread: 0.14859283868117`
 
 Remaining execution-state gap: `run.py` still calls `DecisionEngine`
 directly. This no longer creates a duplicated research pipeline:
@@ -276,7 +282,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-028.1 invoke no exception: the Research Validation
+RE-025.1-RE-028.2 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. RE-027.1 is documentation-only audit work, and
@@ -286,7 +292,8 @@ published Snapshot, Observable Universe, Similarity and Evidence
 surfaces. No frozen component was modified to build Research
 Validation, to verify its canonical metrics, or to close the
 `ResearchEngine` gap. RE-028.1 is documentation-only scope work for a
-future Evidence Engine v2.
+future Evidence Engine v2. RE-028.2 implements that Evidence v2 as an
+additive Evidence-layer change, not a frozen Core modification.
 
 ------------------------------------------------------------------------
 
@@ -298,9 +305,9 @@ future Evidence Engine v2.
   Snapshot Engine               Stable
   Similarity Engine             Stable (RE-021 exception — see Frozen Core Policy)
   Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine wired in RE-024.3)
-  Evidence Engine                v1 — RE-028.1 scoped v2 as an additive
-                                  explainability upgrade, not a contract
-                                  rewrite.
+  Evidence Engine                v2 — additive descriptive sample-shape
+                                  fields added in RE-028.2. Existing
+                                  v1 fields and semantics preserved.
   Research Engine                v1 — rebuilt facade over the shared verified research pipeline (RE-027.2-RE-027.5). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
   Assessment Engine              v1
   Inference Engine               Planned
@@ -1130,6 +1137,58 @@ Out of scope for RE-028.1:
 
 This is a scope gate, not an implementation iteration.
 
+## RE-028.2 — Evidence Engine v2 descriptive sample shape
+
+RE-028.2 implements the first Evidence Engine v2 surface as an
+additive, backwards-compatible extension.
+
+`models/evidence.py` adds descriptive sample-shape fields:
+
+-   `return_count`
+-   `positive_count`
+-   `negative_count`
+-   `zero_count`
+-   `non_positive_probability`
+-   `return_spread`
+
+`engine/evidence_engine.py` computes those fields from the same
+horizon-specific return sample already used for
+`average_return`, `median_return`, `worst_return`, `best_return` and
+`positive_probability`.
+
+Compatibility rule:
+
+-   existing Evidence fields keep their names and semantics;
+-   the new fields have defaults, so older direct `Evidence(...)`
+    construction remains compatible;
+-   absence of evidence still uses `None` for probability/spread fields
+    where a numeric value would imply observed data.
+
+Interpretation boundary:
+
+-   Evidence describes the historical sample;
+-   Evidence does not score confidence;
+-   Evidence does not recommend portfolio action;
+-   Evidence does not decide whether the SOP should deploy, hold or
+    block capital.
+
+Verified result from `tests/verify_research_engine.py` after RE-028.2:
+
+-   `RESEARCH ENGINE : STABLE`
+-   `matches: 10`
+-   `return_count: 9`
+-   `positive_count: 8`
+-   `negative_count: 1`
+-   `zero_count: 0`
+-   `non_positive_probability: 0.11111111111111`
+-   `return_spread: 0.14859283868117`
+
+The distinction between `episodes_count=10` and `return_count=9` is
+intentional: the selected historical sample can contain matches that do
+not yet have a realized return at the requested horizon. Evidence v2
+makes that sample coverage visible without turning it into an
+assessment score.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -1211,6 +1270,13 @@ Evidence v2 must therefore be additive: richer objective description of
 the evidence sample, without changing existing fields or moving
 assessment/recommendation logic into Evidence.
 
+RE-028.2 implements the first additive Evidence v2 fields:
+return_count, positive_count, negative_count, zero_count,
+non_positive_probability and return_spread. These fields make the
+shape of the realized return sample observable while preserving the
+Evidence boundary: description only, no confidence score, no portfolio
+recommendation and no SOP action.
+
 ------------------------------------------------------------------------
 
 # Project Axioms
@@ -1226,6 +1292,23 @@ assessment/recommendation logic into Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.20
+
+-   Added RE-028.2: Evidence Engine v2 descriptive sample-shape fields.
+-   Extended `models/evidence.py` with additive, defaulted fields:
+    return_count, positive_count, negative_count, zero_count,
+    non_positive_probability and return_spread.
+-   Updated `engine/evidence_engine.py` to compute those fields from
+    the same horizon-specific return sample already used by the
+    existing return statistics.
+-   Updated `tests/verify_research_engine.py` to verify the new
+    Evidence v2 surface. Live result: matches=10, return_count=9,
+    positive_count=8, negative_count=1, zero_count=0,
+    non_positive_probability=0.11111111111111,
+    return_spread=0.14859283868117.
+-   Reaffirmed the boundary: Evidence describes; Assessment / SOP
+    interprets.
 
 ## Version 1.19
 
