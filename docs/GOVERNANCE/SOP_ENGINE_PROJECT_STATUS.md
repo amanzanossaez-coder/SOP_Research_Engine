@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.12\
+**Version:** 1.13\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-025.9)
+# Execution State (as of RE-025.10)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -144,7 +144,7 @@ verified:
   ResearchEngine       See below -- distinct from the others because
                         the documented architecture names it
                         explicitly.
-  Research Validation  Exists (RE-025.1-RE-025.9), fully independent of
+  Research Validation  Exists (RE-025.1-RE-025.10), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
                         historical episode it replays DecisionEngine's
@@ -238,7 +238,7 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-025.9 invoke no exception: the Research Validation
+RE-025.1-RE-025.10 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
 interfaces. No frozen component was modified to build it.
@@ -259,7 +259,7 @@ interfaces. No frozen component was modified to build it.
   Constitution                   Planned
   Protocol Engine                Planned
   Dashboard                      Planned
-  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic + repeated forecast diagnostic (RE-025.1-RE-025.9). Offline only, not wired into run.py.
+  Research Validation Harness    v1 — harness + MAE + directional hit-rate + rank correlation + pinned runtime dependencies + effective-N caveat + overlapping outcome window diagnostic + repeated forecast diagnostic + synthesis (RE-025.1-RE-025.10). Offline only, not wired into run.py.
 
 **Note — naming collision, not a duplication of function.**
 `ValidationEngine` (`engine/validation_engine.py`) and the Research
@@ -753,6 +753,48 @@ not invalidate MAE, directional hit-rate or rank correlation, but it
 does mean those diagnostics must not be read as if each row carried a
 fully independent forecast signal.
 
+## RE-025.10 — Research Validation synthesis
+
+RE-025.1 through RE-025.9 establish Research Validation as a coherent
+offline diagnostic layer for the Similarity/Evidence pipeline. It is
+point-in-time, uses the same public interfaces as the operative
+DecisionEngine flow, computes canonical exploratory metrics, pins the
+runtime that makes those metrics reproducible, and documents the main
+known dependence channels in the evaluated sample.
+
+The current canonical validation surface is:
+
+-   sample_size = 21;
+-   evaluated_count = 19;
+-   MAE = 0.07025011023213769 (7.03%) under pinned runtime;
+-   directional_hit_rate = 0.9473684210526315 (94.74%);
+-   rank_correlation = -0.22902466816870654;
+-   overlap_pairs = 10 realized 5-year window overlaps;
+-   repeated_forecast_groups = 4;
+-   records_in_repeated_forecast_groups = 16/19.
+
+The interpretation is intentionally bounded. These numbers are useful
+evidence about how the current Research Engine behaves, but they are
+not strong statistical validation. The high directional hit-rate is
+not very discriminating because 0/19 forecasts were negative. Rank
+correlation is more informative than hit-rate but remains exploratory.
+MAE is outlier-sensitive at this sample size. Most importantly, `n=19`
+is an operative count, not an independent sample-size claim.
+
+RE-025.8 and RE-025.9 make the independence caveat concrete:
+
+-   outcome-side dependence is observable through 10 overlapping
+    realized 5-year windows;
+-   forecast-side dependence is observable because 16/19 evaluable
+    records share a forecast value with at least one other record.
+
+No numeric effective N is published. That is deliberate. The system now
+knows enough to avoid overstating its evidence, but not enough to
+compress the dependence structure into a defensible single adjusted
+sample-size number. Future work may quantify effective N, comparable
+set overlap, or other dependence structures, but RE-025 closes the
+current block as exploratory validation with explicit limitations.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -789,10 +831,11 @@ enough to justify one.
 
 Effective sample size is documented conceptually in RE-025.6. One
 outcome-side dependence channel is observable through RE-025.8, and
-one forecast-side dependence channel is observable through RE-025.9,
-but no numeric effective-N correction exists yet. Research Validation
-metrics should keep treating `n=19` as an operative count, not as an
-independent statistical sample.
+one forecast-side dependence channel is observable through RE-025.9.
+RE-025.10 closes the current Research Validation block as exploratory
+validation with explicit limitations. No numeric effective-N correction
+exists yet; Research Validation metrics should keep treating `n=19` as
+an operative count, not as an independent statistical sample.
 
 ------------------------------------------------------------------------
 
@@ -809,6 +852,20 @@ independent statistical sample.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.13
+
+-   Added RE-025.10: Research Validation synthesis.
+-   Consolidated the interpretation of RE-025.6, RE-025.8 and
+    RE-025.9 into one closing statement: `n=19` is an operative count,
+    not an independent sample-size claim.
+-   Summarized the current canonical Research Validation surface:
+    sample_size=21, evaluated_count=19, MAE=7.03%, directional
+    hit-rate=94.74%, rank_correlation=-0.2290, overlap_pairs=10,
+    repeated_forecast_groups=4, and 16/19 records in repeated forecast
+    groups.
+-   Closed the current RE-025 block as exploratory validation with
+    explicit limitations, without publishing a numeric effective N.
 
 ## Version 1.12
 
