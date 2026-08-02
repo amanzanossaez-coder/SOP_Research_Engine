@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.15\
+**Version:** 1.16\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-027.1)
+# Execution State (as of RE-027.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -141,9 +141,11 @@ verified:
                         first.event.drawdown_similarity) -- would raise
                         AttributeError if ever called. Never called
                         today.
-  ResearchEngine       See below -- distinct from the others because
-                        the documented architecture names it
-                        explicitly.
+  ResearchEngine       Exists and executes a verified research pipeline
+                        facade (RE-027.2-RE-027.4). It is not called by
+                        run.py yet. Produces ResearchResult from
+                        SnapshotEngine -> ObservableUniverse ->
+                        SimilarityEngine.top() -> EvidenceEngine.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -162,43 +164,38 @@ verified:
                         Unrelated to ValidationEngine above despite the
                         similar name -- see Component Status.
 
-## Matches the diagram's named objects: not yet
+## Matches the diagram's named objects: ResearchEngine aligned
 
 The architecture above names `ResearchEngine` producing a
-`ResearchResult`. RE-027.1 verifies that the object currently in the
-repository does not match the architecture and should not be repaired
-by isolated argument fixes.
+`ResearchResult`. RE-027.1 verified that the prior object was stale and
+dangerous to patch in isolation. RE-027.2-RE-027.4 rebuild and verify
+that named object as a thin facade over the already verified research
+pipeline:
 
-`ResearchEngine.__init__()` cannot instantiate successfully:
+    SnapshotEngine(dataset).latest()
+        │
+    ObservableUniverse(dataset, as_of=snapshot.date)
+        │
+    SimilarityEngine(universe.episodes()).top(snapshot, n=10)
+        │
+    EvidenceEngine().build(matches, years=5)
+        │
+    ResearchResult
 
--   `SnapshotEngine()` is called without `dataset`, although the real
-    constructor requires it.
--   `ExplanationEngine()` is called without `matches`, although the
-    real constructor requires it.
--   `AssessmentEngine()` is called without `dataset`, although the
-    real constructor requires it.
+Verified result from `tests/verify_research_engine.py`:
 
-`ResearchEngine.run()` also does not represent the operative pipeline:
+-   `RESEARCH ENGINE : STABLE`
+-   `snapshot_date: 2026.07`
+-   `matches: 10`
+-   `horizon_years: 5`
+-   `median_return: 0.11386676352177`
+-   `worst_return: -0.01091948933253`
+-   `best_return: 0.13767334934864`
 
--   it calls `SnapshotEngine.build(dataset)`, a method that does not
-    exist;
--   it builds similarity directly from `SimilarityEngine(dataset)`,
-    while the operative flow uses `ObservableUniverse(...).episodes()`;
--   it calls `SimilarityEngine.compare(snapshot)` instead of
-    `SimilarityEngine.top(snapshot, n=10)`, which would make evidence
-    use all compared episodes rather than the selected nearest
-    historical matches if the constructor errors were patched away;
--   it calls `EvidenceEngine.build(similarities)` without making the
-    horizon explicit;
--   it routes through `ExplanationEngine`, which is already documented
-    as broken if called;
--   it returns a plain dictionary instead of a `ResearchResult`.
-
-What is aligned with the architecture today is the *conceptual* flow
-executed inside `DecisionEngine` -- not the `ResearchEngine` object
-the documentation names. The rebuilt `ResearchEngine` should therefore
-be a thin facade over the already verified operative pipeline, not a
-second independent implementation that can drift from `DecisionEngine`.
+Remaining execution-state gap: `run.py` still calls `DecisionEngine`
+directly. `ResearchEngine` is now a working named facade, but it is
+not yet the command-line entry point. This is an integration choice to
+handle later, not an unresolved defect in the RE-027 rebuild.
 
 ## Other known-broken, disconnected code
 
@@ -263,12 +260,15 @@ Changes require objective justification.
     resulting evidence. Authorized under "a functional defect
     exists."
 
-RE-025.1-RE-027.1 invoke no exception: the Research Validation
+RE-025.1-RE-027.4 invoke no exception: the Research Validation
 Harness consumes `ObservableUniverse`, `SimilarityEngine` and
 `EvidenceEngine` exactly as published, through their existing public
-interfaces, and RE-027.1 is documentation-only audit work. No frozen
-component was modified to build it, to verify its canonical metrics, or
-to audit the `ResearchEngine` gap.
+interfaces. RE-027.1 is documentation-only audit work, and
+RE-027.2-RE-027.4 rebuild `ResearchResult` / `ResearchEngine` plus a
+smoke test around the same published Snapshot, Observable Universe,
+Similarity and Evidence surfaces. No frozen component was modified to
+build Research Validation, to verify its canonical metrics, or to
+close the `ResearchEngine` gap.
 
 ------------------------------------------------------------------------
 
@@ -281,6 +281,7 @@ to audit the `ResearchEngine` gap.
   Similarity Engine             Stable (RE-021 exception — see Frozen Core Policy)
   Observable Universe           Stable in operative flow (wired through DecisionEngine, RE-023.5; AssessmentEngine pending, RE-024.3)
   Evidence Engine                v1
+  Research Engine                v1 — rebuilt facade over the verified research pipeline (RE-027.2-RE-027.4). Produces ResearchResult. Smoke-tested. Not called by run.py yet.
   Assessment Engine              v1
   Inference Engine               Planned
   Constitution                   Planned
@@ -905,7 +906,7 @@ It must not become a second independent implementation of the same
 pipeline. A duplicated pipeline would create another place where
 architecture and execution can drift apart.
 
-Next intended sequence:
+Completed rebuild sequence:
 
 1.  RE-027.2 — redefine `models/research_result.py` so it represents
     the real Research output.
@@ -914,16 +915,89 @@ Next intended sequence:
 3.  RE-027.4 — add a functional smoke test for the rebuilt
     `ResearchEngine`.
 
+## RE-027.2 — ResearchResult aligned with operative Research output
+
+RE-027.2 updates `models/research_result.py` so `ResearchResult`
+represents the objective Research output now produced by the verified
+pipeline.
+
+`ResearchResult` contains:
+
+-   `snapshot`;
+-   selected `matches`;
+-   resulting `evidence`.
+
+It deliberately does not contain recommendations, portfolio decisions,
+assessment confidence or explanations. Those belong to downstream
+decision / explanation responsibilities, not to the objective Research
+result.
+
+This keeps `ResearchResult` aligned with the Evidence Layer that has
+already been validated through RE-025.x and RE-026.x.
+
+## RE-027.3 — ResearchEngine rebuilt as operative pipeline facade
+
+RE-027.3 rebuilds `engine/research_engine.py` as a thin facade over the
+same operative research flow already verified through `DecisionEngine`:
+
+    SnapshotEngine(dataset).latest()
+        │
+    ObservableUniverse(dataset, as_of=snapshot.date)
+        │
+    SimilarityEngine(universe.episodes()).top(snapshot, n=10)
+        │
+    EvidenceEngine().build(matches, years=5)
+        │
+    ResearchResult
+
+The rebuilt engine removes the stale constructor state that previously
+instantiated engines with invalid arguments. It also removes the
+dangerous `SimilarityEngine.compare()` path, which would have built
+evidence from all compared episodes rather than the selected nearest
+matches.
+
+Design boundary: `ResearchEngine` is a Research facade only. It does
+not call `ExplanationEngine`, `AssessmentEngine` or
+`ProbabilityEngine`.
+
+## RE-027.4 — ResearchEngine functional smoke test
+
+RE-027.4 adds `tests/verify_research_engine.py`.
+
+The test verifies that the rebuilt `ResearchEngine` executes the
+expected research pipeline and returns a stable `ResearchResult`
+surface.
+
+Verified result:
+
+-   `RESEARCH ENGINE : STABLE`
+-   `snapshot_date: 2026.07`
+-   `matches: 10`
+-   `horizon_years: 5`
+-   `median_return: 0.11386676352177`
+-   `worst_return: -0.01091948933253`
+-   `best_return: 0.13767334934864`
+
+This closes the RE-027 rebuild gate. Remaining future integration
+question: whether `run.py` should eventually call `ResearchEngine`
+directly or continue using `DecisionEngine` as the user-facing
+execution path.
+
 ------------------------------------------------------------------------
 
 # Roadmap
 
 ## Pre-Phase Gate
 
-Rebuild `ResearchEngine` so the named architecture matches the
-verified operative pipeline. This gate begins with RE-027.1 and should
-be closed before starting Evidence Engine v2 or Similarity Engine v2
-work.
+Closed as of RE-027.4.
+
+`ResearchEngine` now exists as a rebuilt, smoke-tested facade over the
+verified research pipeline. It produces `ResearchResult` from
+snapshot, observable universe, selected similarity matches and
+evidence.
+
+Evidence Engine v2 or Similarity Engine v2 work can now proceed
+without being blocked by a stale named architecture object.
 
 ## Phase 1
 
@@ -968,10 +1042,11 @@ Validation surface. It first verifies the pinned runtime from
 `requirements.txt`, then verifies the canonical RE-025 metrics and
 dependency diagnostics.
 
-RE-027.1 audits the gap between the documented `ResearchEngine` object
-and the operative pipeline already verified through `DecisionEngine`.
-The rebuild must be a thin facade over the verified pipeline, not a
-second independent implementation.
+RE-027.1 audited the gap between the documented `ResearchEngine`
+object and the operative pipeline already verified through
+`DecisionEngine`. RE-027.2-RE-027.4 close that gap by aligning
+`ResearchResult`, rebuilding `ResearchEngine` as a thin facade, and
+adding a functional smoke test.
 
 ------------------------------------------------------------------------
 
@@ -988,6 +1063,25 @@ second independent implementation.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.16
+
+-   Added RE-027.2: `ResearchResult` now represents the objective
+    Research output -- snapshot, selected matches and evidence.
+-   Added RE-027.3: rebuilt `ResearchEngine` as a thin facade over the
+    verified Snapshot -> ObservableUniverse -> SimilarityEngine.top()
+    -> EvidenceEngine pipeline.
+-   Removed the stale `ResearchEngine` path that instantiated engines
+    with invalid constructor arguments and could have used
+    `SimilarityEngine.compare()` instead of selected top matches.
+-   Added RE-027.4: functional smoke test for the rebuilt
+    `ResearchEngine`.
+-   Closed the RE-027 Pre-Phase Gate: Evidence Engine v2 and
+    Similarity Engine v2 are no longer blocked by the stale named
+    ResearchEngine object.
+-   Documented the remaining integration boundary: `run.py` still calls
+    `DecisionEngine` directly; wiring the CLI entry point through
+    `ResearchEngine` remains a future choice.
 
 ## Version 1.15
 
