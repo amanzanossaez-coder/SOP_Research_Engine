@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.26\
+**Version:** 1.27\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.4)
+# Execution State (as of RE-029.5)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -129,8 +129,12 @@ verified:
                         resolved. Confidence remains a separate
                         ValidationEngine path
                         (coverage/consistency/diversity/stability, with
-                        stability hardcoded to 1.0) and must not drive
-                        SOP capital gates until a later calibration pass.
+                        stability hardcoded to 1.0). RE-029.5 defines
+                        any future evidence-quality link to capital
+                        posture as a gate / ceiling, not a weighted
+                        input, and explicitly excludes the current
+                        confidence score from SOP capital gates while
+                        stability remains hardcoded.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -1456,6 +1460,56 @@ not SOP capital posture.
 
 ------------------------------------------------------------------------
 
+## RE-029.5 — Confidence-to-posture gate boundary
+
+RE-029.5 defines how evidence quality may connect to SOP capital
+posture before any executable rules are written.
+
+Decision:
+
+-   Evidence quality / confidence is a gate, not a weighted input.
+-   Weak evidence caps the maximum allowed capital posture regardless
+    of expected return.
+-   Evidence quality must not be averaged into a composite capital score
+    that can be offset by attractive return expectations or unrelated
+    favorable signals.
+
+Rationale:
+
+-   A weighted score optimizes, but can become a black box.
+-   A gate protects: if evidence quality is insufficient, the reason for
+    limiting posture remains explicit and auditable.
+-   This follows the primary objective hierarchy: avoid irreversible
+    error before preserving capital, and preserve capital before
+    maximizing return.
+
+Gate combination:
+
+-   Evidence quality, regime comparability and personal capacity combine
+    by veto / most restrictive ceiling.
+-   One failed gate cannot be compensated by other gates.
+-   The final capital posture cannot exceed the lowest ceiling produced
+    by any active gate.
+
+Current confidence restriction:
+
+-   The current `AssessmentEngine` confidence score must not be used as
+    the evidence-quality gate.
+-   Reason: the score still includes `stability=1.0` as a hardcoded
+    placeholder, which gives a false 25% weight to a non-measured
+    dimension.
+-   Until stability is calibrated, any future evidence-quality gate must
+    inspect individual dimensions directly (coverage, consistency,
+    diversity and explicit stability status) or remain documentation-only.
+
+Boundary:
+
+-   No thresholds are defined.
+-   No capital posture rules are implemented.
+-   No code changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -1482,7 +1536,8 @@ Interpretation moves to Assessment / SOP governance.
 
 Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
 audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
-public helpers verified in RE-029.4.
+public helpers verified in RE-029.4; confidence-to-posture gate
+boundary defined in RE-029.5.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1501,9 +1556,15 @@ logic.
 RE-029.3 makes `AssessmentEngine` consume the shared
 `build_research_result()` pipeline, closing the Research source-of-truth
 duplication identified in RE-029.2. RE-029.4 verifies the public helper
-outputs after that refactor. Remaining Assessment work is confidence
-calibration and governance boundary design, not temporal-safety repair
-or duplicate Research pipeline migration.
+outputs after that refactor. RE-029.5 defines the connection pattern
+between confidence / evidence quality and capital posture: gate /
+ceiling, not weighted input. Gates combine by veto / most restrictive
+ceiling across evidence quality, regime comparability and personal
+capacity. The current `AssessmentEngine` confidence score is explicitly
+excluded from SOP capital gates while stability remains hardcoded.
+Remaining Assessment / SOP work is executable thresholds, gate
+calibration, regime comparability, personal capacity and capital posture
+mapping.
 
 ## Phase 3
 
@@ -1593,6 +1654,17 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.27
+
+-   Added RE-029.5: confidence-to-posture gate boundary.
+-   Defined evidence quality / confidence as a gate and posture ceiling,
+    not a weighted input.
+-   Defined gate combination as veto / most restrictive ceiling across
+    evidence quality, regime comparability and personal capacity.
+-   Explicitly excluded current `AssessmentEngine` confidence score from
+    SOP capital gates while `stability=1.0` remains hardcoded.
+-   No code changed.
 
 ## Version 1.26
 
