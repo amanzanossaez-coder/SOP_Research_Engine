@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.47\
+**Version:** 1.48\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-BUG.3)
+# Execution State (as of RE-DATA.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -269,7 +269,9 @@ verified:
                         acceptance criteria. RE-BUG.2 fixes calendar-
                         month duration arithmetic. RE-BUG.3 documents
                         the downstream impact and canonical post-fix
-                        metrics.
+                        metrics. RE-DATA.1 records future Shiller data
+                        update automation as a validated-data pipeline,
+                        not a blind download.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -493,6 +495,13 @@ documentation-only gate-combination boundary work.
                                   RE-BUG.2 fixes the bug in code.
                                   RE-BUG.3 records the post-fix canonical
                                   metrics and match set.
+  Data Update Automation         Planned. RE-DATA.1 records future
+                                  Shiller source refresh policy:
+                                  downloadable source may be automated
+                                  later, but only through validation,
+                                  backup, tests and explicit logging.
+                                  No downloader exists. Current updates
+                                  remain manual.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -4606,6 +4615,65 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DATA.1 — Shiller source update automation note
+
+RE-DATA.1 records a future data-update capability.
+
+It is documentation-only.
+
+No code changed.
+
+Current state:
+
+The Shiller dataset is updated manually.
+
+The local source file remains:
+
+    data/raw/shiller.xlsx
+
+Future capability:
+
+A later iteration may add a controlled updater, for example:
+
+    python3 tools/update_shiller_data.py
+
+The updater may download the Shiller source workbook from the official
+Shiller data site.
+
+Boundary:
+
+This must not be implemented as a blind download-and-overwrite step.
+
+Any future automated update must:
+
+-   download the source file to a temporary location first;
+-   preserve or back up the previous local workbook;
+-   verify the expected workbook structure;
+-   verify that `Price.1` still maps to Real Total Return Price;
+-   verify required columns before replacing local data;
+-   verify that the latest observation is not older than the current
+    local source;
+-   run the loader / drawdown / research verification tests after the
+    update;
+-   log the source URL, update date, prior latest observation and new
+    latest observation;
+-   fail closed if validation does not pass.
+
+Timing:
+
+This is not a near-term priority.
+
+It should be revisited after the RE-PRED target / baseline work is
+closed, because changing data sources while target semantics are still
+open would make validation harder to interpret.
+
+Rejected shortcut:
+
+Do not silently replace `data/raw/shiller.xlsx` from the network without
+structural validation and test reruns.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -4826,6 +4894,12 @@ Research Validation now reports `mae = 0.06928793787076225`,
 `rank_correlation = -0.26505171850684983`. These values supersede the
 pre-fix values going forward without rewriting the historical record.
 
+RE-DATA.1 records future Shiller data update automation as planned, not
+implemented. Any future updater must validate workbook structure,
+confirm `Price.1` semantics, back up the prior local source, rerun tests
+and log the update before replacing `data/raw/shiller.xlsx`. Manual
+updates remain the current process.
+
 ## Phase 3
 
 Inference Engine
@@ -4914,6 +4988,20 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.48
+
+-   Added RE-DATA.1: Shiller source update automation note.
+-   Recorded that Shiller data updates remain manual today.
+-   Recorded future automation as a validated data-update pipeline, not
+    a blind network overwrite.
+-   Required any future updater to validate workbook structure and
+    `Price.1` semantics before replacing local data.
+-   Required backup, test reruns and explicit update logging for any
+    future automated refresh.
+-   Deferred implementation until after RE-PRED target / baseline work
+    is closed.
+-   No code changed.
 
 ## Version 1.47
 
