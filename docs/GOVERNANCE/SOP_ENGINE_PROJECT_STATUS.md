@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.46\
+**Version:** 1.47\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-BUG.1)
+# Execution State (as of RE-BUG.3)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -266,7 +266,10 @@ verified:
                         price-basis asymmetry and date-arithmetic
                         duration bug. RE-BUG.1 promotes the duration
                         bug to near-term code-fix priority and defines
-                        acceptance criteria.
+                        acceptance criteria. RE-BUG.2 fixes calendar-
+                        month duration arithmetic. RE-BUG.3 documents
+                        the downstream impact and canonical post-fix
+                        metrics.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -487,6 +490,9 @@ documentation-only gate-combination boundary work.
                                   arithmetic bug affecting Evidence
                                   recovery statistics. RE-BUG.1 defines
                                   acceptance criteria for the future fix.
+                                  RE-BUG.2 fixes the bug in code.
+                                  RE-BUG.3 records the post-fix canonical
+                                  metrics and match set.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -4473,6 +4479,133 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-BUG.3 — Calendar-month duration fix impact record
+
+RE-BUG.3 documents the impact of the RE-BUG.2 code fix.
+
+It is documentation-only.
+
+No code changed.
+
+Fix status:
+
+RE-BUG.2 fixed the verified calendar-month duration bug by adding
+centralized date arithmetic and replacing direct `YYYY.MM` float
+subtraction in `engine/drawdown_engine.py`.
+
+The fix introduced:
+
+-   `engine/date_utils.py`;
+-   corrected `duration_months` calculation;
+-   corrected `recovery_months` calculation;
+-   `tests/verify_duration_arithmetic.py`;
+-   updated canonical Research, Assessment and Research Validation
+    verification expectations.
+
+Verification status:
+
+The post-fix pinned-runtime verification passes:
+
+-   `tests/verify_duration_arithmetic.py`;
+-   `tests/verify_research_engine.py`;
+-   `tests/verify_assessment_engine.py`;
+-   `tests/verify_validation_metrics.py`.
+
+Forward-looking documentation rule:
+
+The pre-fix canonical values remain part of project history.
+
+They must not be silently rewritten.
+
+From RE-BUG.2 onward, the post-fix values below are the official
+current canonical values.
+
+Current snapshot match set:
+
+The current `SimilarityEngine.top()` match identifiers, expressed as
+`bottom_date`, are:
+
+    [
+        2018.12,
+        1998.09,
+        1966.10,
+        2020.03,
+        1960.10,
+        1990.10,
+        2022.10,
+        1962.06,
+        1880.05,
+        1903.10,
+    ]
+
+Current Evidence / Research canonical values:
+
+-   `Evidence.median_return`: `0.10192496249726091`;
+-   `Evidence.worst_return`: `-0.01091948933252962`;
+-   `Evidence.best_return`: `0.13767334934864284`;
+-   `Evidence.return_count`: `9`;
+-   `Evidence.positive_count`: `8`;
+-   `Evidence.negative_count`: `1`;
+-   `Evidence.zero_count`: `0`;
+-   `Evidence.non_positive_probability`: `0.1111111111111111`;
+-   `Evidence.return_spread`: `0.14859283868117246`.
+
+Current Assessment canonical values:
+
+-   `expected_return_5y`: `0.10192496249726091`;
+-   `upside_potential`: `0.13285520801656237`;
+-   `downside_risk`: `-0.01091948933252962`;
+-   `drawdown_zone`: `NORMAL`;
+-   `matches`: `10`.
+
+Current Research Validation canonical values:
+
+-   `episodes`: `23`;
+-   `sample_size`: `21`;
+-   `evaluated_count`: `19`;
+-   `mae`: `0.06928793787076225`;
+-   `directional_hit_rate`: `0.9473684210526315`;
+-   `rank_correlation`: `-0.26505171850684983`;
+-   `overlap_pairs`: `10`;
+-   `repeated_forecast_groups`: `5`.
+
+Impact interpretation:
+
+The fix corrected an objectively wrong duration calculation.
+
+The change affected active Similarity scoring through both direct
+duration scoring and speed scoring.
+
+Therefore changes in selected matches, Evidence statistics and Research
+Validation metrics are expected consequences of the corrected arithmetic,
+not unrelated regressions.
+
+Methodological interpretation:
+
+The predictive-validity conclusion does not improve because of this fix.
+
+The updated validation surface remains conservative:
+
+-   rank correlation remains negative;
+-   directional hit-rate remains non-discriminant;
+-   the effective sample-size caveat remains unresolved;
+-   Evidence Quality remains unable to justify capital deployment on
+    predictive-validity grounds.
+
+Boundary:
+
+-   No target changed.
+-   No target freeze authorized.
+-   No baseline decision made.
+-   No holdout policy changed.
+-   No episode-detection redesign authorized.
+-   No price-basis asymmetry decision made.
+-   No unrecovered-drawdown decision made.
+-   No gate threshold changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -4680,6 +4813,19 @@ rerun Research / Assessment / Validation verifications, report any
 downstream Similarity / Research Validation changes, and avoid mixing
 the bug fix with target-freeze or governance work.
 
+RE-BUG.2 fixes the calendar-month duration bug in code. It introduces
+centralized `months_between()` arithmetic, updates drawdown duration and
+recovery duration calculations, adds a duration-specific verification
+test and updates canonical Research / Assessment / Research Validation
+expectations.
+
+RE-BUG.3 documents the post-fix impact. The current canonical evidence
+surface now uses `Evidence.median_return = 0.10192496249726091`.
+Research Validation now reports `mae = 0.06928793787076225`,
+`directional_hit_rate = 0.9473684210526315` and
+`rank_correlation = -0.26505171850684983`. These values supersede the
+pre-fix values going forward without rewriting the historical record.
+
 ## Phase 3
 
 Inference Engine
@@ -4768,6 +4914,28 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.47
+
+-   Added RE-BUG.3: Calendar-month duration fix impact record.
+-   Documented that RE-BUG.2 fixed the verified calendar-month duration
+    arithmetic bug in code.
+-   Recorded that the fix affects active Similarity scoring through both
+    duration and speed.
+-   Recorded the current post-fix match set:
+    `[2018.12, 1998.09, 1966.10, 2020.03, 1960.10, 1990.10, 2022.10,
+    1962.06, 1880.05, 1903.10]`.
+-   Established the post-fix canonical `Evidence.median_return` as
+    `0.10192496249726091`.
+-   Established the post-fix canonical Research Validation metrics:
+    `mae = 0.06928793787076225`,
+    `directional_hit_rate = 0.9473684210526315` and
+    `rank_correlation = -0.26505171850684983`.
+-   Recorded that pre-fix canonical values remain historical and are
+    superseded forward, not silently rewritten.
+-   Reaffirmed that the predictive-validity conclusion remains
+    conservative after the fix.
+-   No code changed in RE-BUG.3.
 
 ## Version 1.46
 
