@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.36\
+**Version:** 1.37\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-033.1)
+# Execution State (as of RE-034.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -206,7 +206,11 @@ verified:
                         exists. No posture engine exists. No gate
                         combination logic exists. RE-033.1 defines the
                         ordered posture vocabulary that future gates may
-                        cap.
+                        cap. RE-034.1 documents the combination boundary:
+                        `Blocked` first, then the most restrictive
+                        posture ceiling, with Evidence Quality not
+                        measurable treated differently from unavailable
+                        Regime Comparability / Personal Capacity.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -360,7 +364,8 @@ isolated module with a local input adapter; Frozen Core and operative
 wiring remain unchanged. RE-031.1 is documentation-only scope work for
 the Regime Comparability Gate. RE-032.1 is documentation-only
 classification work for Personal Capacity. RE-033.1 is
-documentation-only vocabulary work for Capital Posture.
+documentation-only vocabulary work for Capital Posture. RE-034.1 is
+documentation-only gate-combination boundary work.
 
 ------------------------------------------------------------------------
 
@@ -416,6 +421,9 @@ documentation-only vocabulary work for Capital Posture.
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
                                   as an orthogonal veto.
+  Gate Combination Boundary      Documented in RE-034.1. No code. No
+                                  posture engine. No executable
+                                  combination logic.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2565,6 +2573,158 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-034.1 — Gate combination boundary
+
+RE-034.1 defines the boundary for combining gate outputs into a final
+Capital Posture ceiling.
+
+It is documentation-only.
+
+No posture engine is implemented.
+
+Combination inputs:
+
+Future combination logic must not consume scores.
+
+It should consume discrete gate outputs such as:
+
+-   gate name;
+-   gate internal state;
+-   posture ceiling;
+-   `Blocked` flag;
+-   explanation.
+
+The combination layer must operate on posture ceilings and veto flags,
+not raw confidence or validation scores.
+
+Combination order:
+
+1.  If any gate or human approval control activates `Blocked`, final
+    output is `Blocked`.
+2.  If `Blocked` is not active, combine ordered posture ceilings by
+    taking the most restrictive ceiling.
+
+Ordered posture scale:
+
+    Conserve < Prepare < Deploy Partially < Deploy Aggressively
+
+Non-deployment vs deployment:
+
+RE-034.1 separates non-deployment postures from deployment postures.
+
+Non-deployment postures:
+
+-   `Conserve`
+-   `Prepare`
+
+Deployment postures:
+
+-   `Deploy Partially`
+-   `Deploy Aggressively`
+
+Evidence Quality prerequisite:
+
+Evidence Quality not measurable blocks deployment.
+
+It does not, by itself, necessarily block `Prepare`.
+
+Reason:
+
+`Prepare` does not commit capital. It authorizes planning and
+preparation only. Deployment states commit capital based on evidence.
+Therefore measurable Evidence Quality is a hard prerequisite for
+`Deploy Partially` or `Deploy Aggressively`, but not necessarily for
+`Prepare`.
+
+Asymmetric unavailable-gate treatment:
+
+This exception applies to Evidence Quality only.
+
+Unavailable Regime Comparability caps at `Conserve`.
+
+Unavailable Personal Capacity, while still unclassified, caps at
+`Conserve` as a placeholder.
+
+Reason:
+
+Evidence Quality uncertainty means the system does not know how much to
+trust the expected-return evidence. That blocks capital deployment but
+does not necessarily block preparation.
+
+Regime Comparability uncertainty means the system does not know whether
+the current situation is structurally comparable enough to historical
+precedents to justify any reaction.
+
+Personal Capacity unavailability means the system does not know whether
+the person can act responsibly at all.
+
+Those uncertainties are more fundamental than uncertainty about the
+return estimate, so they cap at `Conserve` until measured or classified.
+
+Current gate-ceiling mapping:
+
+-   Evidence Quality `not measurable` -> `Prepare`;
+-   Evidence Quality `conservative` -> `Conserve`;
+-   Regime Comparability `not measurable` -> `Conserve`;
+-   Personal Capacity unavailable / unclassified -> `Conserve`;
+-   Any `Blocked` flag -> `Blocked`.
+
+This mapping is provisional and documentary. It exists to make the
+current architecture auditable before implementation.
+
+Worked current-state inference:
+
+Current known states:
+
+-   Evidence Quality: `not measurable` -> `Prepare`;
+-   Regime Comparability: `not measurable` -> `Conserve`;
+-   Personal Capacity: unavailable / unclassified -> `Conserve`;
+-   `Blocked`: false unless explicitly activated.
+
+Combination:
+
+    min(Prepare, Conserve, Conserve) = Conserve
+
+Documentation-level result:
+
+    Final capital posture ceiling: Conserve
+
+This is a documentation-level inference, not executable logic. No
+Capital Posture Engine exists yet.
+
+Personal Capacity placeholder:
+
+Personal Capacity is included in the worked example only as an
+unavailable placeholder.
+
+RE-032.1 has not classified Personal Capacity as a parallel gate, Human
+Approval prerequisite or mixed control. Future combination logic must be
+revised after that classification.
+
+Open questions:
+
+-   Can `Prepare` ever be authorized solely by Regime Comparability while
+    Evidence Quality remains `not measurable`?
+-   Should Regime Comparability have its own non-deployment exception in
+    future, or is `not measurable -> Conserve` permanent?
+-   Does Personal Capacity belong in gate combination, or inside Human
+    Approval before any capital action is considered?
+-   How should explanations be composed when several gates cap posture at
+    the same level?
+
+Boundary:
+
+-   No code changed.
+-   No posture engine is implemented.
+-   No gate combination logic is implemented.
+-   No thresholds are defined.
+-   No Dry Powder Protocol rules are implemented.
+-   No Portfolio Reallocation Protocol rules are implemented.
+-   No Human Approval implementation is added.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2687,6 +2847,16 @@ current known gate states, the documentation-level capital posture
 ceiling is `Conserve`. No posture engine or gate-combination logic exists
 yet.
 
+RE-034.1 defines the gate-combination boundary. Combination consumes
+discrete posture ceilings and `Blocked` flags, not scores. `Blocked`
+wins first; otherwise the most restrictive ordered ceiling wins.
+RE-034.1 separates non-deployment postures (`Conserve`, `Prepare`) from
+deployment postures (`Deploy Partially`, `Deploy Aggressively`). Evidence
+Quality not measurable blocks deployment but may still allow `Prepare`.
+Unavailable Regime Comparability and unavailable / unclassified Personal
+Capacity cap at `Conserve`. Given current states, the
+documentation-level final posture ceiling remains `Conserve`.
+
 ## Phase 3
 
 Inference Engine
@@ -2775,6 +2945,28 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.37
+
+-   Added RE-034.1: Gate combination boundary.
+-   Defined combination inputs as discrete gate outputs: gate name,
+    internal state, posture ceiling, `Blocked` flag and explanation.
+-   Prohibited combination logic from consuming raw scores.
+-   Defined combination order: `Blocked` wins first; otherwise the most
+    restrictive ordered posture ceiling wins.
+-   Separated non-deployment postures (`Conserve`, `Prepare`) from
+    deployment postures (`Deploy Partially`, `Deploy Aggressively`).
+-   Documented that Evidence Quality `not measurable` blocks deployment
+    but does not necessarily block `Prepare`.
+-   Documented the intentional asymmetry: unavailable Regime
+    Comparability and unavailable / unclassified Personal Capacity cap
+    at `Conserve`, while Evidence Quality `not measurable` caps at
+    `Prepare`.
+-   Added current-state inference:
+    `min(Prepare, Conserve, Conserve) = Conserve`.
+-   Clarified that Personal Capacity is included only as an unavailable
+    placeholder until RE-032.1 classification is resolved.
+-   No code changed.
 
 ## Version 1.36
 
