@@ -20,7 +20,10 @@ from engine.evidence_quality_gate import (
     EvidenceQualityGate,
     GlobalModelValidationState,
     LocalEvidenceQualityInputs,
+    build_local_evidence_quality_inputs,
 )
+from engine.drawdown_engine import run_drawdown_engine
+from engine.research_engine import ResearchEngine
 
 
 LESS_RESTRICTIVE_STATES = {
@@ -29,10 +32,22 @@ LESS_RESTRICTIVE_STATES = {
     "less restrictive",
 }
 
+EXPECTED_LOCAL_COVERAGE = 0.9
+EXPECTED_LOCAL_CONSISTENCY = 0.9518456229064439
+EXPECTED_LOCAL_DIVERSITY = 0.6
+
 
 def assert_equal(label: str, actual, expected) -> None:
 
     if actual != expected:
+        raise AssertionError(
+            f"{label}: expected {expected}, got {actual}"
+        )
+
+
+def assert_close(label: str, actual: float, expected: float) -> None:
+
+    if abs(actual - expected) > 1e-12:
         raise AssertionError(
             f"{label}: expected {expected}, got {actual}"
         )
@@ -65,6 +80,56 @@ def assert_contains(label: str, values: list[str], expected: str) -> None:
 def main() -> None:
 
     gate = EvidenceQualityGate()
+
+    dataset = run_drawdown_engine()
+    research = ResearchEngine().run(dataset)
+    real_local = build_local_evidence_quality_inputs(
+        research.evidence,
+    )
+
+    assert_close(
+        "real_local_coverage",
+        real_local.coverage,
+        EXPECTED_LOCAL_COVERAGE,
+    )
+    assert_close(
+        "real_local_consistency",
+        real_local.consistency,
+        EXPECTED_LOCAL_CONSISTENCY,
+    )
+    assert_close(
+        "real_local_diversity",
+        real_local.diversity,
+        EXPECTED_LOCAL_DIVERSITY,
+    )
+    assert_equal(
+        "real_local_independence_dispersion_measured",
+        real_local.independence_dispersion_measured,
+        False,
+    )
+
+    real_today = gate.evaluate(
+        local=real_local,
+        global_state=GlobalModelValidationState(
+            predictive_validation_status="not validated",
+        ),
+    )
+
+    assert_equal(
+        "real_today_state",
+        real_today.state,
+        NOT_MEASURABLE,
+    )
+    assert_contains(
+        "real_today_explanations",
+        real_today.explanations,
+        "independence / dispersion not measured",
+    )
+    assert_contains(
+        "real_today_explanations",
+        real_today.explanations,
+        "global model-validation state not validated",
+    )
 
     today = gate.evaluate(
         local=LocalEvidenceQualityInputs(
@@ -158,6 +223,10 @@ def main() -> None:
     )
 
     print("EVIDENCE QUALITY GATE : STABLE")
+    print(f"real_local_coverage: {real_local.coverage:.14f}")
+    print(f"real_local_consistency: {real_local.consistency:.14f}")
+    print(f"real_local_diversity: {real_local.diversity:.14f}")
+    print(f"real_today_state: {real_today.state}")
     print(f"today_state: {today.state}")
     print(f"incomplete_state: {incomplete.state}")
     print(
