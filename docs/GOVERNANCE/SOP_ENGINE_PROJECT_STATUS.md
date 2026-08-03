@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.30\
+**Version:** 1.31\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.8)
+# Execution State (as of RE-029.9)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -147,7 +147,9 @@ verified:
                         separate EvidenceQualityGate structure, with
                         local snapshot inputs separated from global
                         model-validation state, and not wired into
-                        run.py or DecisionEngine.
+                        run.py or DecisionEngine. RE-029.9 defines the
+                        acceptance criteria for that first future code
+                        change.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -313,7 +315,7 @@ RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
 governance scope audits. RE-029.3 refactors `AssessmentEngine` to
 consume the shared Research pipeline without modifying frozen Core
 components. RE-029.4 adds verification for the public Assessment helper
-surface. RE-029.5, RE-029.6, RE-029.7 and RE-029.8 are
+surface. RE-029.5, RE-029.6, RE-029.7, RE-029.8 and RE-029.9 are
 documentation-only governance iterations: no frozen component changes
 are invoked.
 
@@ -344,6 +346,8 @@ are invoked.
                                   RE-029.8 documents the future
                                   implementation scope without changing
                                   code.
+                                  RE-029.9 documents acceptance criteria
+                                  for the first isolated gate PR.
                                   Remaining issue is confidence
                                   calibration/boundary, not temporal
                                   leakage or Research pipeline
@@ -1857,6 +1861,101 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-029.9 — Evidence Quality Gate first-code acceptance criteria
+
+RE-029.9 defines the acceptance criteria for the first future code PR
+that introduces an isolated `EvidenceQualityGate` structure. It does not
+implement that PR.
+
+The purpose is to make the next transition from documentation to code
+auditable. A future PR should be accepted or rejected by reading its
+diff against these criteria.
+
+Expected files:
+
+-   A future implementation may introduce a new isolated module, likely
+    `engine/evidence_quality_gate.py`.
+-   A future verification may introduce a focused test, likely
+    `tests/verify_evidence_quality_gate.py`.
+-   File names are not finalized by RE-029.9, but the responsibility is:
+    one isolated gate module and one focused verification surface.
+
+Required implementation properties:
+
+-   The gate exists and compiles in isolation.
+-   The gate is not wired into `run.py`.
+-   The gate is not wired into `DecisionEngine`.
+-   The gate does not modify `AssessmentEngine`.
+-   The gate does not modify `ValidationEngine`.
+-   The gate does not read or reuse
+    `AssessmentEngine.confidence().score`.
+-   The gate keeps local snapshot evidence quality separate from global
+    model-validation state.
+-   The gate exposes discrete output states, including at least
+    `not measurable` and `conservative`.
+-   The gate defaults to fail-closed.
+-   The gate returns explanations, not only state labels.
+
+Required test properties:
+
+-   Tests must verify structure and behaviour, not only importability.
+-   With today's available dimensions -- partial local inputs, no local
+    implementation of independence / dispersion, no local implementation
+    of predictive validation status and global model-validation state
+    still not validated -- the gate must return `not measurable` or
+    `conservative`.
+-   The same test must reject any less-restrictive state under today's
+    inputs.
+-   Incomplete inputs or `None` values must produce `not measurable`, not
+    a crash and not an assumed default score.
+-   This follows the RE-024.1 Evidence rule: absence of evidence is not
+    `0.0`.
+
+Explanation requirements:
+
+-   Explanations must identify the specific channel or dimension causing
+    the cap.
+-   A generic explanation such as "insufficient evidence" is not
+    acceptable by itself.
+-   Acceptable explanations should name causes such as:
+
+    -   local coverage unavailable;
+    -   local consistency unavailable;
+    -   local diversity unavailable;
+    -   global model-validation state not validated;
+    -   predictive validation status unavailable;
+    -   independence / dispersion not measured.
+
+Frozen Core rejection criterion:
+
+-   The first `EvidenceQualityGate` PR must not modify Frozen Core.
+-   Any modification to Frozen Core in that PR is grounds for rejection
+    unless a separate numbered iteration explicitly invokes the Frozen
+    Core Policy exception before the code change.
+
+Explicit non-goals for the first code PR:
+
+-   No numeric thresholds.
+-   No capital posture mapping.
+-   No automatic recommendations.
+-   No runtime wiring.
+-   No changes to `DecisionEngine`.
+-   No changes to `AssessmentEngine`.
+-   No changes to `ValidationEngine`.
+-   No replacement of `confidence.score`.
+-   No use of aggregate Research Validation metrics as local snapshot
+    quality.
+
+Boundary:
+
+-   No code changed.
+-   No thresholds are defined.
+-   No enum names are finalized.
+-   No capital posture rules are implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -1886,7 +1985,8 @@ audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
 public helpers verified in RE-029.4; confidence-to-posture gate
 boundary defined in RE-029.5; Evidence Quality Gate dimensions defined
 in RE-029.6; calibration boundary documented in RE-029.7; future
-implementation scope bounded in RE-029.8.
+implementation scope bounded in RE-029.8; first-code acceptance
+criteria documented in RE-029.9.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1929,7 +2029,11 @@ future less-restrictive state), clarify that `stability` is not one of
 the five official Evidence Quality dimensions today, and keep the gate
 unwired from `run.py` and `DecisionEngine`. Remaining Assessment / SOP
 work is executable thresholds, gate calibration, regime comparability,
-personal capacity and capital posture mapping.
+personal capacity and capital posture mapping. RE-029.9 defines the
+acceptance criteria for the first isolated gate PR: it must be testable,
+fail-closed with today's incomplete inputs, explain the specific cause
+of any cap, treat `None` or incomplete inputs as `not measurable`, avoid
+Frozen Core, and remain unwired from the operative flow.
 
 ## Phase 3
 
@@ -2019,6 +2123,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.31
+
+-   Added RE-029.9: Evidence Quality Gate first-code acceptance
+    criteria.
+-   Documented likely future implementation and verification surfaces:
+    an isolated gate module and a focused gate verification test.
+-   Required the first future gate PR to compile and test in isolation
+    without wiring into `run.py` or `DecisionEngine`.
+-   Required tests to assert that today's incomplete inputs produce
+    `not measurable` or `conservative`, never a less-restrictive state.
+-   Required incomplete inputs or `None` values to produce
+    `not measurable`, not crashes or assumed default scores.
+-   Required explanations to name the specific channel or dimension
+    causing the cap.
+-   Made Frozen Core modification a rejection criterion for the first
+    gate PR unless a separate numbered exception is authorized first.
+-   Reaffirmed non-goals: no thresholds, no capital posture mapping, no
+    automatic recommendations, no runtime wiring and no use of aggregate
+    Research Validation metrics as local snapshot quality.
+-   No code changed.
 
 ## Version 1.30
 
