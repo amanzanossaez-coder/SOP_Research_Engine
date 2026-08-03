@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.28\
+**Version:** 1.29\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.6)
+# Execution State (as of RE-029.7)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -138,7 +138,11 @@ verified:
                         the initial Evidence Quality Gate dimensions and
                         records that the gate starts conservative because
                         current Research Validation does not yet show
-                        reliable discriminatory power.
+                        reliable discriminatory power. RE-029.7 defines
+                        the calibration boundary: any relaxation from
+                        conservative must be pre-registered, discrete
+                        and evidence-led, never inferred from the
+                        aggregate confidence score.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -304,7 +308,7 @@ RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
 governance scope audits. RE-029.3 refactors `AssessmentEngine` to
 consume the shared Research pipeline without modifying frozen Core
 components. RE-029.4 adds verification for the public Assessment helper
-surface. RE-029.5 and RE-029.6 are documentation-only governance
+surface. RE-029.5, RE-029.6 and RE-029.7 are documentation-only governance
 iterations: no frozen component changes are invoked.
 
 ------------------------------------------------------------------------
@@ -328,6 +332,9 @@ iterations: no frozen component changes are invoked.
                                   Evidence Quality as a governance gate
                                   composed of objective dimensions, but
                                   no executable thresholds yet.
+                                  RE-029.7 documents the calibration
+                                  boundary for moving beyond the initial
+                                  conservative gate state.
                                   Remaining issue is confidence
                                   calibration/boundary, not temporal
                                   leakage or Research pipeline
@@ -1633,6 +1640,107 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-029.7 — Evidence Quality Gate calibration boundary
+
+RE-029.7 defines the calibration boundary for the Evidence Quality Gate.
+It does not implement the gate and does not define numeric thresholds.
+
+Architectural meaning of conservative:
+
+-   The gate is fail-closed, not fail-open.
+-   Evidence must actively justify any posture above the conservative
+    ceiling against explicit, pre-registered criteria.
+-   The default is not a middle state. Uncertainty resolves toward
+    restriction because opportunity cost is subordinate to irreversible
+    error in the SOP objective hierarchy.
+-   Gate states must be discrete. Evidence Quality must not become a
+    continuous capital-allocation function derived from a score.
+-   A continuous score would reintroduce the optimization pressure that
+    RE-029.5 rejected when it defined evidence quality as a gate rather
+    than a weighted input.
+
+Conditions for moving from conservative toward neutral:
+
+-   Criteria must be pre-registered before the evidence is evaluated.
+-   The decision must not be made ad hoc because a current result appears
+    attractive.
+-   All Evidence Quality dimensions must be measured without
+    placeholders, including stability.
+-   Future validation must show positive discriminatory power under a
+    pre-registered validation protocol. Rank correlation positive and
+    distinguishable from zero is one possible form of such evidence, but
+    RE-029.7 does not define it as the only future criterion.
+-   Directional metrics must be compared against naive baselines. A
+    hit-rate only matters if it improves on trivial rules such as always
+    predicting a positive return.
+-   Error metrics such as MAE must be compared against naive baselines,
+    such as unconditional historical mean or median forecasts, before
+    they can support a less restrictive gate.
+-   Sample dependence must be measured, bounded or explicitly discounted.
+    It must not be hidden behind nominal record counts.
+
+Current evidence that does not suffice:
+
+-   MAE of 7.03% is informative, but not yet compared against a naive
+    point-in-time baseline.
+-   Directional hit-rate of 94.74% is not discriminating in the current
+    sample because 0/19 evaluable forecasts were negative.
+-   Rank correlation is weakly negative under the pinned runtime
+    (`-0.22902466816870654`).
+-   `n=19` is an operative count, not an independent sample-size claim,
+    because Research Validation already documents overlapping realized
+    outcome windows and repeated forecast groups.
+
+Dimension readiness:
+
+-   Coverage is genuine but weak. It counts usable matches, but does not
+    yet judge whether those matches are strong analogies.
+-   Diversity is genuine but weak. It uses decade dispersion as a coarse
+    proxy and does not guarantee regime independence.
+-   Consistency is real but not yet governance-grade. It measures return
+    dispersion among matches, but can be inflated by temporally
+    concentrated or structurally dependent observations.
+-   Stability is not measured. It is currently hardcoded to `1.0` and
+    must be treated as unavailable, not as weak positive evidence.
+-   Independence / dispersion and predictive validation status are
+    documented dimensions, but not yet implemented as local gate
+    measurements.
+
+Prohibited shortcuts:
+
+-   `AssessmentEngine.confidence().score` must not be used as the
+    Evidence Quality Gate.
+-   It must not be used as a temporary proxy until something better
+    exists. That path would turn a placeholder into governance logic.
+-   Aggregate Research Validation metrics must not be cited as the
+    quality of a specific current snapshot. They describe historical
+    model behaviour, not local evidence quality for today's match set.
+-   Attractive expected return must not compensate for weak evidence
+    quality.
+-   No emergency or urgency argument may relax the Evidence Quality Gate
+    ad hoc. Relaxation requires a numbered, documented governance
+    iteration.
+
+Open governance question:
+
+-   A future human-approval mechanism must decide whether an exception
+    iteration written during the crisis that motivates it deserves the
+    same authority as one written before the pressure existed.
+-   Possible safeguards include a second approver, a cooling-off period
+    or a rule requiring that emergency exceptions be defined before the
+    triggering event.
+-   RE-029.7 records this as an open governance question only. It does
+    not solve the approval mechanism.
+
+Boundary:
+
+-   No thresholds are defined.
+-   No enum or state machine is implemented.
+-   No capital posture rules are implemented.
+-   No code changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -1661,7 +1769,7 @@ Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
 audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
 public helpers verified in RE-029.4; confidence-to-posture gate
 boundary defined in RE-029.5; Evidence Quality Gate dimensions defined
-in RE-029.6.
+in RE-029.6; calibration boundary documented in RE-029.7.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1691,9 +1799,14 @@ consistency, diversity, independence / dispersion and predictive
 validation status. It also records the initial conservative stance:
 current Research Validation is reproducible but not yet predictive
 validation, because hit-rate is not discriminating and rank correlation
-is weakly negative. Remaining Assessment / SOP work is executable
-thresholds, gate calibration, regime comparability, personal capacity
-and capital posture mapping.
+is weakly negative. RE-029.7 defines the calibration boundary: the gate
+is fail-closed, movement beyond conservative requires pre-registered
+criteria, current validation metrics do not suffice, `confidence.score`
+is prohibited even as a temporary proxy, and aggregate Research
+Validation metrics must not be confused with local snapshot quality.
+Remaining Assessment / SOP work is executable thresholds, gate
+calibration, regime comparability, personal capacity and capital posture
+mapping.
 
 ## Phase 3
 
@@ -1783,6 +1896,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.29
+
+-   Added RE-029.7: Evidence Quality Gate calibration boundary.
+-   Defined conservative gate posture as fail-closed, discrete and
+    evidence-led.
+-   Documented that movement toward neutral requires pre-registered
+    criteria, fully measured dimensions, baseline comparisons and
+    explicit treatment of sample dependence.
+-   Recorded why current Research Validation metrics do not suffice to
+    relax the conservative ceiling: MAE lacks a naive baseline,
+    hit-rate is not discriminating, rank correlation is weakly negative
+    and `n=19` is not an independent sample-size claim.
+-   Classified current dimension readiness: coverage and diversity are
+    genuine but weak, consistency is real but not yet governance-grade,
+    stability is unavailable, and independence / dispersion plus
+    predictive validation status are not yet local gate measurements.
+-   Prohibited use of `AssessmentEngine.confidence().score` as a gate or
+    temporary proxy.
+-   Prohibited treating aggregate Research Validation metrics as local
+    snapshot evidence quality.
+-   Recorded an open governance question about whether exception
+    iterations written during the crisis that motivates them require
+    extra safeguards.
+-   No code changed.
 
 ## Version 1.28
 
