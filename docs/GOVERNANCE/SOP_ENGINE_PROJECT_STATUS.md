@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.38\
+**Version:** 1.39\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-034.2)
+# Execution State (as of RE-034.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -212,7 +212,11 @@ verified:
                         measurable treated differently from unavailable
                         Regime Comparability / Personal Capacity.
                         RE-034.2 defines first-code acceptance criteria
-                        for that future combination layer.
+                        for that future combination layer. RE-034.3
+                        adds the isolated gate-combination module and
+                        verification test. RE-034.4 documents that it
+                        exists and passes verification, but remains
+                        outside the operative flow.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -423,9 +427,14 @@ documentation-only gate-combination boundary work.
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
                                   as an orthogonal veto.
-  Gate Combination Boundary      Documented in RE-034.1 and RE-034.2.
-                                  No code. No posture engine. No
-                                  executable combination logic.
+  Gate Combination Layer         v0 — isolated structure added in
+                                  RE-034.3. `engine/gate_combination.py`
+                                  exists and is verified by
+                                  `tests/verify_gate_combination.py`.
+                                  Not wired into run.py, DecisionEngine,
+                                  AssessmentEngine or ValidationEngine.
+                                  No posture engine. No thresholds. No
+                                  protocol rules. No operative authority.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2875,6 +2884,102 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-034.4 — Gate combination implementation status
+
+RE-034.4 documents the status after the first isolated
+gate-combination code.
+
+It is documentation-only.
+
+Implemented in RE-034.3:
+
+-   `engine/gate_combination.py`;
+-   `tests/verify_gate_combination.py`.
+
+Verified command:
+
+    python3 tests/verify_gate_combination.py
+
+Verified output:
+
+    GATE COMBINATION : STABLE
+
+What now exists:
+
+-   discrete Capital Posture constants:
+    `Conserve`, `Prepare`, `Deploy Partially`,
+    `Deploy Aggressively`, `Blocked`;
+-   ordered posture comparison for non-blocked gates;
+-   `Blocked` precedence over posture ordering;
+-   discrete gate-combination input objects;
+-   combined result with traceable explanations;
+-   regression coverage for today's documentary state:
+    Evidence Quality `not measurable`, Regime Comparability
+    `not measurable`, Personal Capacity unavailable / unclassified and
+    `Blocked=false` combine to `Conserve`;
+-   regression coverage for the Evidence Quality asymmetry:
+    Evidence Quality `not measurable` caps at `Prepare`, not `Conserve`,
+    when the other gates allow less restrictive posture;
+-   regression coverage proving that Evidence Quality does not override
+    a more restrictive Regime Comparability or Personal Capacity cap.
+
+What does not exist:
+
+-   no Capital Posture Engine;
+-   no automatic recommendation;
+-   no thresholds;
+-   no Dry Powder Protocol rules;
+-   no Portfolio Reallocation Protocol rules;
+-   no Human Approval implementation;
+-   no adapter from live gate outputs into the combination layer;
+-   no operative wiring.
+
+Operative boundary:
+
+`engine/gate_combination.py` exists in the repository.
+
+It does not participate in the `run.py` execution path.
+
+It is not called by `DecisionEngine`.
+
+It is not called by `AssessmentEngine`.
+
+It is not called by `ValidationEngine`.
+
+It does not consume `confidence.score`.
+
+It does not consume MAE, hit-rate, rank correlation or any raw
+Research Validation metric.
+
+Current posture inference:
+
+The documented current-state inference remains:
+
+    min(Prepare, Conserve, Conserve) = Conserve
+
+This is still an architectural inference and test fixture.
+
+It is not an executable SOP recommendation.
+
+Next implementation boundary:
+
+Future work may define adapters from actual gate outputs into
+`GateCombinationInput`.
+
+That future work must remain isolated unless a later numbered iteration
+explicitly authorizes operative wiring.
+
+Boundary:
+
+-   Documentation updated only.
+-   No code changed in RE-034.4.
+-   No posture engine is implemented.
+-   No thresholds are defined.
+-   No protocol rules are implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -3013,8 +3118,15 @@ state to `Conserve`, verify that `Blocked` wins first, verify that the
 most restrictive ceiling wins, protect the Evidence Quality
 `not measurable -> Prepare` exception from regression, prove that
 Evidence Quality does not override more restrictive gates, and require
-traceable explanations naming the limiting gate or control. No code
-exists yet.
+traceable explanations naming the limiting gate or control.
+
+RE-034.3 adds the isolated gate-combination module and verification test.
+RE-034.4 documents its status: `engine/gate_combination.py` exists,
+`tests/verify_gate_combination.py` passes, and the module remains outside
+the operative flow. It provides discrete posture constants, `Blocked`
+precedence, most-restrictive ceiling selection, and traceable limiting
+explanations. It does not implement a posture engine, thresholds,
+protocol rules, Human Approval or runtime wiring.
 
 ## Phase 3
 
@@ -3104,6 +3216,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.39
+
+-   Added RE-034.4: Gate combination implementation status.
+-   Documented that RE-034.3 added `engine/gate_combination.py` and
+    `tests/verify_gate_combination.py`.
+-   Recorded verified command:
+    `python3 tests/verify_gate_combination.py`.
+-   Recorded verified output: `GATE COMBINATION : STABLE`.
+-   Updated Component Status from boundary-only to isolated
+    Gate Combination Layer v0.
+-   Clarified that the layer exists and passes verification but remains
+    outside the operative flow.
+-   Clarified that no Capital Posture Engine, thresholds, protocol rules,
+    Human Approval implementation, live gate adapters or runtime wiring
+    exist.
+-   Preserved the current posture inference:
+    `min(Prepare, Conserve, Conserve) = Conserve`.
+-   No code changed in RE-034.4.
 
 ## Version 1.38
 
