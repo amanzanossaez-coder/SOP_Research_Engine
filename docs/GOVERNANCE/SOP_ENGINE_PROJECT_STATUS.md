@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.32\
+**Version:** 1.33\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-030.1)
+# Execution State (as of RE-030.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -151,7 +151,9 @@ verified:
                         acceptance criteria for that first future code
                         change. RE-030.1 adds the isolated
                         EvidenceQualityGate module and verification
-                        test, still outside the operative flow.
+                        test, still outside the operative flow. RE-030.2
+                        adds a local Evidence -> LocalEvidenceQualityInputs
+                        adapter, also outside the operative flow.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -177,8 +179,12 @@ verified:
                         Not called by AssessmentEngine. Does not consume
                         AssessmentEngine.confidence().score. Separates
                         local snapshot inputs from global model-validation
-                        state. Defaults fail-closed: today's incomplete
-                        gate inputs produce `not measurable`; fully
+                        state. RE-030.2 adds
+                        build_local_evidence_quality_inputs(evidence),
+                        using Evidence as the single source of truth for
+                        the selected match set. Defaults fail-closed:
+                        today's real local inputs plus non-validated
+                        global state produce `not measurable`; fully
                         measured but not yet authorized inputs produce
                         `conservative`.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
@@ -329,7 +335,9 @@ components. RE-029.4 adds verification for the public Assessment helper
 surface. RE-029.5, RE-029.6, RE-029.7, RE-029.8 and RE-029.9 are
 documentation-only governance iterations: no frozen component changes
 are invoked. RE-030.1 adds a new isolated gate module and focused test,
-without modifying Frozen Core or operative wiring.
+without modifying Frozen Core or operative wiring. RE-030.2 extends that
+isolated module with a local input adapter; Frozen Core and operative
+wiring remain unchanged.
 
 ------------------------------------------------------------------------
 
@@ -366,7 +374,8 @@ without modifying Frozen Core or operative wiring.
                                   duplication.
   Evidence Quality Gate          v0 — isolated structure added in
                                   RE-030.1. Compiles and has focused
-                                  verification. Not wired into run.py,
+                                  verification. RE-030.2 adds local
+                                  Evidence input adapter. Not wired into run.py,
                                   DecisionEngine, AssessmentEngine or
                                   ValidationEngine. No thresholds, no
                                   capital posture mapping and no
@@ -2053,6 +2062,88 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-030.2 — Local Evidence Quality input adapter
+
+RE-030.2 adds the first adapter from real Research output into local
+Evidence Quality inputs.
+
+Function added:
+
+    build_local_evidence_quality_inputs(evidence)
+
+Design:
+
+-   The adapter receives only `evidence`.
+-   It does not receive `matches` separately.
+-   `Evidence` remains the single source of truth for the selected match
+    set through `evidence.matches`.
+-   This prevents source-of-truth drift between an `Evidence` object and
+    a separately supplied match list.
+
+Local dimensions:
+
+-   `coverage` is calculated from usable evidence:
+
+        min(evidence.return_count / 10.0, 1.0)
+
+    It deliberately does not use `len(evidence.matches) / 10.0`.
+    Today's snapshot has 10 selected matches but only 9 usable realized
+    returns at the evidence horizon, so local coverage is 0.9, not 1.0.
+
+-   `consistency` is calculated from realized returns at the same horizon
+    as the `Evidence` object:
+
+        future_return_{evidence.horizon_years}y
+
+    This avoids the legacy `ValidationEngine` default horizon
+    (`future_return_3y`) and keeps local consistency aligned with the
+    returns that produced `Evidence.median_return`,
+    `Evidence.worst_return` and `Evidence.best_return`.
+
+-   `diversity` is calculated from the number of decades represented in
+    `evidence.matches`, divided by the selected match count.
+
+-   `independence_dispersion_measured` remains `False`.
+
+Isolation clarification:
+
+RE-030.1 was isolated in the strongest sense: the gate structure had no
+dependency on other project modules.
+
+RE-030.2 introduces a narrower form of isolation. The adapter reads the
+existing `Evidence` object and its `Similarity` matches, so it is no
+longer zero-dependency. It remains architecturally isolated because
+nothing calls it from the operative flow:
+
+-   `run.py` is unchanged.
+-   `DecisionEngine` is unchanged.
+-   `AssessmentEngine` is unchanged.
+-   `ValidationEngine` is unchanged.
+
+Verified current local values:
+
+-   `real_local_coverage: 0.90000000000000`
+-   `real_local_consistency: 0.95184562290644`
+-   `real_local_diversity: 0.60000000000000`
+-   `real_today_state: not measurable`
+
+The focused verification pins the exact current values. It does not
+settle thresholds, capital posture mapping or governance authority.
+
+Boundary:
+
+-   No thresholds are defined.
+-   No capital posture mapping is implemented.
+-   No automatic recommendation is implemented.
+-   No runtime wiring is implemented.
+-   `run.py` is unchanged.
+-   `DecisionEngine` is unchanged.
+-   `AssessmentEngine` is unchanged.
+-   `ValidationEngine` is unchanged.
+-   Frozen Core is unchanged.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2139,6 +2230,16 @@ snapshot inputs from global model-validation state, returns discrete
 states with explanations, defaults fail-closed and remains outside
 `run.py`, `DecisionEngine`, `AssessmentEngine` and `ValidationEngine`.
 No thresholds or capital posture mapping exist yet.
+
+RE-030.2 adds `build_local_evidence_quality_inputs(evidence)`, the first
+adapter from real Research output into local Evidence Quality inputs.
+The adapter uses `Evidence` as the single source of truth for matches,
+calculates coverage from usable returns (`return_count`, not selected
+match count), calculates consistency at `evidence.horizon_years`, and
+keeps independence / dispersion unmeasured. Current real local values:
+coverage=0.9, consistency=0.9518456229064439, diversity=0.6. With
+global model-validation state still not validated, the gate returns
+`not measurable` for today's snapshot.
 
 ## Phase 3
 
@@ -2228,6 +2329,30 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.33
+
+-   Added RE-030.2: local Evidence Quality input adapter.
+-   Added `build_local_evidence_quality_inputs(evidence)` to translate
+    real `Evidence` into `LocalEvidenceQualityInputs`.
+-   Kept `Evidence` as the single source of truth for the selected match
+    set; no separate `matches` argument is accepted.
+-   Calculated local coverage from usable returns:
+    `min(evidence.return_count / 10.0, 1.0)`.
+-   Verified current local coverage is 0.9, because today's snapshot has
+    10 selected matches but 9 usable realized returns.
+-   Calculated local consistency at `evidence.horizon_years`, avoiding
+    the legacy `ValidationEngine` 3-year default horizon.
+-   Verified current local consistency is 0.9518456229064439 and current
+    local diversity is 0.6.
+-   Verified today's real local inputs plus non-validated global state
+    return `not measurable`.
+-   Clarified that RE-030.2 is no longer zero-dependency, because it
+    reads `Evidence` and its matches, but remains isolated from the
+    operative flow.
+-   Confirmed no thresholds, no capital posture mapping, no automatic
+    recommendation and no operative authority.
+-   Frozen Core unchanged.
 
 ## Version 1.32
 
