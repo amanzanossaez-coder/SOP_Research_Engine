@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.45\
+**Version:** 1.46\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.6)
+# Execution State (as of RE-BUG.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -264,7 +264,9 @@ verified:
                         RE-PRED.6 audits bottom detection and episode
                         boundaries, and records two verified findings:
                         price-basis asymmetry and date-arithmetic
-                        duration bug.
+                        duration bug. RE-BUG.1 promotes the duration
+                        bug to near-term code-fix priority and defines
+                        acceptance criteria.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -483,7 +485,8 @@ documentation-only gate-combination boundary work.
                                   bottom detection / episode boundaries
                                   and records a verified duration
                                   arithmetic bug affecting Evidence
-                                  recovery statistics.
+                                  recovery statistics. RE-BUG.1 defines
+                                  acceptance criteria for the future fix.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -4260,8 +4263,9 @@ It affects fields currently produced by the system:
 -   `Evidence.average_recovery_months`;
 -   `Evidence.median_recovery_months`.
 
-It may also affect Similarity because `duration_months` participates in
-episode comparison.
+It affects Similarity directly because `duration_months` participates in
+duration scoring and also in speed scoring through `abs(drawdown) /
+duration_months`.
 
 RE-PRED.6 does not fix the bug.
 
@@ -4293,6 +4297,178 @@ Boundary:
 -   No validation result changed.
 -   No gate threshold changed.
 -   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
+## RE-BUG.1 — Calendar-month duration bug acceptance criteria
+
+RE-BUG.1 defines acceptance criteria for fixing the date-arithmetic bug
+identified in RE-PRED.6.
+
+It is documentation-only.
+
+No code changed.
+
+Bug classification:
+
+This is a verified implementation bug.
+
+It is not a methodology question.
+
+The current code calculates calendar durations by subtracting floats in
+`YYYY.MM` format:
+
+    int(round((bottom_date - peak_date) * 12))
+    int(round((recovery_date - bottom_date) * 12))
+
+That is not calendar-month arithmetic.
+
+Affected fields:
+
+-   `Episode.duration_months`;
+-   `Episode.recovery_months`;
+-   `Evidence.average_recovery_months`;
+-   `Evidence.median_recovery_months`.
+
+Directly affected behavior:
+
+-   Similarity duration scoring, because `episode.duration_months` is
+    compared directly against `snapshot.duration_months`;
+-   Similarity speed scoring, because `snapshot_speed` is calculated as
+    `abs(drawdown) / duration_months`.
+
+This means the bug is not limited to recovery-statistic fields.
+
+Correcting duration arithmetic may change the actual match set selected
+by `SimilarityEngine.top()`.
+
+Priority:
+
+This bug must be near the head of the code-fix queue.
+
+Reason:
+
+It already affects public Research / Evidence outputs.
+
+Any future consumer of Evidence recovery statistics could read those
+fields without knowing they are wrong.
+
+Required fix behavior:
+
+The future fix must calculate month distance from `YYYY.MM` encoded
+dates by converting year and month components explicitly.
+
+For two dates:
+
+    start = YYYY.MM
+    end   = YYYY.MM
+
+the correct month distance must be:
+
+    (end_year - start_year) * 12 + (end_month - start_month)
+
+The fix must not use direct float subtraction.
+
+Required examples:
+
+The future test must include at least:
+
+    1929.09 -> 1932.06 = 33 months
+
+This case currently returns 36 months.
+
+The test should also include a same-year cross-month case and a
+multi-year case whose month component decreases.
+
+Required regression scope:
+
+The future verification must prove:
+
+-   all 23 current drawdown episodes have calendar-correct
+    `duration_months`;
+-   all recovered episodes have calendar-correct `recovery_months`;
+-   no duration uses float date subtraction;
+-   `Evidence.average_recovery_months` and
+    `Evidence.median_recovery_months` are recalculated from corrected
+    `recovery_months`;
+-   the fix does not change `future_return_5y`;
+-   the fix does not change source-column semantics;
+-   the fix does not change episode threshold logic;
+-   the fix does not change the nominal-price vs real-total-return
+    asymmetry documented in RE-PRED.6.
+-   the fix compares today's selected match identifiers before and after
+    the correction.
+
+Expected downstream impact:
+
+Because `duration_months` participates in two active Similarity
+dimensions, correcting it may change:
+
+-   selected matches;
+-   Evidence return statistics;
+-   Evidence Quality local inputs;
+-   Research Validation metrics.
+
+Such changes are acceptable if caused by corrected duration arithmetic.
+
+They must be reported explicitly in the future fix iteration.
+
+They must not be hidden as unrelated regression noise.
+
+If selected matches do not change, that fact must be reported explicitly
+as well.
+
+The future fix must not assume that canonical numbers survive unchanged:
+
+-   `Evidence.return_count`;
+-   `Evidence.median_return`;
+-   `Evidence.worst_return`;
+-   `Evidence.best_return`;
+-   Research Validation MAE;
+-   directional hit rate;
+-   rank correlation.
+
+Required tests:
+
+The future code change should add or update a focused verification test.
+
+Minimum assertions:
+
+-   date-to-month conversion helper returns correct values;
+-   1929.09 to 1932.06 returns 33;
+-   every produced episode has corrected `duration_months`;
+-   every recovered episode has corrected `recovery_months`;
+-   public Evidence recovery statistics are based on corrected values;
+-   today's top-match identifiers are compared before and after the fix;
+-   `verify_research_engine.py` passes after the fix;
+-   `verify_assessment_engine.py` passes after the fix;
+-   `verify_validation_metrics.py` is rerun after the fix, with expected
+    values updated only if changed matches or corrected arithmetic explain
+    the difference;
+-   the existing Research pipeline still runs.
+
+Rejected shortcuts:
+
+-   Do not patch only the 1929 case.
+-   Do not round float differences differently.
+-   Do not keep using `YYYY.MM` float subtraction.
+-   Do not silently update canonical validation numbers without
+    explaining whether changed Similarity matches caused the change.
+-   Do not assume Similarity is unaffected without comparing match
+    identifiers.
+-   Do not combine this bug fix with target-freeze, baseline, holdout or
+    gate-threshold work.
+
+Boundary:
+
+-   No code changed in RE-BUG.1.
+-   No bug fixed yet.
+-   No target changed.
+-   No episode-detection redesign authorized.
+-   No price-basis asymmetry decision made.
+-   No unrecovered-drawdown decision made.
+-   No validation metrics recalculated.
 -   No operative wiring authorized.
 
 ------------------------------------------------------------------------
@@ -4492,8 +4668,17 @@ It also records that unrecovered drawdowns are structurally excluded
 because episodes are appended only on recovery. Finally, it records a
 verified date-arithmetic bug: `duration_months` and `recovery_months`
 are calculated by subtracting `YYYY.MM` floats rather than calendar
-months, affecting public Evidence recovery statistics and potentially
-Similarity. No code is changed in RE-PRED.6.
+months, affecting public Evidence recovery statistics and active
+Similarity scoring. No code is changed in RE-PRED.6.
+
+RE-BUG.1 promotes the date-arithmetic duration bug to near-term code-fix
+priority. It defines acceptance criteria for a future fix: use explicit
+calendar-month arithmetic, verify examples such as 1929.09 -> 1932.06 =
+33 months, update public Evidence recovery statistics from corrected
+values, compare selected match identifiers before and after the fix,
+rerun Research / Assessment / Validation verifications, report any
+downstream Similarity / Research Validation changes, and avoid mixing
+the bug fix with target-freeze or governance work.
 
 ## Phase 3
 
@@ -4583,6 +4768,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.46
+
+-   Added RE-BUG.1: Calendar-month duration bug acceptance criteria.
+-   Classified the `duration_months` / `recovery_months` issue as a
+    verified implementation bug, not a methodology question.
+-   Marked the bug as near-term code-fix priority because it already
+    affects public Evidence recovery statistics and active Similarity
+    scoring.
+-   Required future fix to use explicit calendar-month arithmetic rather
+    than `YYYY.MM` float subtraction.
+-   Required regression coverage for `1929.09 -> 1932.06 = 33 months`.
+-   Required verification that all current episode durations and recovery
+    durations are calendar-correct after the fix.
+-   Required public Evidence recovery statistics to be recalculated from
+    corrected values.
+-   Required selected match identifiers to be compared before and after
+    the future fix.
+-   Required rerunning `verify_research_engine.py`,
+    `verify_assessment_engine.py` and `verify_validation_metrics.py`
+    after the future fix.
+-   Required explicit reporting of any downstream Similarity or Research
+    Validation metric changes caused by corrected duration arithmetic.
+-   Prohibited mixing the bug fix with target-freeze, baseline, holdout
+    or gate-threshold work.
+-   No code changed.
 
 ## Version 1.45
 
