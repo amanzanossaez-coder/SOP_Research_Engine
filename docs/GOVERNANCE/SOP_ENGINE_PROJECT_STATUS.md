@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.33\
+**Version:** 1.34\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-030.2)
+# Execution State (as of RE-031.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -187,6 +187,14 @@ verified:
                         global state produce `not measurable`; fully
                         measured but not yet authorized inputs produce
                         `conservative`.
+  Regime Comparability Gate
+                        Planned / documented boundary only (RE-031.1).
+                        No code exists. Not called by run.py,
+                        DecisionEngine, AssessmentEngine or
+                        EvidenceQualityGate. Intended to cap capital
+                        posture when today's market regime is not
+                        structurally comparable to the historical
+                        evidence being used.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -337,7 +345,8 @@ documentation-only governance iterations: no frozen component changes
 are invoked. RE-030.1 adds a new isolated gate module and focused test,
 without modifying Frozen Core or operative wiring. RE-030.2 extends that
 isolated module with a local input adapter; Frozen Core and operative
-wiring remain unchanged.
+wiring remain unchanged. RE-031.1 is documentation-only scope work for
+the Regime Comparability Gate.
 
 ------------------------------------------------------------------------
 
@@ -380,6 +389,10 @@ wiring remain unchanged.
                                   ValidationEngine. No thresholds, no
                                   capital posture mapping and no
                                   operative authority.
+  Regime Comparability Gate      Boundary documented in RE-031.1. No
+                                  code. No thresholds. No capital posture
+                                  mapping. Not wired into any operative
+                                  flow.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2144,6 +2157,119 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-031.1 — Regime Comparability Gate boundary
+
+RE-031.1 defines the first boundary for the Regime Comparability Gate.
+It is documentation-only.
+
+Purpose:
+
+The Regime Comparability Gate asks whether the historical evidence being
+used by the Research Engine is structurally applicable to the current
+market regime.
+
+It does not ask whether the market is attractive.
+
+It does not ask whether expected return is high.
+
+It asks whether the current regime is comparable enough to the regimes
+represented in the evidence sample for the evidence to be allowed to
+support capital posture.
+
+Architectural role:
+
+-   Regime comparability is a gate / ceiling, not a weighted input.
+-   It can cap maximum capital posture.
+-   It cannot make posture more aggressive by itself.
+-   It cannot compensate for weak Evidence Quality.
+-   It cannot override Personal Capacity.
+-   It combines with other gates by veto / most restrictive ceiling.
+
+Relationship with Evidence Quality:
+
+-   Evidence Quality asks whether the evidence sample is internally
+    usable and whether the model has demonstrated predictive validity.
+-   Regime Comparability asks whether the current regime is structurally
+    represented by that evidence.
+-   These questions are related but not identical.
+-   A high-quality evidence sample can still be a poor guide if today's
+    regime is structurally outside the sample.
+-   A comparable regime does not make weak evidence strong.
+
+Relationship with `AssessmentEngine.drawdown_zone()`:
+
+-   `drawdown_zone()` is a market severity taxonomy.
+-   It is not a regime-comparability gate.
+-   It may help describe the current market state, but it does not decide
+    whether today's regime is comparable to historical precedents.
+-   RE-031.1 does not modify `AssessmentEngine`.
+
+Candidate dimensions:
+
+The first implementation is not authorized yet, but future Regime
+Comparability work may need to evaluate dimensions such as:
+
+-   valuation regime;
+-   inflation regime;
+-   interest-rate regime;
+-   earnings / margin regime;
+-   volatility regime;
+-   liquidity / credit regime;
+-   policy / intervention regime;
+-   market-structure regime.
+
+These are candidate dimensions only. RE-031.1 defines no thresholds and
+does not decide which dimensions become executable.
+
+Current state:
+
+-   No Regime Comparability code exists.
+-   No local regime-comparability inputs exist.
+-   No global regime taxonomy exists.
+-   No thresholds exist.
+-   No capital posture mapping exists.
+-   The gate is not measurable today.
+
+Default stance:
+
+-   Until measured, Regime Comparability must be treated as unavailable,
+    not favorable.
+-   Absence of regime comparability evidence must not be represented as a
+    positive score.
+-   If a future gate requires a state before measurement exists, it must
+    fail closed.
+
+Prohibited shortcuts:
+
+-   Do not use `drawdown_zone()` as a regime-comparability proxy.
+-   Do not use expected return as a regime-comparability proxy.
+-   Do not use Evidence Quality as a regime-comparability proxy.
+-   Do not infer comparability from the fact that `SimilarityEngine`
+    found matches.
+-   Do not relax the gate ad hoc because a current market opportunity
+    appears attractive.
+
+Open questions:
+
+-   Which regime dimensions are observable with current data?
+-   Which dimensions require new data sources?
+-   Should regime comparability be measured locally against the selected
+    match set, globally against the full historical universe, or both?
+-   Can regime comparability be computed, or does it require an explicit
+    human regime assessment for some dimensions?
+-   How should regime comparability interact with future Personal
+    Capacity classification?
+
+Boundary:
+
+-   No code changed.
+-   No thresholds are defined.
+-   No regime taxonomy is finalized.
+-   No capital posture mapping is implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2241,6 +2367,13 @@ coverage=0.9, consistency=0.9518456229064439, diversity=0.6. With
 global model-validation state still not validated, the gate returns
 `not measurable` for today's snapshot.
 
+RE-031.1 opens the Regime Comparability Gate as a separate governance
+boundary. It defines regime comparability as a gate / ceiling, not a
+weighted input, and separates it from both Evidence Quality and
+`AssessmentEngine.drawdown_zone()`. No code, thresholds, regime taxonomy
+or capital posture mapping exist yet. Current Regime Comparability state
+is not measurable.
+
 ## Phase 3
 
 Inference Engine
@@ -2329,6 +2462,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.34
+
+-   Added RE-031.1: Regime Comparability Gate boundary.
+-   Defined regime comparability as a gate / ceiling that asks whether
+    current market conditions are structurally comparable to the
+    historical evidence sample.
+-   Separated Regime Comparability from Evidence Quality.
+-   Separated Regime Comparability from `AssessmentEngine.drawdown_zone()`,
+    which remains a market severity taxonomy, not a comparability gate.
+-   Listed candidate future dimensions: valuation, inflation, interest
+    rates, earnings / margins, volatility, liquidity / credit, policy /
+    intervention and market structure.
+-   Documented current state as not measurable: no code, no inputs, no
+    taxonomy, no thresholds and no capital posture mapping.
+-   Prohibited shortcuts such as using drawdown zone, expected return,
+    Evidence Quality or the existence of similarity matches as regime
+    comparability proxies.
+-   No code changed.
 
 ## Version 1.33
 
