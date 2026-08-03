@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.37\
+**Version:** 1.38\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-034.1)
+# Execution State (as of RE-034.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -211,6 +211,8 @@ verified:
                         posture ceiling, with Evidence Quality not
                         measurable treated differently from unavailable
                         Regime Comparability / Personal Capacity.
+                        RE-034.2 defines first-code acceptance criteria
+                        for that future combination layer.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -421,9 +423,9 @@ documentation-only gate-combination boundary work.
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
                                   as an orthogonal veto.
-  Gate Combination Boundary      Documented in RE-034.1. No code. No
-                                  posture engine. No executable
-                                  combination logic.
+  Gate Combination Boundary      Documented in RE-034.1 and RE-034.2.
+                                  No code. No posture engine. No
+                                  executable combination logic.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2725,6 +2727,154 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-034.2 — Gate combination first-code acceptance criteria
+
+RE-034.2 defines acceptance criteria for the first isolated
+gate-combination code.
+
+It is documentation-only.
+
+No posture engine is implemented.
+
+Purpose:
+
+The first code change must make the RE-034.1 combination boundary
+testable without connecting it to the operative SOP flow.
+
+It must model structure, ordering and explanations only.
+
+It must not implement thresholds, protocols or automatic capital action.
+
+Required behavior:
+
+1.  `Blocked` wins before any ordered-posture comparison.
+
+    If any gate or human approval control marks `Blocked`, the combined
+    result must be `Blocked` regardless of all posture ceilings.
+
+2.  Without `Blocked`, the most restrictive posture ceiling wins.
+
+    The ordered scale is:
+
+        Conserve < Prepare < Deploy Partially < Deploy Aggressively
+
+3.  The current real-state anchor must be pinned as a regression test.
+
+    With today's known gate states:
+
+    -   Evidence Quality: `not measurable` -> `Prepare`;
+    -   Regime Comparability: `not measurable` -> `Conserve`;
+    -   Personal Capacity: unavailable / unclassified -> `Conserve`;
+    -   `Blocked`: false.
+
+    The combined output must be exactly:
+
+        Conserve
+
+    This test protects the worked RE-034.1 example from becoming only
+    prose.
+
+4.  Evidence Quality must not override more restrictive gates.
+
+    A test must verify that if Evidence Quality authorizes up to
+    `Deploy Aggressively` but Regime Comparability or Personal Capacity
+    caps at `Conserve`, the combined output remains `Conserve`.
+
+    This prevents the Evidence Quality exception from being misread as
+    Evidence Quality dominance.
+
+5.  Evidence Quality `not measurable` must not be flattened back to
+    `Conserve`.
+
+    A test must verify that:
+
+    -   Evidence Quality: `not measurable` -> `Prepare`;
+    -   Regime Comparability: `Deploy Aggressively`;
+    -   Personal Capacity: `Deploy Aggressively`;
+    -   `Blocked`: false.
+
+    The combined output must be:
+
+        Prepare
+
+    This protects the RE-034.1 distinction between preparation and
+    deployment from regression.
+
+6.  Unavailable Regime Comparability must cap at `Conserve`.
+
+    A test must verify that unavailable or `not measurable` Regime
+    Comparability caps the combined result at `Conserve`, even if other
+    gates allow less restrictive posture.
+
+7.  Unavailable Personal Capacity must cap at `Conserve` while its role
+    remains unclassified.
+
+    A test must verify the placeholder behavior documented in RE-034.1.
+    Future work may revise this after Personal Capacity is classified,
+    but the first code must not silently assume it is favorable.
+
+8.  Explanations must preserve traceability.
+
+    The combined output must identify which gate or control caused the
+    final ceiling or `Blocked` result.
+
+    A generic explanation such as "insufficient evidence" is not enough.
+    The explanation must name the specific limiting gate or control, for
+    example:
+
+    -   `Regime Comparability: not measurable`;
+    -   `Personal Capacity: unavailable`;
+    -   `Evidence Quality: not measurable, deployment blocked`;
+    -   `Human Approval: blocked`.
+
+9.  Inputs must be discrete.
+
+    The combination function must consume posture ceilings, `Blocked`
+    flags and explanations. It must not consume raw scores,
+    `confidence.score`, MAE, hit-rate, rank correlation or any other
+    validation metric directly.
+
+Required isolation:
+
+The first code change may add an isolated combination module and a
+verification test.
+
+It must not be wired into:
+
+-   `run.py`;
+-   `DecisionEngine`;
+-   `AssessmentEngine`;
+-   `ValidationEngine`;
+-   Frozen Core.
+
+Automatic rejection criteria:
+
+A future PR fails RE-034.2 if it:
+
+-   connects combination logic to the operative flow;
+-   changes Frozen Core;
+-   consumes raw scores instead of discrete gate ceilings;
+-   treats Evidence Quality as dominant over the other gates;
+-   maps Evidence Quality `not measurable` directly to `Conserve`;
+-   treats unavailable Regime Comparability as favorable;
+-   treats unavailable Personal Capacity as favorable;
+-   returns a final posture without naming the limiting cause;
+-   implements thresholds;
+-   implements Dry Powder Protocol rules;
+-   implements Portfolio Reallocation Protocol rules;
+-   implements Human Approval.
+
+Boundary:
+
+-   No code changed.
+-   No posture engine is implemented.
+-   No gate combination logic is implemented.
+-   No thresholds are defined.
+-   No protocol rules are implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2857,6 +3007,15 @@ Unavailable Regime Comparability and unavailable / unclassified Personal
 Capacity cap at `Conserve`. Given current states, the
 documentation-level final posture ceiling remains `Conserve`.
 
+RE-034.2 defines first-code acceptance criteria for the future isolated
+gate-combination module. The required tests must pin the current real
+state to `Conserve`, verify that `Blocked` wins first, verify that the
+most restrictive ceiling wins, protect the Evidence Quality
+`not measurable -> Prepare` exception from regression, prove that
+Evidence Quality does not override more restrictive gates, and require
+traceable explanations naming the limiting gate or control. No code
+exists yet.
+
 ## Phase 3
 
 Inference Engine
@@ -2945,6 +3104,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.38
+
+-   Added RE-034.2: Gate combination first-code acceptance criteria.
+-   Required a regression test for the current real state:
+    Evidence Quality `not measurable`, Regime Comparability
+    `not measurable`, Personal Capacity unavailable / unclassified and
+    `Blocked=false` must combine to `Conserve`.
+-   Required a test proving that Evidence Quality does not override more
+    restrictive gates.
+-   Required a test proving that Evidence Quality `not measurable` caps
+    at `Prepare`, not `Conserve`, when the other gates allow less
+    restrictive posture.
+-   Required unavailable Regime Comparability and unavailable Personal
+    Capacity to cap at `Conserve`.
+-   Required combined explanations to name the specific limiting gate or
+    control.
+-   Repeated first-code isolation boundaries: no `run.py`,
+    `DecisionEngine`, `AssessmentEngine`, `ValidationEngine` or Frozen
+    Core wiring.
+-   No code changed.
 
 ## Version 1.37
 
