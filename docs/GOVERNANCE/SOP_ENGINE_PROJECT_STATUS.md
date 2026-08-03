@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.34\
+**Version:** 1.35\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-031.1)
+# Execution State (as of RE-032.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -195,6 +195,13 @@ verified:
                         posture when today's market regime is not
                         structurally comparable to the historical
                         evidence being used.
+  Personal Capacity     Planned / classification boundary only
+  Boundary              (RE-032.1). No code exists. Not called by run.py,
+                        DecisionEngine, AssessmentEngine or any gate.
+                        RE-032.1 does not assume this becomes a parallel
+                        computable gate; it classifies whether Personal
+                        Capacity belongs as a gate, human approval
+                        requirement or mixed control.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -346,7 +353,8 @@ are invoked. RE-030.1 adds a new isolated gate module and focused test,
 without modifying Frozen Core or operative wiring. RE-030.2 extends that
 isolated module with a local input adapter; Frozen Core and operative
 wiring remain unchanged. RE-031.1 is documentation-only scope work for
-the Regime Comparability Gate.
+the Regime Comparability Gate. RE-032.1 is documentation-only
+classification work for Personal Capacity.
 
 ------------------------------------------------------------------------
 
@@ -393,6 +401,11 @@ the Regime Comparability Gate.
                                   code. No thresholds. No capital posture
                                   mapping. Not wired into any operative
                                   flow.
+  Personal Capacity Boundary     Classification boundary documented in
+                                  RE-032.1. No code. No thresholds. No
+                                  capital posture mapping. Not yet
+                                  classified as computable gate, human
+                                  approval requirement or mixed control.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2270,6 +2283,133 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.1 — Personal Capacity classification boundary
+
+RE-032.1 defines the first boundary for Personal Capacity.
+It is documentation-only.
+
+Primary classification question:
+
+    Is Personal Capacity a parallel gate,
+    a human-approval requirement,
+    or a mixed control?
+
+RE-032.1 deliberately does not assume the answer.
+
+Purpose:
+
+Personal Capacity asks whether the person can responsibly assume risk
+now.
+
+It does not measure market opportunity.
+
+It does not measure evidence quality.
+
+It does not measure regime comparability.
+
+It asks whether the person's current financial and behavioural capacity
+allows any capital posture above the conservative floor.
+
+Architectural role:
+
+-   Personal Capacity may become a gate, a human-approval prerequisite or
+    a mixed control.
+-   Until classified, it must not be treated as a fully computable gate.
+-   If it becomes a gate, it must act as a ceiling, not a weighted input.
+-   It cannot make posture more aggressive by itself.
+-   It cannot compensate for weak Evidence Quality.
+-   It cannot compensate for poor Regime Comparability.
+-   It must fail closed when required facts or attestations are missing.
+
+Two input channels:
+
+Future Personal Capacity work must not collapse all personal dimensions
+into one opaque score. Inputs must remain separated into at least two
+channels.
+
+1.  Verifiable facts.
+
+    These are objective or documentable conditions, such as:
+
+    -   available liquidity;
+    -   near-term cash needs;
+    -   fixed obligations;
+    -   debt service;
+    -   income concentration;
+    -   portfolio concentration;
+    -   required emergency reserve;
+    -   known time horizon constraints.
+
+2.  Attested judgement.
+
+    These are human declarations or judgements, not stable objective
+    measurements, such as:
+
+    -   perceived income stability;
+    -   willingness to tolerate drawdown;
+    -   ability to avoid forced selling;
+    -   psychological capacity to hold through stress;
+    -   household or life constraints not captured in financial data.
+
+These channels may both restrict posture, but they must not be averaged
+into a single score.
+
+Drawdown tolerance risk:
+
+Declared tolerance to drawdown is least reliable when it matters most.
+
+A tolerance statement made in calm conditions is more useful than a
+revision made during a crisis. A change in declared tolerance during a
+drawdown should be treated with the same suspicion as an emergency
+exception that relaxes a gate under pressure.
+
+Future governance should therefore prefer pre-registered personal
+capacity attestations over crisis-time revisions. RE-032.1 does not
+define the approval mechanism, but records the risk explicitly.
+
+Relationship with Human Approval:
+
+-   Personal Capacity may belong partly or entirely inside Human
+    Approval.
+-   If so, it should be treated as an approval prerequisite rather than a
+    parallel technical gate.
+-   If some parts are computable and others attested, future design must
+    preserve that separation.
+-   Gate combination cannot be finalized until Personal Capacity is
+    classified.
+
+Prohibited shortcuts:
+
+-   Do not convert Personal Capacity into an opaque confidence score.
+-   Do not average verifiable facts with attested judgement.
+-   Do not treat a missing attestation as favorable.
+-   Do not treat crisis-time risk tolerance revisions as equally reliable
+    as pre-registered attestations.
+-   Do not allow attractive market evidence to compensate for inadequate
+    Personal Capacity.
+
+Open questions:
+
+-   Which Personal Capacity facts can be verified from existing records?
+-   Which facts require manual entry?
+-   Which dimensions require explicit human attestation?
+-   Should attestations expire?
+-   Should crisis-time attestation changes require a cooling-off period
+    or second approval?
+-   Does Personal Capacity participate in gate-combination logic, or does
+    it sit inside Human Approval before any capital action is allowed?
+
+Boundary:
+
+-   No code changed.
+-   No thresholds are defined.
+-   No personal-capacity taxonomy is finalized.
+-   No capital posture mapping is implemented.
+-   No operative wiring is authorized.
+-   Personal Capacity is not yet classified as a gate.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2374,6 +2514,15 @@ weighted input, and separates it from both Evidence Quality and
 or capital posture mapping exist yet. Current Regime Comparability state
 is not measurable.
 
+RE-032.1 opens the Personal Capacity classification boundary. It does
+not assume Personal Capacity is a parallel computable gate. The first
+classification question is whether Personal Capacity belongs as a gate,
+as a Human Approval prerequisite, or as a mixed control. The document
+separates verifiable personal facts from attested judgement and records
+the special unreliability of crisis-time drawdown tolerance revisions.
+No code, thresholds, personal-capacity taxonomy or capital posture
+mapping exist yet.
+
 ## Phase 3
 
 Inference Engine
@@ -2462,6 +2611,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.35
+
+-   Added RE-032.1: Personal Capacity classification boundary.
+-   Framed the primary question as whether Personal Capacity is a
+    parallel gate, a Human Approval requirement or a mixed control.
+-   Defined Personal Capacity as the question of whether the person can
+    responsibly assume risk now, separate from market opportunity,
+    Evidence Quality and Regime Comparability.
+-   Required future Personal Capacity work to separate verifiable facts
+    from attested judgement.
+-   Listed candidate verifiable facts such as liquidity, cash needs,
+    obligations, debt service, income concentration, portfolio
+    concentration, emergency reserve and time horizon constraints.
+-   Listed candidate attested judgements such as perceived income
+    stability, drawdown tolerance, ability to avoid forced selling and
+    psychological capacity to hold through stress.
+-   Recorded drawdown tolerance as especially unreliable under crisis
+    pressure, and stated that pre-registered attestations should carry
+    more weight than crisis-time revisions.
+-   Documented that gate-combination logic cannot be finalized until
+    Personal Capacity is classified.
+-   No code changed.
 
 ## Version 1.34
 
