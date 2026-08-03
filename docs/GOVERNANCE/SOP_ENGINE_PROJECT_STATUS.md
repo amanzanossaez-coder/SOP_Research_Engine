@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.27\
+**Version:** 1.28\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.5)
+# Execution State (as of RE-029.6)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -134,7 +134,11 @@ verified:
                         posture as a gate / ceiling, not a weighted
                         input, and explicitly excludes the current
                         confidence score from SOP capital gates while
-                        stability remains hardcoded.
+                        stability remains hardcoded. RE-029.6 defines
+                        the initial Evidence Quality Gate dimensions and
+                        records that the gate starts conservative because
+                        current Research Validation does not yet show
+                        reliable discriminatory power.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -300,7 +304,8 @@ RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
 governance scope audits. RE-029.3 refactors `AssessmentEngine` to
 consume the shared Research pipeline without modifying frozen Core
 components. RE-029.4 adds verification for the public Assessment helper
-surface.
+surface. RE-029.5 and RE-029.6 are documentation-only governance
+iterations: no frozen component changes are invoked.
 
 ------------------------------------------------------------------------
 
@@ -319,9 +324,13 @@ surface.
   Assessment Engine              v1 — consumes the shared Research
                                   pipeline as of RE-029.3. Public
                                   helpers smoke-tested in RE-029.4. Not
-                                  called by run.py. Remaining issue is
-                                  confidence calibration/boundary, not
-                                  temporal leakage or Research pipeline
+                                  called by run.py. RE-029.6 defines
+                                  Evidence Quality as a governance gate
+                                  composed of objective dimensions, but
+                                  no executable thresholds yet.
+                                  Remaining issue is confidence
+                                  calibration/boundary, not temporal
+                                  leakage or Research pipeline
                                   duplication.
   Inference Engine               Planned
   Constitution                   Planned
@@ -1510,6 +1519,120 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-029.6 — Evidence Quality Gate dimensions
+
+RE-029.6 defines the documentary shape of the Evidence Quality Gate.
+It does not implement the gate and does not define numeric thresholds.
+
+The purpose of the gate is to cap maximum SOP capital posture according
+to the quality of the evidence base. Evidence quality remains a ceiling,
+not a weighted source of conviction. It can restrict capital posture; it
+cannot make posture more aggressive by itself.
+
+Starting posture:
+
+-   The initial Evidence Quality Gate state must be conservative.
+-   The current Research Validation surface is useful engineering
+    evidence, but it does not yet demonstrate predictive validity.
+-   Directional hit-rate is not discriminating in the current sample:
+    0/19 evaluable forecasts were negative, so the 94.74% hit-rate
+    mostly reflects that 18/19 realized 5-year outcomes were positive.
+-   Rank correlation is weakly negative under the pinned runtime
+    (`-0.22902466816870654`), so higher forecast ranks have not yet
+    corresponded to higher realized-return ranks in this validation
+    slice.
+-   Therefore the gate must not start at Neutral by default. Neutral or
+    more permissive states must be earned later through validation, not
+    assumed from engineering consistency.
+
+Evidence Quality dimensions:
+
+1.  Coverage.
+
+    Measures whether enough usable comparable evidence exists for the
+    research claim being made. This aligns with the existing
+    `ValidationEngine` coverage concept and with Research Validation's
+    distinction between `sample_size` and `evaluated_count`.
+
+2.  Consistency.
+
+    Measures whether the evidence points in a coherent direction across
+    the selected comparable set. This aligns with the existing
+    `ValidationEngine` consistency concept. Consistency is descriptive;
+    it must not be converted into a capital recommendation by itself.
+
+3.  Diversity.
+
+    Measures whether the evidence is supported by meaningfully different
+    historical precedents rather than a narrow cluster of similar cases.
+    This aligns with the existing `ValidationEngine` diversity concept.
+
+4.  Independence / dispersion.
+
+    Measures whether the evidence sample carries independent information
+    or is structurally concentrated. This dimension captures the
+    Research Validation findings from RE-025.6, RE-025.8 and RE-025.9:
+    `n=19` is an operative count, not an independent sample-size claim;
+    10 evaluated pairs have overlapping realized 5-year outcome windows;
+    and 16/19 evaluable records belong to repeated forecast groups.
+
+5.  Predictive validation status.
+
+    Measures whether the Research Engine has demonstrated that its
+    forecasts discriminate outcomes, not merely that the pipeline is
+    reproducible. Current status is conservative: MAE is informative but
+    outlier-sensitive, directional hit-rate is not discriminating, and
+    rank correlation is weakly negative.
+
+Relationship with existing `ValidationEngine`:
+
+-   Existing `ValidationEngine` dimensions may inform future Evidence
+    Quality implementation, especially coverage, consistency and
+    diversity.
+-   The current aggregate `AssessmentEngine.confidence().score` must not
+    be used as the Evidence Quality Gate.
+-   Reason: the score still includes hardcoded `stability=1.0`, and it
+    does not capture the Research Validation independence / dispersion
+    caveat.
+-   RE-029.6 therefore defines dimensions, not executable scoring.
+
+What Evidence Quality may limit:
+
+-   Maximum capital posture.
+-   Maximum aggressiveness of Dry Powder deployment.
+-   Maximum aggressiveness of Portfolio Reallocation.
+-   Whether an otherwise attractive Research output may be acted on
+    beyond a conservative posture.
+
+What Evidence Quality may not do:
+
+-   It may not create a Risk ON posture by itself.
+-   It may not override Dry Powder constraints.
+-   It may not override Portfolio Reallocation constraints.
+-   It may not override personal-capacity constraints.
+-   It may not convert attractive expected return into permission for
+    aggressive capital deployment when evidence quality is weak.
+
+Protocol separation:
+
+-   Dry Powder Protocol and Portfolio Reallocation Protocol remain
+    separate governance protocols.
+-   Dry Powder governs deployable liquidity.
+-   Portfolio Reallocation governs changes to existing exposure.
+-   Evidence Quality governs the maximum posture allowed by the evidence
+    base across both protocols.
+-   Final posture still follows veto logic: the most restrictive active
+    gate wins.
+
+Boundary:
+
+-   No thresholds are defined.
+-   No enum or state machine is implemented.
+-   No capital posture rules are implemented.
+-   No code changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -1537,7 +1660,8 @@ Interpretation moves to Assessment / SOP governance.
 Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
 audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
 public helpers verified in RE-029.4; confidence-to-posture gate
-boundary defined in RE-029.5.
+boundary defined in RE-029.5; Evidence Quality Gate dimensions defined
+in RE-029.6.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1562,9 +1686,14 @@ ceiling, not weighted input. Gates combine by veto / most restrictive
 ceiling across evidence quality, regime comparability and personal
 capacity. The current `AssessmentEngine` confidence score is explicitly
 excluded from SOP capital gates while stability remains hardcoded.
-Remaining Assessment / SOP work is executable thresholds, gate
-calibration, regime comparability, personal capacity and capital posture
-mapping.
+RE-029.6 defines the Evidence Quality Gate dimensions: coverage,
+consistency, diversity, independence / dispersion and predictive
+validation status. It also records the initial conservative stance:
+current Research Validation is reproducible but not yet predictive
+validation, because hit-rate is not discriminating and rank correlation
+is weakly negative. Remaining Assessment / SOP work is executable
+thresholds, gate calibration, regime comparability, personal capacity
+and capital posture mapping.
 
 ## Phase 3
 
@@ -1654,6 +1783,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.28
+
+-   Added RE-029.6: Evidence Quality Gate dimensions.
+-   Defined coverage, consistency, diversity, independence / dispersion
+    and predictive validation status as the documentary dimensions of
+    evidence quality.
+-   Documented that the gate starts conservative because current Research
+    Validation does not yet demonstrate predictive discrimination:
+    directional hit-rate is not discriminating and rank correlation is
+    weakly negative.
+-   Reaffirmed that `AssessmentEngine.confidence().score` must not be
+    used as the Evidence Quality Gate while `stability=1.0` remains
+    hardcoded and sample independence / dispersion is not captured.
+-   Clarified what Evidence Quality may limit: maximum capital posture,
+    Dry Powder deployment aggressiveness and Portfolio Reallocation
+    aggressiveness.
+-   Clarified what Evidence Quality may not do: create Risk ON posture,
+    override other gates or compensate weak evidence with attractive
+    expected return.
+-   No code changed.
 
 ## Version 1.27
 
