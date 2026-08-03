@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.29\
+**Version:** 1.30\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.7)
+# Execution State (as of RE-029.8)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -142,7 +142,12 @@ verified:
                         the calibration boundary: any relaxation from
                         conservative must be pre-registered, discrete
                         and evidence-led, never inferred from the
-                        aggregate confidence score.
+                        aggregate confidence score. RE-029.8 defines
+                        the first future implementation scope: a
+                        separate EvidenceQualityGate structure, with
+                        local snapshot inputs separated from global
+                        model-validation state, and not wired into
+                        run.py or DecisionEngine.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -308,8 +313,9 @@ RE-029.1 and RE-029.2 are documentation-only Assessment / SOP
 governance scope audits. RE-029.3 refactors `AssessmentEngine` to
 consume the shared Research pipeline without modifying frozen Core
 components. RE-029.4 adds verification for the public Assessment helper
-surface. RE-029.5, RE-029.6 and RE-029.7 are documentation-only governance
-iterations: no frozen component changes are invoked.
+surface. RE-029.5, RE-029.6, RE-029.7 and RE-029.8 are
+documentation-only governance iterations: no frozen component changes
+are invoked.
 
 ------------------------------------------------------------------------
 
@@ -335,6 +341,9 @@ iterations: no frozen component changes are invoked.
                                   RE-029.7 documents the calibration
                                   boundary for moving beyond the initial
                                   conservative gate state.
+                                  RE-029.8 documents the future
+                                  implementation scope without changing
+                                  code.
                                   Remaining issue is confidence
                                   calibration/boundary, not temporal
                                   leakage or Research pipeline
@@ -1741,6 +1750,113 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-029.8 — Evidence Quality Gate implementation scope
+
+RE-029.8 defines the allowed scope of the first future
+`EvidenceQualityGate` implementation. It does not implement the gate.
+
+The first code iteration, when authorized, should create structure only.
+It must not introduce numeric thresholds, automatic capital posture
+changes or operative wiring into the current execution path.
+
+Implementation boundary:
+
+-   Do not modify `AssessmentEngine.confidence().score`.
+-   Do not use `AssessmentEngine.confidence().score` as a temporary
+    proxy.
+-   Do not modify `ValidationEngine` in the first gate implementation.
+-   Do not wire the first `EvidenceQualityGate` implementation into
+    `run.py`.
+-   Do not wire it into `DecisionEngine`.
+-   The first implementation should exist, compile and be testable in
+    isolation before it governs anything operative.
+
+Separate input channels:
+
+The future gate must not receive its inputs as one flat list of
+"allowed evidence." RE-029.7 already distinguishes global Research
+Validation from local snapshot quality. The implementation should
+preserve that distinction in its shape.
+
+1.  Local snapshot evidence quality.
+
+    This channel describes the current match set only.
+
+    Initial local inputs may include:
+
+    -   local coverage;
+    -   local consistency;
+    -   local diversity.
+
+    These values are about today's selected evidence sample. They do not
+    prove that the model has predictive skill globally.
+
+2.  Global model-validation state.
+
+    This channel describes whether the Research Engine, as a model, has
+    demonstrated predictive discrimination under pre-registered
+    validation criteria.
+
+    Current global state is conservative / not validated. Existing
+    Research Validation metrics are useful diagnostics, but they do not
+    yet justify a neutral gate state.
+
+    Global validation state must not be collapsed into local match-set
+    quality.
+
+Dimension clarification:
+
+-   RE-029.6 defines five official Evidence Quality dimensions:
+    coverage, consistency, diversity, independence / dispersion and
+    predictive validation status.
+-   `stability` is not currently an official Evidence Quality Gate
+    dimension.
+-   `stability` belongs to the legacy `ValidationEngine` /
+    `confidence.score` path today.
+-   RE-029.7 evaluates `stability` only because the hardcoded
+    `stability=1.0` blocks use of `confidence.score` as a gate or proxy.
+-   Independence / dispersion does not automatically absorb stability.
+    Independence / dispersion concerns the structure of the evidence
+    sample. Stability concerns the stability of the engine or its
+    outputs across versions, conditions or runs.
+-   If stability is ever added to the Evidence Quality Gate, it must be
+    introduced explicitly in a later numbered iteration.
+
+Conceptual output states:
+
+The future gate must distinguish absence of measurement from measured
+insufficiency. This follows the same design principle as Evidence:
+absence of evidence is not `0.0`.
+
+The conceptual output therefore needs at least three states:
+
+-   not measurable;
+-   conservative;
+-   future less-restrictive state, name not yet finalized.
+
+`not measurable` means the gate lacks required measurements. It is not
+the same as "measured and insufficient." Both may cap posture
+conservatively, but they must remain explainably different states.
+
+Future implementation rule:
+
+-   The first code change should model structure and explanations only.
+-   It should preserve local/global input separation.
+-   It should preserve discrete output states.
+-   It should default to fail-closed.
+-   It should remain outside the operative flow until thresholds,
+    calibration and human approval are documented in later iterations.
+
+Boundary:
+
+-   No code changed.
+-   No thresholds are defined.
+-   No enum names are finalized.
+-   No capital posture rules are implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -1769,7 +1885,8 @@ Assessment Engine v2 — opened with RE-029.1 scope audit; boundary
 audited in RE-029.2; shared Research pipeline consumed in RE-029.3;
 public helpers verified in RE-029.4; confidence-to-posture gate
 boundary defined in RE-029.5; Evidence Quality Gate dimensions defined
-in RE-029.6; calibration boundary documented in RE-029.7.
+in RE-029.6; calibration boundary documented in RE-029.7; future
+implementation scope bounded in RE-029.8.
 
 RE-029.1 defines the first governance boundary for Assessment / SOP:
 four capital-intensity postures, one orthogonal `Blocked` veto, three
@@ -1804,9 +1921,15 @@ is fail-closed, movement beyond conservative requires pre-registered
 criteria, current validation metrics do not suffice, `confidence.score`
 is prohibited even as a temporary proxy, and aggregate Research
 Validation metrics must not be confused with local snapshot quality.
-Remaining Assessment / SOP work is executable thresholds, gate
-calibration, regime comparability, personal capacity and capital posture
-mapping.
+RE-029.8 defines the first future implementation scope: create a
+separate `EvidenceQualityGate` structure only, keep local snapshot
+inputs separate from global model-validation state, preserve at least
+three conceptual output states (`not measurable`, conservative and a
+future less-restrictive state), clarify that `stability` is not one of
+the five official Evidence Quality dimensions today, and keep the gate
+unwired from `run.py` and `DecisionEngine`. Remaining Assessment / SOP
+work is executable thresholds, gate calibration, regime comparability,
+personal capacity and capital posture mapping.
 
 ## Phase 3
 
@@ -1896,6 +2019,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.30
+
+-   Added RE-029.8: Evidence Quality Gate implementation scope.
+-   Documented that the first future implementation should create
+    structure only: no thresholds, no capital posture rules and no
+    operative wiring.
+-   Prohibited first implementation changes to
+    `AssessmentEngine.confidence().score`, `ValidationEngine`, `run.py`
+    and `DecisionEngine`.
+-   Required separate input channels for local snapshot evidence quality
+    and global model-validation state.
+-   Clarified that RE-029.6 defines five official Evidence Quality
+    dimensions and that `stability` is not currently one of them.
+-   Distinguished independence / dispersion from stability.
+-   Required at least three conceptual output states: not measurable,
+    conservative and a future less-restrictive state with no finalized
+    name yet.
+-   Reaffirmed fail-closed behaviour and isolation from the operative
+    flow until later threshold, calibration and approval iterations.
+-   No code changed.
 
 ## Version 1.29
 
