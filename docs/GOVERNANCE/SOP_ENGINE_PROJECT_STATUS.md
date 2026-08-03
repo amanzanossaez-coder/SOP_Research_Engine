@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.41\
+**Version:** 1.42\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.2)
+# Execution State (as of RE-PRED.3)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -222,6 +222,9 @@ verified:
                         baselines, holdout policy and live-tracking
                         protocol are defined. RE-PRED.2 audits the
                         current predictive target implemented by code.
+                        RE-PRED.3 defines the provisional target-freeze
+                        boundary while leaving source-column semantics
+                        not fully verified.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -245,9 +248,12 @@ verified:
                         must specify before any holdout, live tracking
                         or gate relaxation can be treated as evidence.
                         RE-PRED.2 audits the current target: annualized
-                        5-year real return CAGR from `Price.1`, used as
-                        both Evidence forecast surface and Research
-                        Validation actual.
+                        5-year CAGR from `Price.1`, used as both
+                        Evidence forecast surface and Research
+                        Validation actual. RE-PRED.3 treats that target
+                        as the provisional freeze candidate, but does
+                        not verify whether `Price.1` is real / nominal
+                        or price / total-return.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -457,6 +463,9 @@ documentation-only gate-combination boundary work.
                                   holdout policy, uncertainty treatment
                                   and live tracking. RE-PRED.2 audits
                                   the current implemented target.
+                                  RE-PRED.3 defines the target-freeze
+                                  decision boundary and provisional
+                                  freeze candidate.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -3533,6 +3542,181 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.3 — Target freeze decision boundary
+
+RE-PRED.3 defines the decision boundary for freezing the predictive
+target.
+
+It does not freeze the model.
+
+It does not create a holdout.
+
+It is documentation-only.
+
+No code changed.
+
+Decision:
+
+The currently implemented target remains the provisional freeze
+candidate:
+
+    future_return_5y
+
+Defined operationally as:
+
+    annualized 5-year CAGR from drawdown bottom,
+    calculated from Shiller `Price.1`,
+    using the first available observation at or after bottom_date + 5.
+
+Reason:
+
+The target is already implemented and consumed consistently by:
+
+-   `EvidenceEngine`;
+-   the shared Research pipeline;
+-   `AssessmentEngine`;
+-   Research Validation.
+
+Changing the target before model freeze would create a new divergence
+risk between code, validation and documentation.
+
+The correct next step is therefore not to redesign the target silently,
+but to treat the implemented target as the provisional candidate while
+documenting what remains unresolved.
+
+Not yet verified:
+
+RE-PRED.3 does not claim that `Price.1` is definitively:
+
+-   real rather than nominal;
+-   total-return rather than price-only.
+
+RE-PRED.2 established that the code uses `Price.1`.
+
+It did not formally verify the semantic meaning of that column.
+
+The phrase "real total-return" must therefore not be used as a settled
+property of the frozen target until the Shiller source-column semantics
+are verified.
+
+Required future verification:
+
+Before definitive target freeze, the project must verify the meaning of
+`Price.1` by inspecting the official Shiller dataset structure or
+another authoritative source for the spreadsheet columns.
+
+The verification must decide whether `Price.1` should be formally
+documented as:
+
+-   real price index;
+-   real total-return index;
+-   nominal price index;
+-   nominal total-return index;
+-   or another source-specific construct.
+
+Until then, the provisional target should be described as:
+
+    annualized 5-year CAGR from `Price.1`
+
+not as:
+
+    annualized real total-return CAGR
+
+CAGR vs cumulative return:
+
+The provisional target remains annualized CAGR, not cumulative
+five-year return.
+
+This preserves consistency with the current code and validation metrics.
+
+However, this choice changes how existing error metrics must be read.
+
+MAE reinterpretation:
+
+The canonical MAE reported by Research Validation is an error over
+annualized CAGR.
+
+It is not an error over cumulative five-year return.
+
+Therefore:
+
+    MAE ~= 7.03%
+
+means approximately 7.03 percentage points of annualized-rate error, not
+7.03 percentage points of total five-year outcome error.
+
+Over a five-year compounding window, an annualized error can imply a
+larger cumulative-outcome difference.
+
+Any future governance discussion must preserve that distinction.
+
+Absolute vs excess return:
+
+RE-PRED.3 does not decide whether predictive validation should ultimately
+evaluate absolute return or excess return versus a baseline.
+
+That decision belongs with baseline design.
+
+Until baselines are defined, the provisional target remains the absolute
+implemented target:
+
+    future_return_5y
+
+Bottom-date anchor:
+
+The provisional start anchor remains:
+
+    bottom_date
+
+This is consistent with the current Research Validation harness, which
+asks what the system would have forecast at the drawdown bottom.
+
+RE-PRED.3 does not authorize changing the anchor to peak date, recovery
+date, signal date or action date.
+
+Maturity vs missingness:
+
+The code currently represents unavailable future outcomes as `None`.
+
+That remains correct.
+
+Future live tracking should distinguish:
+
+-   not yet matured;
+-   structurally missing data;
+-   unavailable because of source failure.
+
+RE-PRED.3 does not implement that distinction.
+
+Freeze status:
+
+The target is not definitively frozen.
+
+It is designated as the provisional freeze candidate.
+
+Definitive target freeze requires at minimum:
+
+-   verification of `Price.1` semantics;
+-   explicit decision on annualized vs cumulative return;
+-   explicit decision on absolute vs excess return;
+-   explicit decision on bottom-date anchor;
+-   explicit missing-outcome taxonomy for live tracking;
+-   numbered documentation recording the freeze.
+
+Boundary:
+
+-   No code changed.
+-   No target definitively frozen.
+-   No model frozen.
+-   No holdout created.
+-   No baseline introduced.
+-   No validation result changed.
+-   No gate threshold changed.
+-   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -3699,6 +3883,14 @@ forecast against each episode's realized `future_return_5y`. Missing
 future outcomes remain `None`, never 0.0. RE-PRED.2 does not freeze or
 change the target.
 
+RE-PRED.3 defines the target-freeze decision boundary. The implemented
+target remains the provisional freeze candidate, but not the definitive
+frozen target. Source-column semantics are not yet verified: `Price.1`
+must not be described as real total-return until confirmed from the
+official Shiller structure or another authoritative source. The existing
+MAE must be read as error over annualized CAGR, not cumulative five-year
+return. Definitive target freeze requires a future numbered decision.
+
 ## Phase 3
 
 Inference Engine
@@ -3787,6 +3979,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.42
+
+-   Added RE-PRED.3: Target freeze decision boundary.
+-   Designated the current implemented target, `future_return_5y`, as
+    the provisional freeze candidate.
+-   Clarified that the target is not definitively frozen.
+-   Clarified that `Price.1` source-column semantics are not yet
+    verified and must not be described as real total-return until
+    confirmed from an authoritative source.
+-   Required future verification of whether `Price.1` represents real
+    price, real total return, nominal price, nominal total return or
+    another source-specific construct.
+-   Preserved annualized CAGR as the provisional target form.
+-   Added MAE reinterpretation: the canonical MAE is error over
+    annualized CAGR, not cumulative five-year return.
+-   Deferred absolute vs excess-return choice to future baseline design.
+-   Preserved `bottom_date` as the provisional start anchor.
+-   Recorded that live tracking should eventually distinguish not-yet-
+    matured outcomes from structurally missing data and source failure.
+-   No code changed.
 
 ## Version 1.41
 
