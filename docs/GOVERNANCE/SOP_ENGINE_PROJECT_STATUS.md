@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.31\
+**Version:** 1.32\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-029.9)
+# Execution State (as of RE-030.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -149,7 +149,9 @@ verified:
                         model-validation state, and not wired into
                         run.py or DecisionEngine. RE-029.9 defines the
                         acceptance criteria for that first future code
-                        change.
+                        change. RE-030.1 adds the isolated
+                        EvidenceQualityGate module and verification
+                        test, still outside the operative flow.
   InferenceEngine      Exists. Its responsibility (queries over
                         episodes -- drawdowns_greater_than,
                         recovered_in_less_than) remains valid. Not part
@@ -170,6 +172,15 @@ verified:
                         to the shared build_research_result() pipeline,
                         the same source of truth consumed by
                         DecisionEngine.
+  EvidenceQualityGate  Exists as an isolated structure (RE-030.1). Not
+                        called by run.py. Not called by DecisionEngine.
+                        Not called by AssessmentEngine. Does not consume
+                        AssessmentEngine.confidence().score. Separates
+                        local snapshot inputs from global model-validation
+                        state. Defaults fail-closed: today's incomplete
+                        gate inputs produce `not measurable`; fully
+                        measured but not yet authorized inputs produce
+                        `conservative`.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -317,7 +328,8 @@ consume the shared Research pipeline without modifying frozen Core
 components. RE-029.4 adds verification for the public Assessment helper
 surface. RE-029.5, RE-029.6, RE-029.7, RE-029.8 and RE-029.9 are
 documentation-only governance iterations: no frozen component changes
-are invoked.
+are invoked. RE-030.1 adds a new isolated gate module and focused test,
+without modifying Frozen Core or operative wiring.
 
 ------------------------------------------------------------------------
 
@@ -352,6 +364,13 @@ are invoked.
                                   calibration/boundary, not temporal
                                   leakage or Research pipeline
                                   duplication.
+  Evidence Quality Gate          v0 — isolated structure added in
+                                  RE-030.1. Compiles and has focused
+                                  verification. Not wired into run.py,
+                                  DecisionEngine, AssessmentEngine or
+                                  ValidationEngine. No thresholds, no
+                                  capital posture mapping and no
+                                  operative authority.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -1956,6 +1975,84 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-030.1 — Isolated Evidence Quality Gate
+
+RE-030.1 introduces the first isolated `EvidenceQualityGate` code
+structure.
+
+This is the first implementation step after the RE-029 governance block.
+It follows the acceptance criteria documented in RE-029.9.
+
+Files added:
+
+-   `engine/evidence_quality_gate.py`
+-   `tests/verify_evidence_quality_gate.py`
+
+Implemented structure:
+
+-   `LocalEvidenceQualityInputs`
+-   `GlobalModelValidationState`
+-   `EvidenceQualityGateResult`
+-   `EvidenceQualityGate`
+-   `NOT_MEASURABLE`
+-   `CONSERVATIVE`
+
+Architecture:
+
+-   Local snapshot evidence quality and global model-validation state are
+    separate input channels.
+-   Local inputs currently include coverage, consistency, diversity and
+    whether independence / dispersion has been measured.
+-   Global input currently captures predictive validation status.
+-   The gate returns a discrete state plus explanations.
+-   Absence of measurement is represented as `not measurable`, not as a
+    numeric default.
+-   The gate defaults fail-closed.
+
+Current behaviour:
+
+-   Today's partial inputs return `not measurable`.
+-   Incomplete local inputs or missing global validation state return
+    `not measurable`.
+-   Fully measured inputs with predictive validation marked `validated`
+    still return `conservative`, because no less-restrictive state is
+    authorized yet.
+-   Explanations identify specific causes, such as local coverage
+    unavailable, predictive validation status unavailable, independence /
+    dispersion not measured, or global model-validation state not
+    validated.
+
+Verification:
+
+`tests/verify_evidence_quality_gate.py` verifies:
+
+-   today's available inputs produce `not measurable` or `conservative`,
+    never a less-restrictive state;
+-   incomplete inputs / `None` values produce `not measurable`;
+-   explanations name specific channels or dimensions;
+-   fully measured but not yet authorized inputs produce `conservative`.
+
+Verified result:
+
+-   `EVIDENCE QUALITY GATE : STABLE`
+-   `today_state: not measurable`
+-   `incomplete_state: not measurable`
+-   `measured_but_not_authorized_state: conservative`
+
+Boundary:
+
+-   No thresholds are defined.
+-   No capital posture mapping is implemented.
+-   No automatic recommendation is implemented.
+-   No runtime wiring is implemented.
+-   `run.py` is unchanged.
+-   `DecisionEngine` is unchanged.
+-   `AssessmentEngine` is unchanged.
+-   `ValidationEngine` is unchanged.
+-   Frozen Core is unchanged.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2034,6 +2131,14 @@ acceptance criteria for the first isolated gate PR: it must be testable,
 fail-closed with today's incomplete inputs, explain the specific cause
 of any cap, treat `None` or incomplete inputs as `not measurable`, avoid
 Frozen Core, and remain unwired from the operative flow.
+
+RE-030.1 implements that first isolated gate structure. It adds
+`engine/evidence_quality_gate.py` and
+`tests/verify_evidence_quality_gate.py`. The gate separates local
+snapshot inputs from global model-validation state, returns discrete
+states with explanations, defaults fail-closed and remains outside
+`run.py`, `DecisionEngine`, `AssessmentEngine` and `ValidationEngine`.
+No thresholds or capital posture mapping exist yet.
 
 ## Phase 3
 
@@ -2123,6 +2228,24 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.32
+
+-   Added RE-030.1: isolated Evidence Quality Gate.
+-   Added `engine/evidence_quality_gate.py` with local/global input
+    separation, discrete state output and specific explanations.
+-   Added `tests/verify_evidence_quality_gate.py` as focused
+    verification for the isolated gate.
+-   Verified today's available inputs return `not measurable` or
+    `conservative`, never a less-restrictive state.
+-   Verified incomplete inputs / `None` values return `not measurable`.
+-   Verified fully measured but not yet authorized inputs return
+    `conservative`.
+-   Confirmed the gate is not wired into `run.py`, `DecisionEngine`,
+    `AssessmentEngine` or `ValidationEngine`.
+-   Confirmed no thresholds, no capital posture mapping, no automatic
+    recommendation and no operative authority.
+-   Frozen Core unchanged.
 
 ## Version 1.31
 
