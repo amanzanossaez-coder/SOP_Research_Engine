@@ -3,6 +3,7 @@ from models.dataset import Dataset
 from models.episode import Episode
 
 from loaders.shiller_loader import load_shiller_data
+from engine.date_utils import months_between
 
 
 MIN_DRAWDOWN = -0.10
@@ -114,10 +115,9 @@ def filter_episodes(drawdowns, df):
 
     for d in drawdowns:
 
-        duration_months = int(
-            round(
-                (d["bottom"]["Date"] - d["peak"]["Date"]) * 12
-            )
+        duration_months = months_between(
+            d["peak"]["Date"],
+            d["bottom"]["Date"],
         )
 
         pre_crash_return_3y = _real_return(
@@ -182,10 +182,9 @@ def enrich_recovery(df, episodes):
 
         episode.recovery_date = first["Date"]
 
-        episode.recovery_months = int(
-            round(
-                (first["Date"] - episode.bottom_date) * 12
-            )
+        episode.recovery_months = months_between(
+            episode.bottom_date,
+            first["Date"],
         )
 
         recovery_rows = df[df["Date"] == first["Date"]]

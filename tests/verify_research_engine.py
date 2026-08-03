@@ -25,8 +25,20 @@ from models.research_result import ResearchResult
 
 EXPECTED_SNAPSHOT_DATE = 2026.07
 EXPECTED_MATCHES = 10
+EXPECTED_MATCH_BOTTOMS = [
+    2018.12,
+    1998.09,
+    1966.10,
+    2020.03,
+    1960.10,
+    1990.10,
+    2022.10,
+    1962.06,
+    1880.05,
+    1903.10,
+]
 EXPECTED_HORIZON_YEARS = 5
-EXPECTED_MEDIAN_RETURN = 0.11386676352176894
+EXPECTED_MEDIAN_RETURN = 0.10192496249726091
 EXPECTED_WORST_RETURN = -0.01091948933252962
 EXPECTED_BEST_RETURN = 0.13767334934864284
 EXPECTED_RETURN_COUNT = 9
@@ -51,6 +63,13 @@ def check_equal(label: str, actual, expected) -> Optional[str]:
     return None
 
 
+def rounded_bottoms(matches) -> list[float]:
+    return [
+        round(match.episode.bottom_date, 2)
+        for match in matches
+    ]
+
+
 def main() -> None:
     dataset = run_drawdown_engine()
     result = ResearchEngine().run(dataset)
@@ -59,6 +78,11 @@ def main() -> None:
         check_equal("result_type", isinstance(result, ResearchResult), True),
         check_close("snapshot_date", result.snapshot.date, EXPECTED_SNAPSHOT_DATE),
         check_equal("matches", len(result.matches), EXPECTED_MATCHES),
+        check_equal(
+            "match_bottoms",
+            rounded_bottoms(result.matches),
+            EXPECTED_MATCH_BOTTOMS,
+        ),
         check_equal(
             "evidence_episodes_count",
             result.evidence.episodes_count,
@@ -133,6 +157,7 @@ def main() -> None:
     print("RESEARCH ENGINE : STABLE")
     print(f"snapshot_date: {result.snapshot.date}")
     print(f"matches: {len(result.matches)}")
+    print(f"match_bottoms: {rounded_bottoms(result.matches)}")
     print(f"horizon_years: {result.evidence.horizon_years}")
     print(f"median_return: {result.evidence.median_return:.14f}")
     print(f"worst_return: {result.evidence.worst_return:.14f}")
