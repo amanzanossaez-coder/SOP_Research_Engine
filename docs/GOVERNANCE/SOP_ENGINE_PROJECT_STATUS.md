@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.39\
+**Version:** 1.40\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-034.4)
+# Execution State (as of RE-PRED.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -216,7 +216,11 @@ verified:
                         adds the isolated gate-combination module and
                         verification test. RE-034.4 documents that it
                         exists and passes verification, but remains
-                        outside the operative flow.
+                        outside the operative flow. RE-PRED.1 opens the
+                        predictive-validity boundary: no new validation
+                        claim is made until target, model freeze,
+                        baselines, holdout policy and live-tracking
+                        protocol are defined.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -234,6 +238,11 @@ verified:
                         so `is not` would never have excluded anything).
                         Unrelated to ValidationEngine above despite the
                         similar name -- see Component Status.
+  Predictive Validity  Boundary opened in RE-PRED.1. Documentation
+  Boundary              only. No code. No new calculation. No validation
+                        claim. Defines what future predictive validation
+                        must specify before any holdout, live tracking
+                        or gate relaxation can be treated as evidence.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -435,6 +444,13 @@ documentation-only gate-combination boundary work.
                                   AssessmentEngine or ValidationEngine.
                                   No posture engine. No thresholds. No
                                   protocol rules. No operative authority.
+  Predictive Validity Boundary   Opened in RE-PRED.1. Documentation
+                                  only. No code. No new calculations.
+                                  No predictive-validity claim. Defines
+                                  the future validation contract: target
+                                  audit, model freeze, baselines,
+                                  holdout policy, uncertainty treatment
+                                  and live tracking.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2980,6 +2996,272 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.1 — Predictive validity boundary
+
+RE-PRED.1 opens the predictive-validity block.
+
+It does not demonstrate predictive capacity.
+
+It defines what would have to be true before the SOP may claim that the
+Research Engine has predictive validity.
+
+It is documentation-only.
+
+No code changed.
+
+No new calculation is executed.
+
+No new validation claim is made.
+
+Purpose:
+
+The Research Engine currently produces objective, reproducible and
+explainable historical evidence.
+
+Current Research Validation does not yet show reliable predictive
+discrimination:
+
+-   rank correlation is weakly negative;
+-   hit-rate is not discriminating because the evaluated forecasts lack
+    meaningful sign variation;
+-   MAE lacks a sufficiently specified naive baseline comparison;
+-   the nominal sample size is not the independent effective sample size.
+
+RE-PRED.1 therefore separates engineering validity from predictive
+validity.
+
+Engineering validity means the pipeline is reproducible and
+methodologically consistent.
+
+Predictive validity means the forecasts demonstrate useful out-of-sample
+relationship to future realized outcomes, against pre-defined baselines,
+with uncertainty reported.
+
+RE-PRED.1 only defines the boundary for that second claim.
+
+Predictive target audit:
+
+Before freezing a predictive target, the project must audit what the
+current code actually calculates.
+
+At minimum, the audit must establish:
+
+-   which return field is evaluated today;
+-   whether the return is nominal or real;
+-   whether it is price return or total return;
+-   whether the horizon is exactly five years or convention-dependent;
+-   which date anchors start and end the realized-return window;
+-   whether missing future returns are excluded, imputed or treated as
+    unavailable;
+-   whether validation evaluates absolute return, excess return, rank or
+    direction.
+
+The future target must either match the current operative calculation or
+explicitly authorize a change.
+
+It must not diverge from implementation by accident.
+
+Predictive claims:
+
+Predictive validity must be decomposed into separate claims.
+
+1.  Ranking validity.
+
+    Higher forecasts should tend to correspond to higher realized
+    outcomes.
+
+    Rank correlation is the natural diagnostic surface for this claim.
+
+    Ranking validity may be useful even if exact magnitudes are not yet
+    calibrated.
+
+2.  Calibration validity.
+
+    Forecast magnitudes should resemble realized magnitudes better than
+    pre-defined naive magnitude estimates.
+
+    This is a stronger claim than ranking validity.
+
+3.  Directional validity.
+
+    Forecast sign should carry useful information only when the sample
+    has meaningful sign variation.
+
+    A high hit-rate with almost no negative forecasts is not, by itself,
+    predictive evidence.
+
+Future model-validation state may need to represent these claims
+separately. A single `validated` / `not validated` string may be too
+coarse if ranking improves before calibration.
+
+Validation surfaces:
+
+Future predictive validation must separate at least three surfaces.
+
+1.  Existing historical backtest.
+
+    This is useful for diagnostics, reproducibility and failure-mode
+    discovery.
+
+    It is not fully clean out-of-sample evidence because the Similarity
+    Engine was designed while exposed to the historical dataset.
+
+2.  Prospective holdout from the freeze date.
+
+    A clean holdout cannot be created retroactively from data already
+    used to design, inspect or iterate the model.
+
+    Any historical holdout claim must therefore be treated cautiously.
+
+    A genuinely clean holdout starts only after the model, dataset
+    cutoff, target, metrics and baselines are frozen.
+
+3.  Live tracking.
+
+    Live tracking is the slowest but most honest evidence source.
+
+    It should begin as soon as the logging protocol is defined, even if
+    the later evaluation horizon takes years to mature.
+
+Model freeze requirement:
+
+No holdout or live-tracking result may count as clean predictive evidence
+unless the evaluated model was frozen before the forecast was observed.
+
+The freeze must include:
+
+-   code version or commit;
+-   dataset cutoff;
+-   feature definitions;
+-   similarity dimensions;
+-   similarity weights;
+-   episode-selection rules;
+-   forecast horizon;
+-   target definition;
+-   metrics;
+-   baselines;
+-   missing-data rules.
+
+Changing the model after seeing validation results makes the affected
+sample exploratory again.
+
+Without this freeze, validation risks becoming p-hacking with extra
+steps.
+
+Baseline requirement:
+
+Predictive claims must be compared against pre-defined naive baselines.
+
+RE-PRED.1 does not define pass/fail thresholds.
+
+It requires future work to specify baselines before evaluation.
+
+Candidate baselines include:
+
+-   unconditional historical mean or median;
+-   constant forecast equal to the full historical universe expected
+    return;
+-   zero-return or no-change forecast where appropriate to the target;
+-   simple mean-reversion rule based on drawdown depth, without
+    similarity matching.
+
+The model does not become predictive merely by beating one trivial
+baseline.
+
+Future validation must explain which baseline each claim is tested
+against and why that comparison is appropriate to the target.
+
+Uncertainty requirement:
+
+No future metric should be interpreted from its point estimate alone.
+
+Given the known dependence documented in RE-025.6, RE-025.8 and
+RE-025.9, uncertainty estimates must respect dependence between
+observations.
+
+An i.i.d. bootstrap is not sufficient by default.
+
+Future work should consider block-aware resampling or another method
+that preserves overlapping outcome windows and repeated forecast groups.
+
+Effective sample size:
+
+The current `n=19` is an operational count, not an independent sample
+size.
+
+RE-PRED future work should move from qualitative warning to quantitative
+effective-sample-size estimation where feasible.
+
+Until then, predictive claims must remain conservative.
+
+Live tracking log:
+
+Future live tracking should be append-only.
+
+The minimum record should include:
+
+-   timestamp;
+-   model commit or version;
+-   dataset cutoff;
+-   snapshot inputs;
+-   forecast horizon;
+-   forecast summary;
+-   forecast distribution or match-return distribution;
+-   selected matches;
+-   Evidence Quality state;
+-   Regime Comparability state if available;
+-   Personal Capacity state if available;
+-   combined posture ceiling if available;
+-   human approval state if available;
+-   whether any action was taken;
+-   later realized outcome when available.
+
+The purpose is to know, years later, exactly what was forecast, by which
+model, using which data, and under which governance state.
+
+No gate relaxation in RE-PRED.1:
+
+RE-PRED.1 does not authorize any relaxation of Evidence Quality, Regime
+Comparability, Personal Capacity or Capital Posture.
+
+It does not set numeric thresholds.
+
+It does not change the current posture inference.
+
+If future predictive evidence remains weak:
+
+The project must treat permanent weak predictive evidence as a named
+design branch, not as an implementation failure.
+
+If predictive validity never becomes demonstrable, the Research Engine
+may remain a descriptive and contextual evidence system rather than a
+forecast-backed deployment engine.
+
+In that scenario, any future capital deployment would need a different
+transparent justification framework. It should not pretend to be backed
+by predictive validation that does not exist.
+
+RE-PRED.1 does not decide that branch.
+
+It records it as a probable architectural question for future
+constitutional governance if the evidence does not improve.
+
+Boundary:
+
+-   No code changed.
+-   No new calculations executed.
+-   No new metrics introduced.
+-   No target frozen yet.
+-   No model frozen yet.
+-   No holdout created yet.
+-   No live-tracking log implemented.
+-   No predictive-validity claim made.
+-   No gate threshold changed.
+-   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -3128,6 +3410,15 @@ precedence, most-restrictive ceiling selection, and traceable limiting
 explanations. It does not implement a posture engine, thresholds,
 protocol rules, Human Approval or runtime wiring.
 
+RE-PRED.1 opens the predictive-validity boundary. It makes no new
+validation claim and runs no new calculation. It defines the future
+contract for any predictive claim: audit the actual target before
+freezing it, freeze the model before holdout or live tracking,
+separate historical backtest from prospective holdout and live tracking,
+predefine baselines, report uncertainty under dependence-aware methods,
+and treat permanent weak predictive evidence as a named design branch
+rather than an implementation bug.
+
 ## Phase 3
 
 Inference Engine
@@ -3216,6 +3507,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.40
+
+-   Added RE-PRED.1: Predictive validity boundary.
+-   Clarified that RE-PRED.1 makes no new predictive-validity claim and
+    executes no new calculation.
+-   Required a future predictive-target audit before freezing the target:
+    return field, nominal vs real, price vs total return, horizon,
+    date anchors, missing-data treatment and validation surface.
+-   Separated future predictive claims into ranking validity,
+    calibration validity and directional validity.
+-   Separated validation surfaces into existing historical backtest,
+    prospective holdout from freeze date and live tracking.
+-   Documented that a retroactive clean holdout is not available by
+    default because the Similarity Engine was designed while exposed to
+    the historical dataset.
+-   Required model freeze before any holdout or live-tracking result can
+    count as clean predictive evidence.
+-   Required future baseline comparisons to be pre-defined.
+-   Required future uncertainty treatment to respect known dependence
+    rather than assuming i.i.d. observations.
+-   Defined minimum fields for a future append-only live-tracking log.
+-   Recorded permanent weak predictive evidence as a named future design
+    branch, not an implementation failure.
+-   No code changed.
 
 ## Version 1.39
 
