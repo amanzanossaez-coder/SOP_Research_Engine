@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.43\
+**Version:** 1.44\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.4)
+# Execution State (as of RE-PRED.5)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -226,6 +226,8 @@ verified:
                         boundary while leaving source-column semantics
                         not fully verified. RE-PRED.4 verifies that
                         Shiller `Price.1` is Real Total Return Price.
+                        RE-PRED.5 defines ordered acceptance criteria
+                        for any future definitive target freeze.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -256,7 +258,9 @@ verified:
                         not verify whether `Price.1` is real / nominal
                         or price / total-return. RE-PRED.4 verifies
                         `Price.1` as Real Total Return Price from the
-                        source workbook header.
+                        source workbook header. RE-PRED.5 records that
+                        source-column semantics are verified, but
+                        bottom-detection semantics are not yet audited.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -470,6 +474,8 @@ documentation-only gate-combination boundary work.
                                   decision boundary and provisional
                                   freeze candidate. RE-PRED.4 verifies
                                   `Price.1` source-column semantics.
+                                  RE-PRED.5 defines target-freeze
+                                  acceptance criteria.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -3853,6 +3859,196 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.5 — Target freeze acceptance criteria
+
+RE-PRED.5 defines acceptance criteria for any future definitive target
+freeze.
+
+It does not freeze the target.
+
+It does not freeze the model.
+
+It is documentation-only.
+
+No code changed.
+
+Purpose:
+
+The project must not freeze a predictive target just because the current
+implementation already exists.
+
+It may use the implemented target as the provisional freeze candidate,
+but definitive freeze requires an ordered set of decisions and
+verifications.
+
+Ordered dependency structure:
+
+The target-freeze criteria are not a flat checklist.
+
+They have dependencies.
+
+Future work must respect this order.
+
+1.  Target mechanics and semantics.
+
+    The project must first verify what the target means mechanically and
+    economically.
+
+    Already verified:
+
+    -   `future_return_5y` uses `Price.1`;
+    -   `Price.1` is Shiller Real Total Return Price;
+    -   the return is annualized CAGR;
+    -   the horizon is five years;
+    -   missing mature outcomes remain `None`, never 0.0.
+
+    Not yet audited:
+
+    -   how `bottom_date` is selected;
+    -   how drawdown episodes are detected;
+    -   how episode start, bottom and recovery are delimited;
+    -   whether the bottom-detection algorithm is the correct target
+        anchor for predictive governance.
+
+    Therefore "target semantically verified" is not fully complete yet.
+    Source-column semantics are verified; bottom-detection semantics are
+    not.
+
+2.  Target unit and horizon decision.
+
+    The project must decide whether the definitive target remains:
+
+        annualized real total-return CAGR over five years
+
+    or whether governance requires a different unit or horizon.
+
+    This must be decided before baselines are designed.
+
+3.  Absolute vs excess-return decision.
+
+    The project must decide whether predictive validation evaluates:
+
+    -   absolute realized return; or
+    -   excess return over a baseline.
+
+    This decision must come before baseline design.
+
+    A baseline used only for comparison is not the same as a baseline
+    subtracted from the target.
+
+4.  Baseline design.
+
+    Baselines may only be defined after the absolute-vs-excess decision.
+
+    If the target remains absolute return, baselines are comparators.
+
+    If the target becomes excess return, a baseline becomes part of the
+    target construction.
+
+    RE-PRED.5 therefore prohibits closing baseline design before the
+    absolute-vs-excess target decision is explicit.
+
+5.  Missingness taxonomy.
+
+    The target freeze must distinguish at least:
+
+    -   not yet matured;
+    -   structurally missing data;
+    -   unavailable because of source failure.
+
+    Current code uses `None`, which remains correct as a representation
+    of unavailable outcome. Future live tracking needs a richer
+    explanation layer so that different `None` causes do not collapse
+    into one state.
+
+6.  Model freeze reference.
+
+    RE-PRED.5 does not redefine the model freeze checklist.
+
+    The authoritative freeze checklist is the one defined in RE-PRED.1.
+
+    Future target-freeze work must reference that checklist rather than
+    duplicating it.
+
+    This avoids two competing sources of truth for what "frozen model"
+    means.
+
+7.  Target unfreeze criteria.
+
+    A frozen target must not be reopened because early validation
+    results are disappointing.
+
+    Reopening a target after observing results would convert future
+    validation into exploratory analysis unless the reason was
+    pre-authorized.
+
+    Acceptable future unfreeze reasons may include:
+
+    -   discovered source-data error;
+    -   verified source-column mapping error;
+    -   discovered target-construction bug;
+    -   authoritative change in the source dataset structure;
+    -   documented governance decision that the target no longer matches
+        the SOP objective.
+
+    Unacceptable unfreeze reasons include:
+
+    -   poor validation performance;
+    -   desire to improve MAE after seeing results;
+    -   desire to improve hit-rate after seeing results;
+    -   desire to improve rank correlation after seeing results;
+    -   market pressure or urgency.
+
+Acceptance criteria for definitive target freeze:
+
+A future target-freeze PR or documentation iteration is acceptable only
+if it:
+
+-   states the target field;
+-   states the target formula;
+-   states the source column and verified source-column semantics;
+-   states the start anchor;
+-   states the end anchor;
+-   states the horizon;
+-   states annualized vs cumulative unit;
+-   states absolute vs excess-return choice;
+-   states missingness taxonomy;
+-   references the RE-PRED.1 model-freeze checklist;
+-   states target unfreeze criteria;
+-   explicitly confirms that no validation results were used to tune the
+    target after freeze evaluation began.
+
+Current status:
+
+The implemented target remains the provisional freeze candidate.
+
+It is not definitively frozen.
+
+The main blocker is no longer `Price.1` semantics.
+
+The remaining blockers are:
+
+-   bottom-detection / episode-boundary audit;
+-   absolute vs excess-return decision;
+-   baseline design after that decision;
+-   missingness taxonomy;
+-   formal freeze / unfreeze governance.
+
+Boundary:
+
+-   No code changed.
+-   No target definitively frozen.
+-   No model frozen.
+-   No baseline introduced.
+-   No holdout created.
+-   No live-tracking log introduced.
+-   No validation result changed.
+-   No gate threshold changed.
+-   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -4033,6 +4229,14 @@ target is annualized real total-return CAGR from drawdown bottom over
 the five-year horizon. This verifies the column semantics, but still
 does not definitively freeze the target.
 
+RE-PRED.5 defines target-freeze acceptance criteria. It orders the
+remaining work by dependency: target mechanics and semantics first,
+unit/horizon and absolute-vs-excess decision before baselines, then
+missingness taxonomy, model-freeze reference and target unfreeze
+criteria. It records that `Price.1` semantics are verified, but
+bottom-detection and episode-boundary semantics are not yet audited.
+The implemented target remains provisional, not definitively frozen.
+
 ## Phase 3
 
 Inference Engine
@@ -4121,6 +4325,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.44
+
+-   Added RE-PRED.5: Target freeze acceptance criteria.
+-   Ordered target-freeze criteria by dependency instead of presenting a
+    flat checklist.
+-   Clarified that source-column semantics are verified, but
+    bottom-detection and episode-boundary semantics are not yet audited.
+-   Required unit / horizon and absolute-vs-excess decisions before
+    baseline design.
+-   Prohibited closing baseline design before the absolute-vs-excess
+    target decision is explicit.
+-   Required a future missingness taxonomy distinguishing not-yet-
+    matured outcomes, structurally missing data and source failure.
+-   Referenced the RE-PRED.1 model-freeze checklist instead of
+    duplicating it.
+-   Added target unfreeze criteria and prohibited reopening the target
+    because validation results are disappointing.
+-   Preserved current `future_return_5y` as provisional freeze candidate
+    only, not definitive frozen target.
+-   No code changed.
 
 ## Version 1.43
 
