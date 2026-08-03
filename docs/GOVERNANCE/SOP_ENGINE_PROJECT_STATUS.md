@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.44\
+**Version:** 1.45\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.5)
+# Execution State (as of RE-PRED.6)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -261,6 +261,10 @@ verified:
                         source workbook header. RE-PRED.5 records that
                         source-column semantics are verified, but
                         bottom-detection semantics are not yet audited.
+                        RE-PRED.6 audits bottom detection and episode
+                        boundaries, and records two verified findings:
+                        price-basis asymmetry and date-arithmetic
+                        duration bug.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -475,7 +479,11 @@ documentation-only gate-combination boundary work.
                                   freeze candidate. RE-PRED.4 verifies
                                   `Price.1` source-column semantics.
                                   RE-PRED.5 defines target-freeze
-                                  acceptance criteria.
+                                  acceptance criteria. RE-PRED.6 audits
+                                  bottom detection / episode boundaries
+                                  and records a verified duration
+                                  arithmetic bug affecting Evidence
+                                  recovery statistics.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -4049,6 +4057,246 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.6 — Bottom detection / episode boundary audit
+
+RE-PRED.6 audits how the current code selects `bottom_date` and defines
+drawdown episodes.
+
+It is documentation-only.
+
+No code changed.
+
+Audited code:
+
+    engine/drawdown_engine.py
+
+Audited functions:
+
+-   `calculate_running_peak()`;
+-   `calculate_drawdown()`;
+-   `detect_drawdowns()`;
+-   `filter_episodes()`;
+-   `enrich_recovery()`;
+-   `_future_return()`.
+
+Current definitions:
+
+Peak:
+
+`RunningPeak = P.cummax()`.
+
+The peak is the cumulative historical maximum of nominal price `P` up to
+the current row.
+
+`detect_drawdowns()` updates the active peak whenever:
+
+    Drawdown == 0
+
+Drawdown:
+
+`calculate_drawdown()` computes:
+
+    (P - RunningPeak) / RunningPeak
+
+Therefore drawdown severity is measured against nominal price `P`, not
+against `Price.1`.
+
+Episode start:
+
+An episode starts when the system is outside a drawdown episode and:
+
+    Drawdown <= MIN_DRAWDOWN
+
+with:
+
+    MIN_DRAWDOWN = -0.10
+
+At that moment, the code stores the prior full-recovery peak as
+`peak_before` and initializes the bottom as the current row.
+
+Bottom:
+
+While an episode is active, the bottom is updated whenever:
+
+    row["Drawdown"] < bottom["Drawdown"]
+
+The bottom is therefore the most negative drawdown observed inside the
+active episode.
+
+Recovery:
+
+Recovery is detected when:
+
+    Drawdown == 0
+
+The episode is appended only in that recovery branch.
+
+This means recovered drawdowns are included, but an unrecovered drawdown
+still active at the end of the dataset is structurally excluded.
+
+Duration:
+
+`duration_months` is currently calculated as:
+
+    int(round((bottom_date - peak_date) * 12))
+
+Recovery months:
+
+`recovery_months` is currently calculated as:
+
+    int(round((recovery_date - bottom_date) * 12))
+
+Target anchor:
+
+`_future_return()` starts the predictive target window from:
+
+    bottom_date
+
+not from:
+
+-   the -10% trigger date;
+-   the peak date;
+-   recovery date;
+-   action date;
+-   human approval date.
+
+Confirmed limits:
+
+-   The drawdown threshold is hardcoded at -10%.
+-   Episode detection uses nominal price `P`.
+-   Future return uses `Price.1`.
+-   The model learns only from drawdowns that later recovered.
+-   The target starts at the final bottom, not at the first trigger.
+
+Verified finding 1 — price-basis asymmetry:
+
+Episode detection and target measurement use different price bases.
+
+Drawdown detection uses:
+
+    P
+
+which is nominal price.
+
+Target returns use:
+
+    Price.1
+
+which RE-PRED.4 verified as Real Total Return Price.
+
+Therefore:
+
+-   what counts as a drawdown episode is measured on nominal price;
+-   what the model later predicts is measured on real total return.
+
+This is a real methodological asymmetry.
+
+RE-PRED.6 does not decide whether it is wrong.
+
+It records that definitive target freeze must explicitly accept,
+reject or redesign this asymmetry.
+
+Verified finding 2 — unrecovered drawdowns are structurally excluded:
+
+`drawdowns.append(...)` exists only inside the recovery branch of
+`detect_drawdowns()`.
+
+Therefore an active drawdown that has not returned to `Drawdown == 0` by
+the end of the dataset never becomes an `Episode`.
+
+It is never available to:
+
+-   `ObservableUniverse`;
+-   `SimilarityEngine`;
+-   `EvidenceEngine`;
+-   Research Validation.
+
+The current dataset run contains 23 episodes and all have
+`recovery_date`.
+
+So this property does not currently create a missing active episode in
+the produced episode list.
+
+But it is structural: the model's historical universe consists only of
+crises that eventually recovered.
+
+Verified finding 3 — duration arithmetic bug:
+
+The current code subtracts dates encoded as floats in `YYYY.MM` format.
+
+That arithmetic is not calendar-month arithmetic.
+
+This affects:
+
+-   `duration_months`;
+-   `recovery_months`.
+
+A data check against the current dataset found discrepancies in all 23
+episodes when compared with true calendar-month arithmetic.
+
+Example:
+
+    peak:   1929.09
+    bottom: 1932.06
+
+Current code:
+
+    36 months
+
+Calendar-month calculation:
+
+    33 months
+
+The observed recovery-month discrepancy reaches up to 7 months.
+
+Severity:
+
+This is a verified bug, not merely a methodological question.
+
+It affects fields currently produced by the system:
+
+-   `Episode.duration_months`;
+-   `Episode.recovery_months`;
+-   `Evidence.average_recovery_months`;
+-   `Evidence.median_recovery_months`.
+
+It may also affect Similarity because `duration_months` participates in
+episode comparison.
+
+RE-PRED.6 does not fix the bug.
+
+It records it as a required follow-up before definitive target freeze or
+any governance reliance on recovery-duration evidence.
+
+Implications for target freeze:
+
+RE-PRED.6 completes part of the bottom-anchor audit, but it does not
+clear the target for definitive freeze.
+
+Remaining blockers include:
+
+-   deciding whether nominal-price drawdown detection is acceptable for a
+    real-total-return target;
+-   deciding whether unrecovered drawdowns should remain structurally
+    excluded;
+-   fixing or formally accepting the date-arithmetic bug;
+-   re-verifying any affected canonical metrics after the bug decision.
+
+Boundary:
+
+-   No code changed.
+-   No bug fixed.
+-   No target definitively frozen.
+-   No model frozen.
+-   No baseline introduced.
+-   No holdout created.
+-   No validation result changed.
+-   No gate threshold changed.
+-   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -4237,6 +4485,16 @@ criteria. It records that `Price.1` semantics are verified, but
 bottom-detection and episode-boundary semantics are not yet audited.
 The implemented target remains provisional, not definitively frozen.
 
+RE-PRED.6 audits bottom detection and episode boundaries. It documents
+that drawdown episodes are detected on nominal price `P`, while
+future returns are measured on Real Total Return Price `Price.1`.
+It also records that unrecovered drawdowns are structurally excluded
+because episodes are appended only on recovery. Finally, it records a
+verified date-arithmetic bug: `duration_months` and `recovery_months`
+are calculated by subtracting `YYYY.MM` floats rather than calendar
+months, affecting public Evidence recovery statistics and potentially
+Similarity. No code is changed in RE-PRED.6.
+
 ## Phase 3
 
 Inference Engine
@@ -4325,6 +4583,28 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.45
+
+-   Added RE-PRED.6: Bottom detection / episode boundary audit.
+-   Documented current peak, drawdown, episode start, bottom, recovery,
+    duration and target-anchor definitions from `engine/drawdown_engine.py`.
+-   Confirmed that drawdown detection uses nominal price `P`.
+-   Confirmed that target returns use `Price.1`, verified in RE-PRED.4
+    as Real Total Return Price.
+-   Recorded the price-basis asymmetry between nominal-price episode
+    detection and real-total-return target measurement.
+-   Recorded that unrecovered drawdowns are structurally excluded because
+    episodes are appended only when `Drawdown == 0` recovery occurs.
+-   Recorded that the current dataset has 23 episodes and all have
+    recovery dates, so the structural exclusion does not currently create
+    a missing active episode in the produced episode list.
+-   Recorded a verified date-arithmetic bug: `duration_months` and
+    `recovery_months` subtract `YYYY.MM` floats instead of calendar
+    months.
+-   Documented that the duration bug affects public Evidence recovery
+    statistics and may affect Similarity.
+-   No code changed.
 
 ## Version 1.44
 
