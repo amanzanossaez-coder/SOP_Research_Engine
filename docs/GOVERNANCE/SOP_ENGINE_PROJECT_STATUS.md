@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.42\
+**Version:** 1.43\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.3)
+# Execution State (as of RE-PRED.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -224,7 +224,8 @@ verified:
                         current predictive target implemented by code.
                         RE-PRED.3 defines the provisional target-freeze
                         boundary while leaving source-column semantics
-                        not fully verified.
+                        not fully verified. RE-PRED.4 verifies that
+                        Shiller `Price.1` is Real Total Return Price.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -253,7 +254,9 @@ verified:
                         Validation actual. RE-PRED.3 treats that target
                         as the provisional freeze candidate, but does
                         not verify whether `Price.1` is real / nominal
-                        or price / total-return.
+                        or price / total-return. RE-PRED.4 verifies
+                        `Price.1` as Real Total Return Price from the
+                        source workbook header.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -465,7 +468,8 @@ documentation-only gate-combination boundary work.
                                   the current implemented target.
                                   RE-PRED.3 defines the target-freeze
                                   decision boundary and provisional
-                                  freeze candidate.
+                                  freeze candidate. RE-PRED.4 verifies
+                                  `Price.1` source-column semantics.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -3717,6 +3721,138 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.4 — Source column semantics verification
+
+RE-PRED.4 verifies the semantic meaning of the Shiller source column
+used by the current predictive target.
+
+It is documentation-only.
+
+No code changed.
+
+Verified source:
+
+The verification was performed against the real project file:
+
+    data/raw/shiller.xlsx
+
+using the workbook header rows that `shiller_loader.py` skips with:
+
+    header=7
+
+The inspected header area was:
+
+    rows 4-8
+
+No merged cells were present in that header area, so each header label
+belongs to its exact column.
+
+Verified column mapping:
+
+Column H is loaded by pandas as:
+
+    Price
+
+Its stacked header labels are:
+
+    row 7: Real
+    row 8: Price
+
+Therefore column H is:
+
+    Real Price
+
+Column J is loaded by pandas as:
+
+    Price.1
+
+because the visible row-8 label `Price` is duplicated and pandas
+deduplicates the second occurrence.
+
+Its stacked header labels are:
+
+    row 5: Real
+    row 6: Total
+    row 7: Return
+    row 8: Price
+
+Therefore column J / `Price.1` is:
+
+    Real Total Return Price
+
+Result:
+
+The inference recorded in RE-PRED.2 is now verified.
+
+`Price.1` is the Shiller Real Total Return Price column.
+
+Current predictive target semantics:
+
+The currently implemented target:
+
+    future_return_5y
+
+is therefore:
+
+    annualized real total-return CAGR
+    from drawdown bottom
+    over the five-year horizon
+    using Shiller Real Total Return Price
+
+This confirms:
+
+-   real rather than nominal;
+-   total return rather than price-only;
+-   annualized CAGR rather than cumulative return.
+
+What remains provisional:
+
+RE-PRED.4 verifies source-column semantics.
+
+It does not definitively freeze the predictive target.
+
+It does not decide whether SOP governance should ultimately prefer:
+
+-   absolute return or excess return;
+-   annualized CAGR or cumulative return;
+-   bottom-date anchor or another action anchor.
+
+Those decisions still require numbered future iterations.
+
+Documentation correction:
+
+Future references may describe the current implemented target as:
+
+    annualized real total-return CAGR from drawdown bottom
+
+They should still distinguish:
+
+-   current implemented target;
+-   provisional freeze candidate;
+-   definitive frozen target.
+
+MAE interpretation:
+
+The RE-PRED.3 MAE reinterpretation remains valid.
+
+The canonical MAE is error over annualized real total-return CAGR, not
+cumulative five-year real total return.
+
+Boundary:
+
+-   No code changed.
+-   No target definitively frozen.
+-   No metric changed.
+-   No validation result changed.
+-   No baseline introduced.
+-   No holdout introduced.
+-   No live-tracking log introduced.
+-   No gate threshold changed.
+-   No capital posture mapping changed.
+-   No operative wiring authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -3885,11 +4021,17 @@ change the target.
 
 RE-PRED.3 defines the target-freeze decision boundary. The implemented
 target remains the provisional freeze candidate, but not the definitive
-frozen target. Source-column semantics are not yet verified: `Price.1`
-must not be described as real total-return until confirmed from the
-official Shiller structure or another authoritative source. The existing
-MAE must be read as error over annualized CAGR, not cumulative five-year
-return. Definitive target freeze requires a future numbered decision.
+frozen target. The existing MAE must be read as error over annualized
+CAGR, not cumulative five-year return. Definitive target freeze requires
+a future numbered decision.
+
+RE-PRED.4 verifies source-column semantics directly against
+`data/raw/shiller.xlsx`. Column H / `Price` is Real Price. Column J /
+`Price.1` is Real Total Return Price, with stacked header labels
+`Real` / `Total` / `Return` / `Price`. Therefore the current implemented
+target is annualized real total-return CAGR from drawdown bottom over
+the five-year horizon. This verifies the column semantics, but still
+does not definitively freeze the target.
 
 ## Phase 3
 
@@ -3979,6 +4121,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.43
+
+-   Added RE-PRED.4: Source column semantics verification.
+-   Verified directly against `data/raw/shiller.xlsx` that pandas
+    `Price.1` corresponds to Shiller column J.
+-   Recorded that rows 4-8 of the workbook header were inspected and no
+    merged cells were present in that header area.
+-   Verified column H / `Price` as Real Price from stacked labels
+    `Real` / `Price`.
+-   Verified column J / `Price.1` as Real Total Return Price from
+    stacked labels `Real` / `Total` / `Return` / `Price`.
+-   Promoted the previous RE-PRED.2 inference about `Price.1` to a
+    verified fact.
+-   Clarified that current `future_return_5y` is annualized real
+    total-return CAGR from drawdown bottom over the five-year horizon.
+-   Preserved the distinction between implemented target, provisional
+    freeze candidate and definitive frozen target.
+-   No code changed.
 
 ## Version 1.42
 
