@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.35\
+**Version:** 1.36\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-032.1)
+# Execution State (as of RE-033.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -202,6 +202,11 @@ verified:
                         computable gate; it classifies whether Personal
                         Capacity belongs as a gate, human approval
                         requirement or mixed control.
+  Capital Posture       Vocabulary documented only (RE-033.1). No code
+                        exists. No posture engine exists. No gate
+                        combination logic exists. RE-033.1 defines the
+                        ordered posture vocabulary that future gates may
+                        cap.
   Research Validation  Exists (RE-025.1-RE-026.1.2), fully independent of
   Harness               run.py -- invoked manually, no wiring exists or
                         is planned yet. Deliberately offline: for each
@@ -354,7 +359,8 @@ without modifying Frozen Core or operative wiring. RE-030.2 extends that
 isolated module with a local input adapter; Frozen Core and operative
 wiring remain unchanged. RE-031.1 is documentation-only scope work for
 the Regime Comparability Gate. RE-032.1 is documentation-only
-classification work for Personal Capacity.
+classification work for Personal Capacity. RE-033.1 is
+documentation-only vocabulary work for Capital Posture.
 
 ------------------------------------------------------------------------
 
@@ -406,6 +412,10 @@ classification work for Personal Capacity.
                                   capital posture mapping. Not yet
                                   classified as computable gate, human
                                   approval requirement or mixed control.
+  Capital Posture Vocabulary     Documented in RE-033.1. No code. No
+                                  posture engine. No gate combination
+                                  implementation. `Blocked` is documented
+                                  as an orthogonal veto.
   Inference Engine               Planned
   Constitution                   Planned
   Protocol Engine                Planned
@@ -2410,6 +2420,151 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-033.1 — Capital Posture vocabulary and ordering
+
+RE-033.1 formalizes the Capital Posture vocabulary and ordering.
+It is documentation-only.
+
+This iteration does not implement posture logic. It defines the ordered
+posture ceiling that future gates may cap.
+
+Ordered posture states:
+
+From most restrictive to least restrictive:
+
+1.  `Conserve`
+2.  `Prepare`
+3.  `Deploy Partially`
+4.  `Deploy Aggressively`
+
+`Blocked` is not part of this ordered scale. It is an orthogonal veto.
+
+State definitions:
+
+### Conserve
+
+No new exposure.
+
+No Dry Powder deployment.
+
+No Portfolio Reallocation outside routine rebalances already scheduled
+outside this SOP process.
+
+`Conserve` is the fail-closed floor.
+
+### Prepare
+
+No new exposure.
+
+No Dry Powder deployment.
+
+No Portfolio Reallocation.
+
+`Prepare` may authorize planning, identifying funding sources,
+redirecting future contributions to cash or preparing Dry Powder
+capacity.
+
+It does not authorize selling existing strategic positions unless a
+future Dry Powder Protocol explicitly allows it.
+
+### Deploy Partially
+
+Authorizes deploying a bounded fraction of available Dry Powder into the
+identified opportunity.
+
+RE-033.1 does not define that fraction.
+
+Portfolio Reallocation remains governed by its own future protocol.
+Deploying Dry Powder does not automatically authorize reallocating
+existing positions.
+
+### Deploy Aggressively
+
+Authorizes deploying the maximum Dry Powder amount allowed by future
+protocols.
+
+It does not automatically authorize Portfolio Reallocation.
+
+Dry Powder deployment and Portfolio Reallocation remain independent
+authorizations with their own gates.
+
+### Blocked
+
+Orthogonal veto.
+
+`Blocked` overrides any ordered posture state.
+
+It must carry an explicit reason, following the explanation standard
+already required from the Evidence Quality Gate.
+
+It may be activated by any future gate or by human approval governance,
+provided the reason is documented.
+
+Rule 1 — gate state to posture ceiling:
+
+A gate's internal state must first map to a posture ceiling for that
+gate.
+
+Current mapping:
+
+-   `not measurable` caps at `Conserve`;
+-   `conservative` caps at `Conserve`.
+
+These two states have the same posture ceiling today but different
+explanations:
+
+-   `not measurable` means required measurement is missing;
+-   `conservative` means the gate was measured but does not authorize a
+    less restrictive ceiling.
+
+This preserves the project-wide rule: absence of evidence is not `0.0`.
+
+Rule 2 — combining posture ceilings:
+
+Future gate combination must operate on posture ceilings, not raw
+internal scores.
+
+Among ordered posture states, the most restrictive ceiling wins.
+
+If `Blocked` is active, `Blocked` wins over all ordered states.
+
+Worked current-state inference:
+
+Current known gate states:
+
+-   Evidence Quality: `not measurable`;
+-   Regime Comparability: `not measurable`;
+-   Personal Capacity: not classified / unavailable;
+-   `Blocked`: false unless explicitly activated.
+
+Documentation-level inference:
+
+    Final capital posture ceiling: Conserve
+
+This is a documentation-level inference, not executable logic. No
+Capital Posture Engine exists yet.
+
+Open question:
+
+Can any gate permit `Prepare` while Evidence Quality remains
+`not measurable`, or is measurable Evidence Quality a prerequisite for
+any posture above `Conserve`?
+
+RE-033.1 records this question for future gate-combination work. It does
+not answer it.
+
+Boundary:
+
+-   No code changed.
+-   No posture engine is implemented.
+-   No gate combination logic is implemented.
+-   No thresholds are defined.
+-   No Dry Powder Protocol rules are implemented.
+-   No Portfolio Reallocation Protocol rules are implemented.
+-   No operative wiring is authorized.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -2523,6 +2678,15 @@ the special unreliability of crisis-time drawdown tolerance revisions.
 No code, thresholds, personal-capacity taxonomy or capital posture
 mapping exist yet.
 
+RE-033.1 formalizes Capital Posture vocabulary and ordering:
+`Conserve`, `Prepare`, `Deploy Partially`, `Deploy Aggressively`, with
+`Blocked` as an orthogonal veto. It separates internal gate-state mapping
+from multi-gate combination. Current `not measurable` and `conservative`
+gate states both cap at `Conserve`, with different explanations. Given
+current known gate states, the documentation-level capital posture
+ceiling is `Conserve`. No posture engine or gate-combination logic exists
+yet.
+
 ## Phase 3
 
 Inference Engine
@@ -2611,6 +2775,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.36
+
+-   Added RE-033.1: Capital Posture vocabulary and ordering.
+-   Formalized ordered posture states from most restrictive to least
+    restrictive: `Conserve`, `Prepare`, `Deploy Partially`,
+    `Deploy Aggressively`.
+-   Documented `Blocked` as an orthogonal veto outside the ordered
+    posture scale.
+-   Defined each posture state in terms of capital consequences.
+-   Tightened `Prepare`: it may authorize planning and preparing Dry
+    Powder capacity, but not selling existing strategic positions unless
+    a future Dry Powder Protocol explicitly allows it.
+-   Separated gate-internal state mapping from multi-gate posture-ceiling
+    combination.
+-   Documented that both `not measurable` and `conservative` currently
+    cap at `Conserve`, while preserving different explanations.
+-   Added current-state documentation inference: Evidence Quality not
+    measurable, Regime Comparability not measurable and Personal Capacity
+    unavailable imply `Conserve`.
+-   Recorded the open question of whether measurable Evidence Quality is
+    a prerequisite for any posture above `Conserve`.
+-   No code changed.
 
 ## Version 1.35
 
