@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.54\
+**Version:** 1.55\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.13)
+# Execution State (as of RE-PRED.14)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -316,6 +316,17 @@ verified:
                         loses to mean-reversion on rank correlation by a
                         full sign flip. The RE-PRED.10.1 deferral trigger
                         was evaluated explicitly and did not activate.
+                        RE-PRED.14 tests the signal-dilution hypothesis
+                        registered in RE-PRED.13 by isolating each active
+                        SimilarityEngine dimension and does not find
+                        support for it: every dimension in isolation
+                        remains negative on rank correlation, none close
+                        to mean-reversion's positive value. A revised,
+                        still-unauthorized hypothesis is registered:
+                        nearest-neighbor selection may not preserve
+                        monotonic rank order the way a direct function of
+                        the query's own value does, regardless of which
+                        single dimension drives the selection.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -625,7 +636,21 @@ documentation-only gate-combination boundary work.
                                   through signal dilution across
                                   dimensions -- flagged for future
                                   investigation, no SimilarityEngine
-                                  change made or authorized.
+                                  change made or authorized. RE-PRED.14
+                                  tests that hypothesis, confirmed under
+                                  the pinned runtime: no single active
+                                  dimension (drawdown -0.19692, duration
+                                  -0.24916, speed -0.20327, cape -0.21701,
+                                  pre_crash_return_3y -0.26353,
+                                  volatility -0.23414) reproduces
+                                  mean-reversion's +0.26316 rank
+                                  correlation. Signal dilution is not
+                                  supported as the explanation. A revised
+                                  hypothesis is registered, not
+                                  authorized: the gap may be structural
+                                  (nearest-neighbor selection vs. a
+                                  direct monotonic function), not a
+                                  weighting problem.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5483,6 +5508,120 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.14 — Similarity dimension diagnostic: signal-dilution hypothesis not supported
+
+RE-PRED.14 adds an exploratory, read-only diagnostic to test the
+signal-dilution hypothesis registered in RE-PRED.13, and records the
+result confirmed under the pinned runtime.
+
+New files:
+
+-   `engine/dimension_diagnostic.py` -- `dimension_forecast()` isolates
+    one active `SimilarityEngine` dimension at a time by re-sorting the
+    already-computed per-dimension scores that
+    `SimilarityEngine.compare()` returns, instead of the blended score
+    `top()` uses. Applies the same `peak_date` recency cutoff as
+    `top()`. Excludes `recovery` deliberately -- RE-021 already removed
+    it from the combined score as a data-leakage fix, and this
+    diagnostic has no business reopening that. `dimension_records()`
+    produces `ValidationRecord`s aligned with the model's, inheriting
+    `evaluable`/`actual` per the same RE-PRED.8 rule, with `evaluable`
+    additionally requiring a non-`None` forecast -- unlike RE-PRED.9's
+    primary baseline, a single-dimension top-10 is not guaranteed to
+    contain a resolved outcome by construction, so this must be checked,
+    not assumed.
+-   `tests/diagnostic_similarity_dimensions.py` -- not a `verify_*.py`
+    regression gate. Makes no canonical claim, asserts no expected
+    values, prints a comparison table. Still enforces the pinned-runtime
+    gate (RE-025.5) before printing anything, because the reproducibility
+    rule applies regardless of whether the script is exploratory.
+
+No Frozen Core component modified. `SimilarityEngine.compare()` is
+consumed exactly as published, the same justification pattern already
+used for RE-025.1 and RE-PRED.9.
+
+A real bug was found and fixed during construction, not in
+`SimilarityEngine`: sorting by `pre_crash_return_3y_score` raised
+`TypeError` because that score is `None` for episodes without three
+years of prior price history. Fixed by excluding `None`-scored
+comparables from that dimension's ranking, mirroring exactly how
+`SimilarityEngine._weighted_score()` already excludes `None` from the
+blended score -- absence of a dimension's signal is not treated as
+maximal dissimilarity.
+
+Results, confirmed under `RUNTIME : PINNED`:
+
+    Dimension                  Evaluated   MAE      Hit-rate   Rank corr.
+    model (blended, RE-BUG.3)  19          0.06929  0.94737    -0.26505
+    drawdown_score              19          0.06765  0.94737    -0.19692
+    duration_score               19          0.07079  0.94737    -0.24916
+    speed_score                  19          0.07049  0.94737    -0.20327
+    cape_score                   19          0.06899  0.94737    -0.21701
+    pre_crash_return_3y_score    19          0.06592  0.94737    -0.26353
+    volatility_score              19          0.06740  0.94737    -0.23414
+    mean-reversion (RE-PRED.13, ref.)        0.18159  0.94737     0.26316
+
+All six dimensions returned `evaluated = 19`, matching the model -- in
+this run, isolating a single dimension did not reduce the evaluable set,
+though the module docstring records that this is not guaranteed in
+general.
+
+Finding, stated plainly:
+
+The signal-dilution hypothesis, as registered in RE-PRED.13, is not
+supported. If blending were diluting a real positive signal present in
+one dimension, isolating that dimension should have recovered something
+closer to mean-reversion's positive rank correlation. It did not: every
+dimension in isolation remains negative, ranging from -0.19692
+(drawdown, the closest to positive) to -0.26353 (pre_crash_return_3y,
+effectively matching the blended model). No single active
+`SimilarityEngine` dimension is the hidden source of mean-reversion's
+advantage.
+
+Revised working hypothesis, registered but not authorized as fact:
+
+The gap may not be a weighting problem at all. Mean-reversion is a
+direct, monotonic function of the query episode's own drawdown depth --
+by construction, a larger drawdown always produces a larger forecast,
+preserving rank order exactly. `SimilarityEngine`, even sorted by a
+single dimension, still selects a top-10 nearest-neighbor set and
+forecasts the median outcome of whichever historical episodes happen to
+rank closest -- a mechanism that does not preserve the query's own rank
+order the same way, regardless of which dimension drives the selection.
+If this is correct, the gap is not fixable by reweighting dimensions; it
+would require reconsidering whether nearest-neighbor selection is the
+right conditioning mechanism at all -- a materially larger question,
+explicitly out of scope for this iteration.
+
+Caveat (per RE-PRED.12, with extra force):
+
+Every column above is computed over an even smaller, still-dependent
+slice of the same 23-episode dataset -- isolating a dimension does not
+add independent observations. This is hypothesis generation, not
+hypothesis confirmation. The revised hypothesis above is speculation
+about mechanism, clearly labeled, not a finding.
+
+Rejected shortcuts:
+
+-   Do not treat this as confirming or ruling out any mechanism with
+    statistical confidence.
+-   Do not treat the revised hypothesis as established; it is
+    unauthorized speculation, one plausible explanation among others.
+-   Do not use this diagnostic's results to modify `SimilarityEngine`,
+    `SIMILARITY_WEIGHTS`, or any Frozen Core component.
+-   Do not treat per-dimension `evaluated = 19` as guaranteed in future
+    runs or future datasets.
+
+Boundary:
+
+-   No Frozen Core component modified.
+-   No `SimilarityEngine` change made or authorized.
+-   No gate state changed.
+-   No target freeze changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5791,6 +5930,20 @@ future investigation only, no Frozen Core change made or authorized.
 Both new correlation values remain subject to RE-PRED.12's unresolved
 sampling-noise caveat on the same N=19 dependent sample.
 
+RE-PRED.14 adds an exploratory, read-only diagnostic
+(`engine/dimension_diagnostic.py`,
+`tests/diagnostic_similarity_dimensions.py`) testing the signal-dilution
+hypothesis registered in RE-PRED.13 by isolating each active
+`SimilarityEngine` dimension. Confirmed under the pinned runtime, no
+dimension in isolation reproduces mean-reversion's positive rank
+correlation -- all six remain negative, from -0.19692 (drawdown) to
+-0.26353 (pre_crash_return_3y). Signal dilution is not supported as the
+explanation. A revised hypothesis is registered, not authorized:
+nearest-neighbor selection may not preserve monotonic rank order the
+way a direct function of the query's own value does. No `SimilarityEngine`
+change is made or authorized. RE-PRED.12's sampling-noise caveat applies
+with extra force to this smaller, still-dependent slicing.
+
 ## Phase 3
 
 Inference Engine
@@ -5879,6 +6032,40 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.55
+
+-   Added RE-PRED.14: Similarity dimension diagnostic.
+-   Added `engine/dimension_diagnostic.py`
+    (`dimension_forecast()`, `dimension_records()`,
+    `DIMENSION_SCORE_FIELDS`) and
+    `tests/diagnostic_similarity_dimensions.py`, an exploratory,
+    non-canonical, non-regression-gated script that still enforces the
+    pinned-runtime check (RE-025.5).
+-   Reused `SimilarityEngine.compare()` unmodified; no Frozen Core
+    component changed.
+-   Excluded `recovery` from the diagnostic deliberately, per RE-021's
+    existing data-leakage fix.
+-   Found and fixed a bug in the new diagnostic script itself (not in
+    `SimilarityEngine`): sorting by `pre_crash_return_3y_score` failed on
+    `None` values; fixed by excluding `None`-scored comparables from
+    that dimension's ranking, mirroring
+    `SimilarityEngine._weighted_score()`'s existing `None`-exclusion
+    rule.
+-   Recorded canonical diagnostic results confirmed under
+    `RUNTIME : PINNED`: no single active dimension reproduces
+    mean-reversion's `+0.26316` rank correlation; all six remain
+    negative, from `drawdown_score = -0.19692` to
+    `pre_crash_return_3y_score = -0.26353`.
+-   Concluded that the signal-dilution hypothesis registered in
+    RE-PRED.13 is not supported.
+-   Registered a revised hypothesis, explicitly not authorized as fact:
+    the gap may be structural (nearest-neighbor selection vs. a direct
+    monotonic function of the query's own value), not a dimension-
+    weighting problem.
+-   Reiterated RE-PRED.12's sampling-noise caveat with extra force for
+    this smaller, still-dependent slicing.
+-   No `SimilarityEngine` change made or authorized.
 
 ## Version 1.54
 
