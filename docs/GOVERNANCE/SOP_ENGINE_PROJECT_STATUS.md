@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.53\
+**Version:** 1.54\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.12)
+# Execution State (as of RE-PRED.13)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -307,7 +307,15 @@ verified:
                         that no baseline comparison on this evaluated
                         sample addresses whether any excess value is
                         distinguishable from sampling noise given N=19
-                        dependent records.
+                        dependent records. RE-PRED.13 records the
+                        canonical secondary-baseline values, confirmed
+                        under the pinned runtime, and the resulting
+                        full-picture finding: the model is not uniformly
+                        dominated -- it clearly beats zero and
+                        mean-reversion on MAE, ties both on hit-rate, but
+                        loses to mean-reversion on rank correlation by a
+                        full sign flip. The RE-PRED.10.1 deferral trigger
+                        was evaluated explicitly and did not activate.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -595,6 +603,29 @@ documentation-only gate-combination boundary work.
                                   gate-state decision is deferred until
                                   the full three-baseline picture is
                                   confirmed under the pinned runtime.
+                                  RE-PRED.13 records that picture,
+                                  confirmed: model MAE 0.06929 beats zero
+                                  0.12749 and mean-reversion 0.18159
+                                  clearly; hit-rate ties all three at
+                                  0.94737; rank correlation is where the
+                                  model loses -- primary baseline
+                                  -0.23172 and mean-reversion +0.26316
+                                  both beat the model's -0.26505, the
+                                  mean-reversion case a full sign flip.
+                                  The RE-PRED.10.1 trigger ("loses to the
+                                  full set on a majority of metrics") is
+                                  evaluated explicitly and does not
+                                  activate -- the model wins MAE against
+                                  two of three baselines. `NOT_DEMONSTRATED`
+                                  remains deferred. A working hypothesis
+                                  is registered, not authorized as fact:
+                                  drawdown depth alone may order future
+                                  returns better than SimilarityEngine's
+                                  multidimensional conditioning, possibly
+                                  through signal dilution across
+                                  dimensions -- flagged for future
+                                  investigation, no SimilarityEngine
+                                  change made or authorized.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5339,6 +5370,119 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.13 — Canonical secondary baseline values and full-picture finding
+
+RE-PRED.13 records the canonical secondary-baseline values, confirmed
+by running `tests/verify_secondary_baselines.py` under
+`RUNTIME : PINNED`, and the full-picture finding that follows.
+
+It is documentation-only. No code changed.
+
+Structural verification, confirmed under the pinned runtime:
+
+-   `episodes = 23`, `evaluated_count = 19` — unchanged.
+-   `zero_hit_rate` and `zero_rank_correlation` are `None`, exactly as
+    expected by construction (RE-PRED.11): `directional_hit_rate()`
+    excludes `forecast == 0`, and `rank_correlation()` returns `None`
+    when all forecasts are identical.
+-   `missing_reversion_forecast_count = 0` — no evaluable model record
+    produced a missing mean-reversion forecast.
+
+Canonical secondary-baseline values:
+
+    zero_mae:                       0.12749337012113
+    reversion_mae:                  0.18158697149305
+    excess_mae_vs_zero:             0.05820543225037
+    excess_mae_vs_reversion:        0.11229903362229
+
+    zero_hit_rate:                  None
+    reversion_hit_rate:             0.94736842105263
+    excess_hit_rate_vs_reversion:   0.00000000000000
+
+    zero_rank_correlation:          None
+    reversion_rank_correlation:     0.26315789473684
+    excess_rank_correlation_vs_reversion: -0.52820961324369
+
+Full comparison table (model, primary baseline from RE-PRED.10, zero,
+mean-reversion):
+
+    Metric              Model      Primary    Zero       Reversion
+    MAE                 0.06929    0.06741*   0.12749    0.18159
+    Directional hit-rate 0.94737   0.94737    None       0.94737
+    Rank correlation    -0.26505   -0.23172*  None       0.26316*
+
+    * beats the model on that metric
+
+Finding, stated plainly:
+
+The model is not uniformly dominated. It clearly beats zero and
+mean-reversion on MAE — 0.06929 versus 0.12749 and 0.18159
+respectively, a wide margin either way. It ties all measurable
+baselines on directional hit-rate. Where it loses is rank correlation:
+the primary baseline beats it by a moderate margin, and mean-reversion
+beats it by a full sign flip — mean-reversion's rank correlation is
+positive (0.26316), the model's is negative (-0.26505).
+
+RE-PRED.10.1 trigger, evaluated explicitly:
+
+RE-PRED.10.1 pre-registered a trigger for reopening the
+`NOT_DEMONSTRATED` gate-state proposal: "if the model loses to the full
+set (primary, zero, mean-reversion) on a majority of canonical
+metrics." That condition does not hold — the model wins MAE against two
+of the three baselines. The proposal remains deferred. Per
+RE-PRED.10.1's own alternative, sharper `explanations` text within the
+existing `NOT_MEASURABLE`/`CONSERVATIVE` states remains the appropriate
+tool if this distinction needs to be made visible, not a new top-level
+state.
+
+Working hypothesis, registered but not authorized as fact:
+
+Mean-reversion's positive rank correlation against the model's negative
+one is a striking, specific result: drawdown depth alone, with no
+comparables and no calibration, orders realized 5-year outcomes better
+than `SimilarityEngine`'s multidimensional conditioning does on this
+sample. One candidate explanation is signal dilution — blending
+drawdown depth with duration, speed, CAPE, pre-crash return and
+volatility (`SIMILARITY_WEIGHTS`, `core/constants.py`) may be
+weighting away the single dimension carrying the strongest ordering
+information, in favor of episodes that resemble the current snapshot
+contextually without capturing the magnitude of the reversion. This is
+recorded as a working hypothesis for future investigation, not a
+diagnosis. No `SimilarityEngine` change is made or authorized by this
+iteration — that component remains Frozen Core, and RE-021 already
+establishes the evidentiary bar for touching it.
+
+Mandatory caveat (per RE-PRED.12):
+
+Both the +0.26316 and -0.26505 rank correlations above are computed
+over the same 19 evaluable records already documented as
+non-independent (RE-025.6, RE-025.8, RE-025.9). Neither figure is
+established as distinguishable from sampling noise. This finding
+sharpens the picture of what the model does on this sample; it does not
+resolve, and must not be read as resolving, RE-PRED.12's open question.
+
+Rejected shortcuts:
+
+-   Do not read this as vindicating the model — it still loses to the
+    primary baseline and to mean-reversion on rank correlation.
+-   Do not read this as confirming `NOT_DEMONSTRATED` — the
+    pre-registered trigger explicitly did not activate.
+-   Do not treat the signal-dilution hypothesis as established; it is
+    unauthorized speculation about mechanism, clearly labeled as such.
+-   Do not treat +0.26316 or -0.26505 as stable, final values immune to
+    sampling noise.
+
+Boundary:
+
+-   No code changed in RE-PRED.13.
+-   No gate state changed.
+-   No capital posture ceiling changed.
+-   No `SimilarityEngine` change made or authorized.
+-   No target freeze changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5632,6 +5776,21 @@ records) are different questions — this iteration answers only the
 first. The gate-state decision is deferred until the full three-baseline
 picture is confirmed under the pinned runtime.
 
+RE-PRED.13 records that confirmed picture. The model beats zero and
+mean-reversion clearly on MAE (0.06929 vs 0.12749 and 0.18159), ties all
+measurable baselines on directional hit-rate, and loses on rank
+correlation to both the primary baseline and mean-reversion — the
+mean-reversion case a full sign flip (+0.26316 vs the model's -0.26505).
+RE-PRED.10.1's trigger ("loses to the full set on a majority of
+metrics") was evaluated explicitly and does not activate, so
+`NOT_DEMONSTRATED` remains deferred. A working hypothesis is registered,
+not authorized as fact: drawdown depth alone may order outcomes better
+than `SimilarityEngine`'s multidimensional conditioning, possibly
+through signal dilution across `SIMILARITY_WEIGHTS` — flagged for
+future investigation only, no Frozen Core change made or authorized.
+Both new correlation values remain subject to RE-PRED.12's unresolved
+sampling-noise caveat on the same N=19 dependent sample.
+
 ## Phase 3
 
 Inference Engine
@@ -5720,6 +5879,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.54
+
+-   Added RE-PRED.13: Canonical secondary baseline values and
+    full-picture finding.
+-   Recorded canonical values confirmed under `RUNTIME : PINNED`:
+    `zero_mae = 0.12749337012113`, `reversion_mae = 0.18158697149305`,
+    `reversion_hit_rate = 0.94736842105263`,
+    `reversion_rank_correlation = 0.26315789473684`.
+-   Confirmed `zero_hit_rate`/`zero_rank_correlation = None` and
+    `missing_reversion_forecast_count = 0`, exactly as expected by
+    construction.
+-   Recorded the full-picture finding: the model beats zero and
+    mean-reversion clearly on MAE, ties all measurable baselines on
+    directional hit-rate, and loses on rank correlation to both the
+    primary baseline and mean-reversion — the mean-reversion case a
+    full sign flip.
+-   Evaluated the RE-PRED.10.1 deferral trigger explicitly: does not
+    activate. `NOT_DEMONSTRATED` remains a deferred proposal.
+-   Registered a working hypothesis, explicitly not authorized as fact:
+    possible signal dilution in `SimilarityEngine`'s multidimensional
+    weighting versus drawdown depth alone. No Frozen Core change made
+    or authorized.
+-   Reiterated that both new correlation values remain subject to
+    RE-PRED.12's unresolved sampling-noise caveat.
+-   No code changed.
 
 ## Version 1.53
 
