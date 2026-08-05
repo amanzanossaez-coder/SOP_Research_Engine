@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.51\
+**Version:** 1.52\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.9)
+# Execution State (as of RE-PRED.10)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -291,10 +291,14 @@ verified:
                         comparison against the model's. RE-PRED.9
                         implements that baseline in code:
                         `engine/baseline_harness.py` and
-                        `tests/verify_baseline_harness.py`. Structurally
-                        verified outside the pinned runtime only. No
-                        baseline value is canonical yet -- that requires
-                        confirmation under `requirements.txt`.
+                        `tests/verify_baseline_harness.py`. RE-PRED.10
+                        records the canonical baseline values, confirmed
+                        under the pinned runtime, and the resulting
+                        finding: the model does not beat the primary
+                        baseline on any of the three canonical metrics --
+                        it ties on directional hit-rate and loses on MAE
+                        and rank correlation. Predictive validity is not
+                        demonstrated relative to this baseline.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -547,9 +551,20 @@ documentation-only gate-combination boundary work.
                                   Structurally verified (record
                                   alignment, the no-missing-forecast
                                   invariant) outside the pinned runtime
-                                  only. No baseline value is canonical --
-                                  pending confirmation under
-                                  `requirements.txt`.
+                                  only. RE-PRED.10 records the canonical
+                                  baseline values, confirmed under
+                                  `RUNTIME : PINNED`: baseline MAE
+                                  0.06740858559979 vs model MAE
+                                  0.06928793787076 (baseline wins);
+                                  baseline hit-rate 0.94736842105263,
+                                  identical to the model (tie); baseline
+                                  rank correlation -0.23171864780822 vs
+                                  model -0.26505171850685 (baseline
+                                  wins). The model does not beat the
+                                  primary baseline on any of the three
+                                  canonical metrics. Predictive validity
+                                  is not demonstrated relative to this
+                                  baseline.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5029,6 +5044,125 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.10 — Canonical baseline values and predictive-validity finding
+
+RE-PRED.10 records the canonical primary baseline values, confirmed by
+running `tests/verify_baseline_harness.py` under `RUNTIME : PINNED`
+(`requirements.txt`), and the finding that follows from them.
+
+It is documentation-only.
+
+No code changed.
+
+Structural verification, confirmed under the pinned runtime:
+
+-   `episodes = 23`, `sample_size = 21`, `evaluated_count = 19`,
+    `baseline_evaluated_count = 19`.
+-   `missing_baseline_forecast_count = 0` — the invariant proven by
+    construction in RE-PRED.9 (a baseline forecast can never be `None`
+    when the corresponding model record is evaluable) holds empirically
+    on the live dataset, not only in principle.
+
+Canonical baseline values:
+
+    model_mae:                 0.06928793787076
+    baseline_mae:               0.06740858559979
+    excess_mae:                -0.00187935227097
+
+    model_hit_rate:             0.94736842105263
+    baseline_hit_rate:          0.94736842105263
+    excess_hit_rate:            0.00000000000000
+
+    model_rank_correlation:    -0.26505171850685
+    baseline_rank_correlation: -0.23171864780822
+    excess_rank_correlation:   -0.03333307069863
+
+Values are recorded to the fourteen decimal places produced by
+`tests/verify_baseline_harness.py`'s own print formatting. This is the
+precision actually captured from the pinned-runtime execution; it is
+not re-derived to a higher precision.
+
+Reading excess: for MAE, `excess_mae = baseline MAE - model MAE`,
+positive meaning the model wins. For hit-rate and rank correlation,
+`excess = model metric - baseline metric`, positive meaning the model
+wins (RE-PRED.8/RE-PRED.9 convention).
+
+Finding, stated plainly, as committed to in advance in RE-PRED.7 and
+RE-PRED.8:
+
+The model does not beat the primary baseline on any of the three
+canonical metrics.
+
+-   MAE: the baseline wins. Baseline error is 0.06741, model error is
+    0.06929 — the baseline is closer to realized outcomes on average.
+-   Directional hit-rate: exact tie. Both are 0.94737. This adds no new
+    information beyond what RE-025.3 already established — a
+    conditionless prediction of "positive" was already known to match
+    the model's directional performance.
+-   Rank correlation: the baseline wins. Baseline correlation is
+    -0.23172, model correlation is -0.26505 — the model's ordering of
+    forecast strength is further from informative than the baseline's,
+    though both remain weakly negative.
+
+Interpretation:
+
+Conditioning the forecast on the current snapshot's similarity to
+historical episodes, via `SimilarityEngine`, does not currently produce
+a forecast that is more accurate, more discriminating, or better
+ordered than simply taking the unconditional historical median of
+comparable episodes observable at each point in time. On this canonical
+19-record evaluated sample, predictive validity is not demonstrated
+relative to this baseline.
+
+This finding does not by itself prove `SimilarityEngine` conditioning
+has no value under any circumstance — the evaluated sample remains
+small, non-independent (RE-025.6, RE-025.8, RE-025.9), and only one
+primary baseline has been tested. It does mean the burden of proof
+established in RE-PRED.1 has not been met: this is not a case where
+predictive validity is assumed to be a matter of time or more code. The
+governing principle recorded at the start of the Predictive Validity
+Boundary applies directly here: predictive validity must first be shown
+to exist before any threshold or gate-relaxation design proceeds as if
+it did.
+
+Connection to Evidence Quality Gate:
+
+This sharpens, but does not by itself change, the existing
+`EvidenceQualityGate` state. RE-029.6 already recorded that the gate
+starts conservative because current Research Validation does not yet
+show reliable discriminatory power. This finding replaces that
+qualitative judgment with a direct, head-to-head quantitative result:
+not merely "hit-rate is non-discriminating and rank correlation is
+weakly negative," but "the model loses to a naive baseline on two of
+three canonical metrics and ties on the third." No gate threshold or
+posture ceiling is changed by this iteration — RE-029.7's calibration
+boundary still requires an explicit, pre-registered governance decision
+before any gate state changes, and this finding argues for continued
+conservatism, not relaxation.
+
+Rejected shortcuts:
+
+-   Do not soften this finding or reframe it as an implementation
+    problem to fix.
+-   Do not treat the exact directional hit-rate tie as if it were
+    informative on its own, independent of RE-025.3's existing finding.
+-   Do not use this finding to automatically change any gate threshold
+    or capital posture ceiling.
+-   Do not treat this single primary-baseline result as a final verdict
+    on predictive validity; secondary baselines and a larger or
+    differently-sampled evaluation remain open.
+
+Boundary:
+
+-   No code changed in RE-PRED.10.
+-   No gate threshold changed.
+-   No capital posture ceiling changed.
+-   No target freeze changed.
+-   No secondary baseline computed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5294,6 +5428,18 @@ runtime, to confirm the code executes and the structural invariants
 hold. No baseline value is canonical yet; RE-PRED.10 will record the
 canonical baseline metrics once confirmed under `requirements.txt`.
 
+RE-PRED.10 records those canonical values, confirmed under
+`RUNTIME : PINNED`, and the finding that follows: the model does not
+beat the primary baseline on any of the three canonical metrics — it
+ties on directional hit-rate (0.94737 both) and loses on MAE
+(baseline 0.06741 vs model 0.06929) and rank correlation (baseline
+-0.23172 vs model -0.26505). Predictive validity, as defined by
+RE-PRED.1's burden of proof, is not demonstrated relative to this
+baseline. This sharpens the existing conservative `EvidenceQualityGate`
+state with a direct quantitative result but does not itself change any
+gate threshold or capital posture ceiling — that remains a separate,
+explicit governance decision under RE-029.7.
+
 ## Phase 3
 
 Inference Engine
@@ -5382,6 +5528,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.52
+
+-   Added RE-PRED.10: Canonical baseline values and predictive-validity
+    finding.
+-   Recorded canonical baseline values confirmed under `RUNTIME : PINNED`:
+    `baseline_mae = 0.06740858559979`,
+    `baseline_hit_rate = 0.94736842105263`,
+    `baseline_rank_correlation = -0.23171864780822`.
+-   Recorded canonical excess values: `excess_mae = -0.00187935227097`,
+    `excess_hit_rate = 0.00000000000000`,
+    `excess_rank_correlation = -0.03333307069863`.
+-   Confirmed `missing_baseline_forecast_count = 0` empirically under the
+    pinned runtime, not only by construction.
+-   Recorded the finding plainly, as committed to in advance in
+    RE-PRED.7/RE-PRED.8: the model does not beat the primary baseline on
+    any of the three canonical metrics — it ties on directional
+    hit-rate and loses on MAE and rank correlation.
+-   Stated that predictive validity, under RE-PRED.1's burden of proof,
+    is not demonstrated relative to this baseline.
+-   Connected this finding to the existing conservative
+    `EvidenceQualityGate` state (RE-029.6/RE-029.7) as sharpening, not
+    changing it — no gate threshold or capital posture ceiling is
+    altered by this iteration.
+-   No code changed.
 
 ## Version 1.51
 
