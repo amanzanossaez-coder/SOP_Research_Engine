@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.56\
+**Version:** 1.57\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.15)
+# Execution State (as of RE-PRED.16)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -336,11 +336,21 @@ verified:
                         intervals for the model, the primary and mean-
                         reversion baselines, and their paired excess --
                         structurally verified outside the pinned runtime
-                        only. Structural smoke test in an unpinned
-                        environment found 4 independence clusters over the
-                        19 evaluable records (sizes 10, 7, 1, 1) -- not a
-                        canonical value. Canonical interval values pending
-                        pinned-runtime confirmation.
+                        only. RE-PRED.16 records the canonical results,
+                        confirmed under the pinned runtime: 3 independence
+                        clusters (sizes 10, 8, 1), not the 4 seen in the
+                        unpinned structural smoke test -- hand-verified
+                        against the already-canonical RE-025.8/RE-025.9
+                        tables, confirming the pinned result and not the
+                        sandbox one. The excess vs. primary baseline on
+                        rank correlation is not distinguishable from
+                        sampling noise (90% interval [-0.06068, 0.02514],
+                        straddles zero); the excess vs. mean-reversion on
+                        rank correlation is robust and does not straddle
+                        zero (90% interval [-0.94270, -0.34208]) -- the
+                        RE-PRED.13 full sign-flip finding survives
+                        dependence-aware resampling, the primary-baseline
+                        loss does not.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -672,10 +682,33 @@ documentation-only gate-combination boundary work.
                                   RE-025.9, resampled at cluster level,
                                   producing percentile confidence
                                   intervals for the model, both baselines
-                                  and their paired excess. Structurally
-                                  verified outside the pinned runtime
-                                  only -- canonical interval values
-                                  pending pinned-runtime confirmation.
+                                  and their paired excess. RE-PRED.16
+                                  records the canonical results, confirmed
+                                  under the pinned runtime: 3 independence
+                                  clusters, sizes 10/8/1 (not the 4 seen in
+                                  the unpinned smoke test -- hand-verified
+                                  against RE-025.8/RE-025.9's own canonical
+                                  tables, confirming the pinned count).
+                                  MAE excess vs. primary baseline is small
+                                  but robust (90% CI [-0.00356, -0.00045],
+                                  model loses, does not straddle zero); MAE
+                                  excess vs. mean-reversion is large and
+                                  robust (90% CI [0.08355, 0.14025], model
+                                  wins). Hit-rate excess is exactly zero at
+                                  every percentile against both baselines
+                                  -- the tie holds under resampling, not
+                                  just at the point estimate. Rank
+                                  correlation excess vs. primary baseline
+                                  straddles zero (90% CI [-0.06068,
+                                  0.02514]) -- RE-PRED.13's "model loses to
+                                  primary on rank correlation" finding is
+                                  not distinguishable from sampling noise
+                                  given this dependence structure. Rank
+                                  correlation excess vs. mean-reversion
+                                  does not straddle zero (90% CI [-0.94270,
+                                  -0.34208]) -- the full sign-flip finding
+                                  is robust, not an artifact of N=19's
+                                  dependence.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5756,6 +5789,123 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.16 — Canonical dependence-aware bootstrap values
+
+RE-PRED.16 records the canonical results of RE-PRED.15's bootstrap,
+confirmed by running `tests/diagnostic_dependence_bootstrap.py` under
+`RUNTIME : PINNED`, closing RE-PRED.12's open question.
+
+It is documentation-only. No code changed.
+
+Cluster structure, confirmed:
+
+    independence_clusters: 3
+    cluster_sizes (desc): [10, 8, 1]
+
+This differs from the 4 clusters (`[10, 7, 1, 1]`) seen in RE-PRED.15's
+unpinned structural smoke test. Hand-verified against the already-
+canonical RE-025.8 overlap pairs and RE-025.9 repeated-forecast groups:
+tracing the union of both edge sets by hand over the 19 evaluable
+records produces exactly the 10-node and 8-node components reported
+here, plus one untouched singleton -- confirming the pinned result, not
+the sandbox one. The discrepancy is attributed to the sandbox's
+unpinned environment producing slightly different underlying forecast
+values, which changes `repeated_forecast_groups()`'s exact-float-
+equality grouping -- not a defect in the new bootstrap code. This is
+the same discipline RE-025.5 already established, now demonstrated
+concretely: even code that touches no pandas/numpy directly can surface
+environment-dependent results, because it consumes forecasts computed
+upstream by code that does.
+
+Canonical bootstrap results (seed=42, replicates=5000, 90% interval):
+
+    Metric      Series                          [low, high]              valid
+    MAE         model                           [0.05796, 0.07982]       5000/5000
+    MAE         primary baseline (RE-PRED.10)   [0.05440, 0.07937]       5000/5000
+    MAE         mean-reversion (RE-PRED.13)     [0.14151, 0.22008]       5000/5000
+    MAE         excess vs primary               [-0.00356, -0.00045]    5000/5000
+    MAE         excess vs mean-reversion        [0.08355, 0.14025]       5000/5000
+
+    hit-rate    model                           [0.88235, 1.00000]       5000/5000
+    hit-rate    primary baseline                [0.88235, 1.00000]       5000/5000
+    hit-rate    mean-reversion                  [0.88235, 1.00000]       5000/5000
+    hit-rate    excess vs primary               [0.00000, 0.00000]       5000/5000
+    hit-rate    excess vs mean-reversion        [0.00000, 0.00000]       5000/5000
+
+    rank_corr   model                           [-0.51587, -0.12759]    4814/5000
+    rank_corr   primary baseline                [-0.54100, -0.06691]    4814/5000
+    rank_corr   mean-reversion                  [0.20362, 0.42683]       4814/5000
+    rank_corr   excess vs primary               [-0.06068, 0.02514]     4814/5000
+    rank_corr   excess vs mean-reversion        [-0.94270, -0.34208]    4814/5000
+
+`valid_replicates` for rank correlation is 4814/5000 (96.3%) -- the
+remaining replicas degenerate to `None` when a resample happens to
+produce identical forecasts or actuals, excluded per the module's
+absence-of-evidence rule, not imputed.
+
+Finding, stated plainly, per metric:
+
+MAE. The model's small loss to the primary baseline (RE-PRED.10:
+excess -0.00188) is real, not noise -- the 90% interval is entirely
+negative and does not straddle zero, though the margin itself is
+small. The model's large win over mean-reversion (RE-PRED.13) is also
+real and robust -- the interval is entirely positive, no ambiguity.
+
+Hit-rate. The exact tie holds under resampling at every percentile
+computed, against both baselines. This metric has no discriminating
+power on this sample, confirmed, not just observed once.
+
+Rank correlation -- the metric RE-PRED.13 flagged as the model's
+weakest point. Two different answers for two different comparisons:
+
+-   Vs. the primary baseline: NOT distinguishable from sampling noise.
+    The 90% interval `[-0.06068, 0.02514]` straddles zero. RE-PRED.13's
+    "the primary baseline beats the model on rank correlation" finding
+    does not survive dependence-aware resampling -- it could be
+    sampling noise given how few independent clusters actually exist.
+-   Vs. mean-reversion: distinguishable from sampling noise, and
+    strongly so. The 90% interval `[-0.94270, -0.34208]` is entirely
+    negative, nowhere near zero. RE-PRED.13's full sign-flip finding
+    (`+0.26316` vs `-0.26505`) is robust to the known dependence
+    structure -- it is not an artifact of treating 19 dependent records
+    as if they were independent.
+
+This is RE-PRED.12's open question, answered concretely: baseline
+choice matters for how much confidence a finding deserves. The primary-
+baseline rank-correlation loss was real-looking but turns out to be
+noise-fragile; the mean-reversion sign-flip was equally real-looking
+and turns out to be robust. Neither could have been told apart from the
+point estimates alone -- that is exactly why RE-PRED.12 refused to let
+either be read as resolved until this iteration.
+
+Rejected shortcuts:
+
+-   Do not read the primary-baseline rank-correlation result as
+    "resolved in the model's favor" -- "not distinguishable from noise"
+    is not the same as "the model is fine on this metric."
+-   Do not read the mean-reversion rank-correlation result as
+    strengthened beyond what it already was -- RE-PRED.13's point
+    estimate already showed the sign flip; this iteration confirms it
+    is not a sampling artifact, nothing more.
+-   Do not treat the hit-rate tie as informative about predictive
+    quality -- it was already known to carry no signal in this
+    comparison (RE-PRED.11/13); this iteration only confirms the tie is
+    stable under resampling.
+-   Do not extrapolate these intervals to a different N, dataset, or
+    universe -- they are specific to the current 23-episode dataset and
+    its current dependence structure.
+
+Boundary:
+
+-   No code changed in RE-PRED.16.
+-   No `SimilarityEngine` change made or authorized.
+-   No gate state changed.
+-   No capital posture ceiling changed.
+-   No operative wiring changed.
+-   No target freeze changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6092,6 +6242,19 @@ Whether the excess intervals against the primary and mean-reversion
 baselines straddle zero is exactly the open question this answers, once
 confirmed under the pinned runtime and recorded in a future iteration.
 
+RE-PRED.16 records that confirmation. Canonical clusters: 3, sizes
+`[10, 8, 1]` -- hand-verified against RE-025.8/RE-025.9's own canonical
+tables. MAE excess vs. primary baseline is small but robust (90% CI
+`[-0.00356, -0.00045]`, does not straddle zero); MAE excess vs.
+mean-reversion is large and robust (`[0.08355, 0.14025]`). Hit-rate
+excess is exactly zero at every percentile against both baselines --
+the tie is stable under resampling. Rank correlation gives two
+different answers: the excess vs. primary baseline straddles zero
+(`[-0.06068, 0.02514]`) -- not distinguishable from sampling noise --
+while the excess vs. mean-reversion does not (`[-0.94270, -0.34208]`)
+-- RE-PRED.13's full sign-flip finding is robust to the known
+dependence structure, not an artifact of it.
+
 ## Phase 3
 
 Inference Engine
@@ -6180,6 +6343,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.57
+
+-   Added RE-PRED.16: canonical dependence-aware bootstrap values,
+    confirmed under `RUNTIME : PINNED`, closing RE-PRED.12.
+-   Recorded canonical cluster structure: 3 independence clusters,
+    sizes `[10, 8, 1]` -- not the 4 (`[10, 7, 1, 1]`) seen in
+    RE-PRED.15's unpinned structural smoke test. Hand-verified against
+    RE-025.8/RE-025.9's own canonical tables; discrepancy attributed to
+    the unpinned sandbox producing slightly different forecast values,
+    which changes `repeated_forecast_groups()`'s exact-float-equality
+    grouping -- not a defect in the bootstrap code.
+-   Recorded canonical 90% bootstrap intervals for MAE, hit-rate and
+    rank correlation, for the model, both baselines, and their paired
+    excess (seed=42, replicates=5000).
+-   Found that MAE excess vs. both baselines is robust (does not
+    straddle zero in either direction); hit-rate excess is exactly zero
+    at every percentile against both baselines.
+-   Found that rank-correlation excess vs. the primary baseline
+    straddles zero -- RE-PRED.13's "model loses to primary on rank
+    correlation" finding is not distinguishable from sampling noise.
+-   Found that rank-correlation excess vs. mean-reversion does not
+    straddle zero -- RE-PRED.13's full sign-flip finding is robust to
+    the known N=19 dependence structure, not an artifact of it.
+-   No code changed in RE-PRED.16. No gate state changed.
 
 ## Version 1.56
 
