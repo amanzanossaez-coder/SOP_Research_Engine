@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.55\
+**Version:** 1.56\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.14)
+# Execution State (as of RE-PRED.15)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -326,7 +326,21 @@ verified:
                         nearest-neighbor selection may not preserve
                         monotonic rank order the way a direct function of
                         the query's own value does, regardless of which
-                        single dimension drives the selection.
+                        single dimension drives the selection. RE-PRED.15
+                        closes the RE-PRED.12 method gap:
+                        `engine/dependence_bootstrap.py` implements a
+                        cluster bootstrap over independence clusters built
+                        from the union of the RE-025.8 overlapping-outcome-
+                        window and RE-025.9 repeated-forecast-group
+                        diagnostics, producing dependence-aware confidence
+                        intervals for the model, the primary and mean-
+                        reversion baselines, and their paired excess --
+                        structurally verified outside the pinned runtime
+                        only. Structural smoke test in an unpinned
+                        environment found 4 independence clusters over the
+                        19 evaluable records (sizes 10, 7, 1, 1) -- not a
+                        canonical value. Canonical interval values pending
+                        pinned-runtime confirmation.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -650,7 +664,18 @@ documentation-only gate-combination boundary work.
                                   authorized: the gap may be structural
                                   (nearest-neighbor selection vs. a
                                   direct monotonic function), not a
-                                  weighting problem.
+                                  weighting problem. RE-PRED.15
+                                  implements a dependence-aware cluster
+                                  bootstrap (engine/dependence_bootstrap.py)
+                                  answering RE-PRED.12: independence
+                                  clusters from the union of RE-025.8 and
+                                  RE-025.9, resampled at cluster level,
+                                  producing percentile confidence
+                                  intervals for the model, both baselines
+                                  and their paired excess. Structurally
+                                  verified outside the pinned runtime
+                                  only -- canonical interval values
+                                  pending pinned-runtime confirmation.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5622,6 +5647,115 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.15 — Dependence-aware cluster bootstrap
+
+RE-PRED.15 closes the method gap opened in RE-PRED.12: whether the
+excess differences observed against the primary baseline (RE-PRED.10)
+and mean-reversion (RE-PRED.13) are distinguishable from sampling
+noise, given that all 19 evaluable records are already documented as
+non-independent through two channels (RE-025.6): overlapping realized
+5-year outcome windows (RE-025.8) and repeated forecasts (RE-025.9).
+
+New file: `engine/dependence_bootstrap.py`.
+
+Method, agreed with Armando before implementation:
+
+-   `independence_clusters(records)` partitions evaluable records into
+    clusters via connected components over the union of two edge
+    sources: pairs returned by `overlapping_outcome_windows()`
+    (RE-025.8) and groups returned by `repeated_forecast_groups()`
+    (RE-025.9). No new dependence criterion is introduced -- both edge
+    sources are the same diagnostics already validated in RE-025.6/8/9,
+    connected here for the first time. Clusters are returned as
+    positions, not objects, so the same partition applies unchanged to
+    any parallel `ValidationRecord` list sharing the same order --
+    model, primary baseline (RE-PRED.9) or secondary baseline
+    (RE-PRED.11) -- an invariant those modules already guarantee.
+-   `cluster_bootstrap_ci()` resamples whole clusters with replacement,
+    never individual records, preserving intra-cluster dependence
+    instead of destroying it. This is the dependence-aware resampling
+    RE-PRED.1 requires; an i.i.d. bootstrap over the 19 records remains
+    explicitly prohibited (RE-PRED.12).
+-   `cluster_bootstrap_paired_excess()` applies the identical cluster
+    draw, in the same replica, to both model and baseline records
+    before computing the excess -- not two independent bootstraps
+    subtracted afterward. This preserves the paired variance structure
+    that RE-PRED.10/11's excess figures already rely on (model and
+    baseline are always evaluated on the same episodes, row for row).
+-   One fixed cluster partition, built once from the model's own
+    records, is reused for every bootstrap in this iteration --
+    standalone and paired. Outcome-window overlap (RE-025.8) is
+    episode/horizon-based and therefore identical for the model and
+    both baselines; repeated-forecast grouping (RE-025.9) is
+    model-specific by construction (it reflects `SimilarityEngine.top()`
+    match-set structure, which neither baseline shares), and using the
+    model's partition uniformly is what makes "paired" resampling
+    well-defined across all three series.
+-   Seed and replicate count are fixed constants, not free script
+    parameters: `BOOTSTRAP_SEED=42`, `BOOTSTRAP_REPLICATES=5000`.
+    Percentile interval fixed at (5, 95) -- a 90% interval, an explicit
+    design choice, not the only possible one.
+-   A bootstrap replica where a metric function returns `None` (e.g.
+    `rank_correlation()` degenerating when a resample happens to
+    produce identical forecasts) is excluded from that metric's
+    percentile, not treated as `0.0` -- the same absence-of-evidence
+    rule used throughout this module. `valid_replicates` is reported
+    explicitly alongside every interval.
+
+New test file: `tests/diagnostic_dependence_bootstrap.py` -- not a
+`verify_*.py` regression gate. Asserts no expected values. Still
+enforces the pinned-runtime gate (RE-025.5) before printing anything.
+Reports, for MAE / hit-rate / rank correlation: the model's own
+interval, the primary and mean-reversion baselines' intervals, and the
+paired excess interval against each. Zero baseline is explicitly out
+of scope for this iteration -- RE-PRED.13 already found it loses to
+the model on MAE by a wide, unambiguous margin; only primary and
+mean-reversion were flagged as open by RE-PRED.12.
+
+`tests/verify_core.py` adds `engine/dependence_bootstrap.py` to its
+structural Engine checks, per the RE-025.7/RE-PRED.9 precedent.
+
+Structural smoke test, run outside the pinned runtime -- not
+canonical: 4 independence clusters over the 19 evaluable records,
+sizes `[10, 7, 1, 1]`. If this holds under the pinned runtime, it
+confirms directly what RE-025.6/8/9 already implied qualitatively:
+`n=19` behaves, for dependence purposes, much closer to a handful of
+independent observations than to 19.
+
+The bootstrap itself uses no pandas/numpy -- pure stdlib `random` with
+a fixed integer seed, which is version-stable. The same reproducibility
+discipline applies regardless (RE-025.5): interval values are not
+canonical until confirmed under the pinned runtime, and no source of
+non-determinism is assumed absent just because the arithmetic doesn't
+touch the pinned-version-sensitive libraries.
+
+What this does not authorize:
+
+-   No `SimilarityEngine`, `EvidenceEngine` or `ObservableUniverse`
+    change.
+-   No gate-state change.
+-   No reinterpretation of RE-PRED.13's point-estimate finding until
+    the confidence intervals are confirmed under the pinned runtime.
+-   No claim, yet, about whether any excess interval does or does not
+    straddle zero -- that is exactly what pinned-runtime confirmation
+    will determine, recorded in a future iteration.
+
+Boundary:
+
+-   Two new files: `engine/dependence_bootstrap.py`,
+    `tests/diagnostic_dependence_bootstrap.py`.
+-   `tests/verify_core.py` updated to recognize the new engine file.
+-   No Frozen Core component modified.
+-   No existing metric function
+    (`mean_absolute_error`/`directional_hit_rate`/`rank_correlation`)
+    modified or reimplemented.
+-   No gate state changed.
+-   No operative wiring changed.
+-   No canonical interval values published yet -- pending pinned-runtime
+    confirmation, to be recorded in a future iteration.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5944,6 +6078,20 @@ way a direct function of the query's own value does. No `SimilarityEngine`
 change is made or authorized. RE-PRED.12's sampling-noise caveat applies
 with extra force to this smaller, still-dependent slicing.
 
+RE-PRED.15 closes RE-PRED.12's method gap directly.
+`engine/dependence_bootstrap.py` builds independence clusters from the
+union of RE-025.8's overlapping-outcome-window pairs and RE-025.9's
+repeated-forecast groups, then runs a cluster bootstrap (whole clusters
+resampled with replacement, never individual records) to produce
+dependence-aware confidence intervals for the model, both baselines, and
+their paired excess. Seed and replicate count are fixed constants
+(`seed=42`, `replicates=5000`), a 90% percentile interval. Structurally
+verified outside the pinned runtime only: 4 independence clusters over
+the 19 evaluable records, sizes `[10, 7, 1, 1]` -- not a canonical value.
+Whether the excess intervals against the primary and mean-reversion
+baselines straddle zero is exactly the open question this answers, once
+confirmed under the pinned runtime and recorded in a future iteration.
+
 ## Phase 3
 
 Inference Engine
@@ -6032,6 +6180,39 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.56
+
+-   Added RE-PRED.15: Dependence-aware cluster bootstrap, closing the
+    RE-PRED.12 method gap.
+-   Added `engine/dependence_bootstrap.py`
+    (`independence_clusters()`, `cluster_bootstrap_ci()`,
+    `cluster_bootstrap_paired_excess()`) and
+    `tests/diagnostic_dependence_bootstrap.py`, an exploratory,
+    non-canonical, non-regression-gated script that still enforces the
+    pinned-runtime check (RE-025.5).
+-   Clusters built via connected components over the union of
+    `overlapping_outcome_windows()` (RE-025.8) and
+    `repeated_forecast_groups()` (RE-025.9) -- no new dependence
+    criterion introduced, both edge sources already validated.
+-   Bootstrap resamples whole clusters with replacement, never
+    individual records, per RE-PRED.1's dependence-aware resampling
+    requirement; i.i.d. resampling over the 19 records remains
+    prohibited.
+-   Paired excess resampling applies the identical cluster draw to
+    model and baseline in the same replica, preserving paired variance
+    structure.
+-   Fixed, documented constants: `BOOTSTRAP_SEED=42`,
+    `BOOTSTRAP_REPLICATES=5000`, 90% percentile interval.
+-   `tests/verify_core.py` updated to recognize
+    `engine/dependence_bootstrap.py`, per the RE-025.7/RE-PRED.9
+    precedent.
+-   Structural smoke test outside the pinned runtime, not canonical: 4
+    independence clusters over the 19 evaluable records, sizes
+    `[10, 7, 1, 1]`.
+-   No Frozen Core component modified. No canonical interval values
+    published yet -- pending pinned-runtime confirmation, to be
+    recorded in a future iteration.
 
 ## Version 1.55
 
