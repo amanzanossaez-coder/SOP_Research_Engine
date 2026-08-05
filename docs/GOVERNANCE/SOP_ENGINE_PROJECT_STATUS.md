@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.48\
+**Version:** 1.49\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-DATA.1)
+# Execution State (as of RE-PRED.7)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -271,7 +271,13 @@ verified:
                         the downstream impact and canonical post-fix
                         metrics. RE-DATA.1 records future Shiller data
                         update automation as a validated-data pipeline,
-                        not a blind download.
+                        not a blind download. RE-PRED.7 defines the
+                        absolute-vs-excess-return boundary: absolute
+                        return is the existing descriptive Evidence
+                        surface, unchanged; excess return over a
+                        primary naive baseline is the future predictive-
+                        validity surface, to be implemented in the
+                        Research Validation Harness, not in Evidence.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -494,7 +500,16 @@ documentation-only gate-combination boundary work.
                                   acceptance criteria for the future fix.
                                   RE-BUG.2 fixes the bug in code.
                                   RE-BUG.3 records the post-fix canonical
-                                  metrics and match set.
+                                  metrics and match set. RE-PRED.7 defines
+                                  the absolute-vs-excess-return boundary:
+                                  absolute return remains the existing
+                                  Evidence descriptive surface; excess
+                                  return over a primary naive baseline
+                                  (unconditional historical mean/median)
+                                  becomes the future predictive-validity
+                                  surface, computed in the Research
+                                  Validation Harness. No baseline value is
+                                  computed yet.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -4674,6 +4689,111 @@ structural validation and test reruns.
 
 ------------------------------------------------------------------------
 
+## RE-PRED.7 — Absolute vs Excess Return Boundary
+
+RE-PRED.7 defines whether predictive validity should be evaluated
+against absolute 5-year return, excess return over a naive baseline, or
+both, in separate channels.
+
+It is documentation-only.
+
+No code changed.
+
+Two channels, not one:
+
+-   Absolute return channel: what happened after the drawdown bottom.
+    This is the existing Evidence descriptive surface
+    (`Evidence.median_return`, `future_return_5y`). No new field, no
+    renamed field. Its purpose is descriptive evidence, not a
+    predictive-validity claim by itself.
+-   Excess return channel: whether the model's forecast adds value over
+    a naive rule that requires no similarity matching. This is the
+    future predictive-validity surface. It does not exist yet.
+
+Motivation:
+
+RE-025.3 already found that a rule that always predicts "positive"
+produces almost the same directional hit rate as the current model,
+because 0/19 forecasts were negative in the evaluated sample. A model
+can score well on an absolute-return metric while adding no
+discriminating value over a rule that ignores current conditions
+entirely. Absolute-return metrics alone cannot distinguish those two
+cases. Excess return can.
+
+Primary baseline:
+
+The primary baseline for excess return is the unconditional historical
+mean/median `future_return_5y` across the full episode set, evaluated
+point-in-time (same `ObservableUniverse` discipline as RE-025.1) so it
+does not itself leak future information. This baseline answers the
+sharpest question available today: does conditioning the forecast on
+the current snapshot via `SimilarityEngine` add anything beyond "stocks
+have historically gone up over 5 years"?
+
+Secondary baselines, already named in RE-PRED.1, remain diagnostic, not
+headline: constant full-universe forecast, zero/no-change, simple
+mean-reversion. This is a mandatory-comparison requirement, not a
+beat-all-four requirement.
+
+Per-metric mechanics are not uniform:
+
+-   MAE and directional hit-rate require an actual baseline forecast
+    series to compute excess against. Excess MAE is baseline MAE minus
+    model MAE (positive means the model beats the baseline). Excess
+    hit-rate is defined analogously.
+-   Rank correlation does not need a baseline forecast series. A
+    constant-forecast baseline has no rank variation, so its rank
+    correlation is undefined / zero by construction. The existing rank
+    correlation value already tests whether the model's forecast
+    ordering carries information beyond none. No new "excess"
+    transformation is needed for this metric; this boundary states that
+    explicitly so it is not built twice.
+
+Placement:
+
+Excess return is a Research Validation Harness concept, not an Evidence
+concept. Evidence describes a live snapshot's matched sample and has no
+"actual" to compare against; excess return is only computable in
+backtest, across historical episodes with realized outcomes. This
+iteration keeps that boundary explicit so no future implementation adds
+baseline or excess-return logic into `models/evidence.py` or
+`engine/evidence_engine.py`.
+
+Expected outcome, stated in advance:
+
+Given RE-025.3 (a trivial rule already matches the model's hit rate) and
+RE-BUG.3 (rank correlation moved further negative after the duration
+fix, not less negative), the most likely outcome once excess return is
+actually computed (a future iteration) is that the primary baseline
+matches or beats the model on at least one canonical metric. That
+outcome, if it occurs, must be recorded plainly as a finding, not
+softened or treated as an implementation problem to fix.
+
+Rejected shortcuts:
+
+-   Do not treat absolute-return metrics (current MAE, hit-rate, rank
+    correlation) as if they already constitute predictive-validity
+    evidence.
+-   Do not compute excess return using a single blended baseline that
+    mixes the four candidate baselines into one number.
+-   Do not add baseline or excess-return fields to `Evidence` or
+    `models/evidence.py`.
+-   Do not apply the same excess-return transformation to rank
+    correlation as to MAE / hit-rate.
+-   Do not compute any baseline value in this iteration.
+
+Boundary:
+
+-   No code changed in RE-PRED.7.
+-   No baseline value computed.
+-   No excess-return metric implemented.
+-   No target freeze changed.
+-   No gate threshold changed.
+-   No operative wiring changed.
+-   No Evidence field added.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -4900,6 +5020,18 @@ confirm `Price.1` semantics, back up the prior local source, rerun tests
 and log the update before replacing `data/raw/shiller.xlsx`. Manual
 updates remain the current process.
 
+RE-PRED.7 defines the absolute-vs-excess-return boundary. Absolute
+return stays the existing Evidence descriptive surface; it is not
+redefined or renamed. Excess return over a primary naive baseline
+(unconditional historical mean/median `future_return_5y`, evaluated
+point-in-time) becomes the future predictive-validity surface, to be
+computed in the Research Validation Harness, not in Evidence. MAE and
+directional hit-rate require an explicit baseline forecast series to
+compute excess against; rank correlation already tests ordering against
+no signal and needs no separate excess transformation. No baseline value
+is computed and no excess-return metric is implemented in this
+iteration.
+
 ## Phase 3
 
 Inference Engine
@@ -4988,6 +5120,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.49
+
+-   Added RE-PRED.7: Absolute vs Excess Return Boundary.
+-   Separated absolute return (existing Evidence descriptive surface,
+    unchanged) from excess return over a naive baseline (future
+    predictive-validity surface, not yet implemented).
+-   Selected the unconditional historical mean/median `future_return_5y`
+    as the primary baseline, evaluated point-in-time.
+-   Kept constant full-universe forecast, zero/no-change and simple
+    mean-reversion as secondary diagnostic baselines, per the RE-PRED.1
+    mandatory-comparison requirement.
+-   Defined per-metric excess mechanics: MAE and directional hit-rate
+    need an explicit baseline forecast series; rank correlation already
+    tests ordering against no signal and needs no separate excess
+    transformation.
+-   Established that excess return belongs to the Research Validation
+    Harness, not to `Evidence` or `models/evidence.py`.
+-   Recorded, in advance, that the most likely outcome once excess
+    return is computed is that the primary baseline matches or beats the
+    model on at least one canonical metric, given RE-025.3 and RE-BUG.3.
+-   No code changed. No baseline value computed. No excess-return metric
+    implemented.
 
 ## Version 1.48
 
