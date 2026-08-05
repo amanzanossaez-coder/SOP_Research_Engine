@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.49\
+**Version:** 1.50\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.7)
+# Execution State (as of RE-PRED.8)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -278,6 +278,17 @@ verified:
                         primary naive baseline is the future predictive-
                         validity surface, to be implemented in the
                         Research Validation Harness, not in Evidence.
+                        RE-PRED.8 defines acceptance criteria for that
+                        primary baseline: a point-in-time expanding
+                        median of `future_return_5y`, reusing
+                        `ObservableUniverse` and bottom_index
+                        self-exclusion, evaluated over the same
+                        evaluable records already used by the model.
+                        It also corrects RE-PRED.7's rank-correlation
+                        claim forward: because this baseline varies per
+                        episode, it does have rank variation, and its
+                        rank correlation is a real, computable
+                        comparison against the model's.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -505,11 +516,22 @@ documentation-only gate-combination boundary work.
                                   absolute return remains the existing
                                   Evidence descriptive surface; excess
                                   return over a primary naive baseline
-                                  (unconditional historical mean/median)
                                   becomes the future predictive-validity
                                   surface, computed in the Research
                                   Validation Harness. No baseline value is
-                                  computed yet.
+                                  computed yet. RE-PRED.8 defines
+                                  acceptance criteria for that primary
+                                  baseline as a point-in-time expanding
+                                  median of `future_return_5y`, reusing
+                                  `ObservableUniverse` and bottom_index
+                                  self-exclusion, evaluated over the same
+                                  evaluable records already used by the
+                                  model. It corrects RE-PRED.7 forward:
+                                  because this baseline varies per
+                                  episode, its rank correlation is a real,
+                                  computable comparison, not an undefined
+                                  quantity. Still no code and no computed
+                                  value.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -4794,6 +4816,111 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.8 — Primary baseline acceptance criteria
+
+RE-PRED.8 defines acceptance criteria for computing the primary
+excess-return baseline defined in RE-PRED.7. It also corrects
+RE-PRED.7's rank-correlation claim forward.
+
+It is documentation-only.
+
+No code changed.
+
+Correction to RE-PRED.7:
+
+RE-PRED.7 stated that rank correlation "does not need a baseline
+forecast series" because "a constant-forecast baseline has no rank
+variation." That claim implicitly assumed a single global baseline
+number computed once over the full 23-episode dataset. That design
+would violate the point-in-time discipline established in RE-025.1 — it
+would inform a 1907 episode's baseline with data from 2020, which did
+not yet exist in 1907. The primary baseline, as specified below, is not
+a single constant: it is a point-in-time expanding statistic that varies
+per episode. It therefore does have rank variation, and its rank
+correlation against realized outcomes is a real, computable comparison
+against the model's rank correlation, not an undefined quantity. This
+correction is recorded here rather than silently rewriting RE-PRED.7,
+per RE-DOC-002.
+
+Baseline definition:
+
+For each evaluable episode `X`, with `bottom_date = t`:
+
+    baseline_forecast(X) = median(future_return_5y) over
+    ObservableUniverse(dataset, as_of=t).episodes(),
+    excluding X by bottom_index
+
+This reuses the exact same temporal-safety machinery already verified
+for the model's own forecast in RE-025.1 (`ObservableUniverse`,
+self-exclusion by `bottom_index`) — no new mechanism is introduced. The
+only difference from the model's forecast is that the baseline is
+unconditional: it does not pass through `SimilarityEngine.top()`, so it
+does not condition on the current snapshot's similarity to `X`.
+
+Statistic choice:
+
+Median, not mean, is the primary baseline statistic. It matches the
+model's own canonical statistic (`Evidence.median_return`), keeping the
+comparison apples-to-apples. Mean may be recorded as a secondary
+diagnostic, never as the headline comparator.
+
+Sample alignment:
+
+The baseline is evaluated over exactly the same evaluable record set
+already established by `ValidationHarness` (today: 19 records). No
+separate inclusion or exclusion criteria are invented for the baseline.
+Using a different sample for baseline vs. model would bias the
+comparison.
+
+Metrics:
+
+Three head-to-head comparisons against the model's existing canonical
+metrics, side by side, not blended:
+
+-   Baseline MAE vs model MAE (`0.06928793787076225`).
+-   Baseline directional hit-rate vs model directional hit-rate
+    (`0.9473684210526315`).
+-   Baseline rank correlation vs model rank correlation
+    (`-0.26505171850684983`).
+
+Excess is reported as baseline MAE minus model MAE for MAE (lower is
+better, so a positive excess means the model wins), and as model minus
+baseline for hit-rate and rank correlation (higher is better, so a
+positive excess means the model wins).
+
+Deferred to a later iteration:
+
+-   Secondary baselines (constant full-universe forecast, zero /
+    no-change, simple mean-reversion) are not defined here. If the
+    constant full-universe forecast is used later, it must be labeled
+    explicitly as not point-in-time-safe and used as a diagnostic only,
+    never as a headline comparator.
+-   Actual baseline computation and values belong to the next code
+    iteration, not to RE-PRED.8.
+
+Rejected shortcuts:
+
+-   Do not use a single global constant baseline computed once over all
+    23 episodes.
+-   Do not invent a separate evaluable-record definition for the
+    baseline.
+-   Do not use mean as the primary baseline statistic.
+-   Do not blend MAE, hit-rate and rank correlation excess into one
+    score.
+-   Do not compute any baseline value in this iteration.
+
+Boundary:
+
+-   No code changed in RE-PRED.8.
+-   No baseline value computed.
+-   No excess-return metric implemented.
+-   No secondary baseline defined.
+-   No target freeze changed.
+-   No gate threshold changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5032,6 +5159,19 @@ no signal and needs no separate excess transformation. No baseline value
 is computed and no excess-return metric is implemented in this
 iteration.
 
+RE-PRED.8 defines acceptance criteria for the primary baseline and
+corrects RE-PRED.7's rank-correlation claim forward: that claim assumed
+a single global constant baseline, which would not be point-in-time
+safe. The primary baseline is instead a point-in-time expanding median
+of `future_return_5y`, computed by reusing `ObservableUniverse` and
+bottom_index self-exclusion — the same temporal-safety machinery already
+verified for the model's own forecast in RE-025.1 — evaluated over the
+model's own evaluable record set. Because this baseline varies per
+episode, its rank correlation is a real, computable comparison against
+the model's, not an undefined quantity. Mean, and the remaining
+secondary baselines, remain deferred. No baseline value is computed and
+no code changes in this iteration.
+
 ## Phase 3
 
 Inference Engine
@@ -5120,6 +5260,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.50
+
+-   Added RE-PRED.8: Primary baseline acceptance criteria.
+-   Corrected RE-PRED.7's rank-correlation claim forward: the primary
+    baseline is not a single global constant, so it does have rank
+    variation and its rank correlation is a real, computable comparison
+    against the model's — not an undefined quantity.
+-   Defined the primary baseline as a point-in-time expanding median of
+    `future_return_5y`, reusing `ObservableUniverse` and bottom_index
+    self-exclusion — the same temporal-safety machinery already verified
+    for the model's own forecast in RE-025.1.
+-   Required the baseline to be evaluated over the exact same evaluable
+    record set already used by `ValidationHarness` (19 records), not a
+    separately invented sample.
+-   Fixed median, not mean, as the primary baseline statistic, to keep
+    the comparison against `Evidence.median_return` apples-to-apples.
+-   Deferred secondary baselines (constant full-universe forecast, zero
+    / no-change, mean-reversion) to a later iteration; required the
+    constant full-universe forecast, if used later, to be labeled
+    explicitly as not point-in-time-safe.
+-   No code changed. No baseline value computed. No excess-return metric
+    implemented.
 
 ## Version 1.49
 
