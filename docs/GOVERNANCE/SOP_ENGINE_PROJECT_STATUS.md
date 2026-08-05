@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.52\
+**Version:** 1.53\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.10)
+# Execution State (as of RE-PRED.12)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -298,7 +298,16 @@ verified:
                         baseline on any of the three canonical metrics --
                         it ties on directional hit-rate and loses on MAE
                         and rank correlation. Predictive validity is not
-                        demonstrated relative to this baseline.
+                        demonstrated relative to this baseline. RE-PRED.11
+                        implements two secondary baselines (zero,
+                        mean-reversion) to isolate whether that finding
+                        is an artifact of the primary baseline choice --
+                        results pending pinned-runtime confirmation.
+                        RE-PRED.12 records, as an explicit open question,
+                        that no baseline comparison on this evaluated
+                        sample addresses whether any excess value is
+                        distinguishable from sampling noise given N=19
+                        dependent records.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -564,7 +573,28 @@ documentation-only gate-combination boundary work.
                                   primary baseline on any of the three
                                   canonical metrics. Predictive validity
                                   is not demonstrated relative to this
-                                  baseline.
+                                  baseline. A proposal to formalize a
+                                  `NOT_DEMONSTRATED` gate state was
+                                  raised and deliberately deferred: it
+                                  would rest on one baseline over a
+                                  non-independent N=19 sample, and today
+                                  it would not change the resulting
+                                  posture ceiling (still `Conserve`,
+                                  `Prepare` allowed) versus the existing
+                                  `not measurable` state. RE-PRED.11
+                                  implements two secondary baselines
+                                  (zero, mean-reversion) to test whether
+                                  the finding is an artifact of the
+                                  primary baseline choice, structurally
+                                  verified outside the pinned runtime
+                                  only. RE-PRED.12 records that
+                                  baseline-choice robustness and
+                                  sampling-noise robustness are different
+                                  questions -- secondary baselines answer
+                                  the first, not the second. The
+                                  gate-state decision is deferred until
+                                  the full three-baseline picture is
+                                  confirmed under the pinned runtime.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -5163,6 +5193,152 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.10.1 — Deferred: `NOT_DEMONSTRATED` gate state proposal
+
+A proposal was raised, immediately after RE-PRED.10, to formalize a
+third `EvidenceQualityGate` output state, `NOT_DEMONSTRATED`, distinct
+from `NOT_MEASURABLE` and `CONSERVATIVE`, taking precedence over local
+input completeness (a globally disproven method cannot be rescued by a
+well-measured local sample).
+
+The proposal is deferred, not rejected, for three reasons:
+
+-   It would rest on a single baseline comparison over a non-independent
+    N=19 sample (RE-025.6, RE-025.8, RE-025.9) -- the same category of
+    overreaction-to-one-data-point the project's robustness axiom exists
+    to prevent.
+-   `EvidenceQualityGate.evaluate()`'s current code already forces
+    `NOT_MEASURABLE` today regardless of global state, because
+    `independence_dispersion_measured` is hardcoded `False`
+    (RE-030.1/RE-030.2). A new state would today produce the identical
+    posture-ceiling consequence (`Conserve`, `Prepare` allowed) as the
+    existing `not measurable` state -- no operative behavior depends on
+    making the distinction yet.
+-   Adding a new state touches the taxonomy `GateCombination` (RE-034)
+    already consumes, before there is a concrete behavioral reason for
+    treating it differently from `NOT_MEASURABLE`.
+
+Explicit trigger for revisiting: once RE-PRED.11's secondary baselines
+are confirmed under the pinned runtime, if the model loses to the full
+set (primary, zero, mean-reversion) on a majority of canonical metrics,
+the case for a formal `NOT_DEMONSTRATED` state becomes materially
+stronger and should be reopened. If the model beats one or more
+secondary baselines while only losing to the primary, the finding is
+more nuanced and likely does not warrant a new top-level state --
+sharper `explanations` text within the existing two-state model may be
+sufficient instead.
+
+Boundary:
+
+-   No code changed.
+-   No new gate state added.
+-   No posture ceiling changed.
+-   This is not a rejection of the underlying finding from RE-PRED.10 --
+    only of formalizing it into gate architecture before a fuller
+    evidentiary basis exists.
+
+------------------------------------------------------------------------
+
+## RE-PRED.11 — Secondary baselines implementation
+
+RE-PRED.11 implements two secondary baselines in
+`engine/baseline_harness.py`, to isolate whether the RE-PRED.10 finding
+is an artifact of the primary baseline choice.
+
+It extends an already-isolated, non-Frozen-Core file (RE-PRED.9). No
+existing function in that file is modified. No other file changes.
+
+New functions:
+
+-   `zero_forecast(episode)` -- returns `0.0` unconditionally. No
+    parameters, no dependency on `ObservableUniverse` or any comparable.
+    By construction, `directional_hit_rate()` excludes `forecast == 0`
+    records and `rank_correlation()` returns `None` when all forecasts
+    are identical -- this baseline can only produce a signal in MAE.
+    This is expected, not a defect.
+-   `mean_reversion_forecast(episode)` -- returns `-episode.drawdown`.
+    Coefficient 1, zero parameters fitted against history. Uses only
+    `episode.drawdown`, an Event field already known at the episode's
+    own bottom -- no comparable episodes, no calibration. Deliberately
+    the simplest defensible definition of "reversion," not the only
+    possible one: a history-calibrated version was rejected to avoid
+    introducing a new overfitting risk inside what must remain a naive
+    baseline.
+-   `build_baseline_records(model_records, forecast_fn)` -- generic
+    constructor for baselines that do not need `ObservableUniverse`.
+    Same RE-PRED.8 rule as `BaselineHarness`: `evaluable` and `actual`
+    are inherited directly from the model's own records, never decided
+    separately for the baseline.
+
+`tests/verify_secondary_baselines.py` re-asserts the existing canonical
+model and primary-baseline values (RE-BUG.3, RE-PRED.10) as a regression
+guard, asserts the expected `None` degeneracy of zero's hit-rate and
+rank correlation, and prints the full three-way comparison table (model
+/ primary baseline / zero / mean-reversion). It does not hardcode
+canonical zero/mean-reversion values -- those require pinned-runtime
+confirmation, the same discipline RE-PRED.9 established and RE-BUG.2
+motivated.
+
+Boundary:
+
+-   No Frozen Core component modified.
+-   No existing function modified.
+-   No canonical secondary-baseline value established.
+-   No gate state changed.
+-   No target freeze changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
+## RE-PRED.12 — Open question: sampling-noise robustness
+
+RE-PRED.12 records an explicit open question that RE-PRED.11's
+secondary baselines do not, and cannot, resolve.
+
+It is documentation-only. No code changed.
+
+Two distinct notions of robustness:
+
+-   Baseline-choice robustness: is the RE-PRED.10 finding specific to
+    the point-in-time expanding median, or does it hold against other
+    naive baselines too? RE-PRED.11 answers this.
+-   Sampling-noise robustness: are the excess differences observed
+    (e.g. -0.00187935227097 excess MAE, -0.03333307069863 excess rank
+    correlation from RE-PRED.10) distinguishable from chance, given that
+    all evaluations share the same 19 evaluable records, already
+    documented as non-independent through two channels (RE-025.6):
+    overlapping realized 5-year outcome windows (RE-025.8) and repeated
+    forecasts (RE-025.9)? RE-PRED.11 does not answer this -- every
+    additional baseline is still scored against the same dependent
+    19-record sample.
+
+This is not a new discovery. It follows directly from RE-025.6, which
+already declined to publish a numeric effective N. It is recorded here,
+specifically, so that a favorable or unfavorable secondary-baseline
+result is not mistaken for statistical confirmation either way.
+
+What this explicitly does not authorize:
+
+-   An i.i.d. bootstrap over the 19 records -- prohibited by RE-PRED.1's
+    uncertainty requirement, which requires dependence-aware resampling,
+    not naive resampling that ignores the known overlap and repeated-
+    forecast structure.
+-   Treating N=19 as if it were 19 independent observations for any
+    significance statement.
+
+This gap is not resolved by this iteration. It remains open, tracked
+here, for future dependence-aware uncertainty work -- scope and method
+not yet defined.
+
+Boundary:
+
+-   No code changed.
+-   No statistical test implemented.
+-   No effective-N value published.
+-   No gate state changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5440,6 +5616,22 @@ state with a direct quantitative result but does not itself change any
 gate threshold or capital posture ceiling — that remains a separate,
 explicit governance decision under RE-029.7.
 
+A proposal to formalize `NOT_DEMONSTRATED` as a third
+`EvidenceQualityGate` output state was raised immediately after
+RE-PRED.10 and deferred in RE-PRED.10.1: it would rest on one baseline
+over a non-independent N=19 sample, and today it would not change the
+resulting posture ceiling versus the existing `not measurable` state.
+RE-PRED.11 implements two secondary baselines (`zero_forecast`,
+`mean_reversion_forecast = -drawdown`) in `engine/baseline_harness.py`
+to test whether RE-PRED.10's finding survives a change of baseline,
+structurally verified outside the pinned runtime only. RE-PRED.12
+records, as an explicit open question, that baseline-choice robustness
+(what RE-PRED.11 tests) and sampling-noise robustness (whether any
+excess value is distinguishable from chance given N=19 dependent
+records) are different questions — this iteration answers only the
+first. The gate-state decision is deferred until the full three-baseline
+picture is confirmed under the pinned runtime.
+
 ## Phase 3
 
 Inference Engine
@@ -5528,6 +5720,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.53
+
+-   Added RE-PRED.10.1: recorded and deferred a proposal to formalize
+    `NOT_DEMONSTRATED` as a third `EvidenceQualityGate` output state.
+    Deferral reasons: rests on one baseline over a non-independent N=19
+    sample; no operative posture-ceiling consequence today versus the
+    existing `not measurable` state; touches `GateCombination` taxonomy
+    before a concrete behavioral reason exists. Recorded an explicit
+    trigger for revisiting once secondary baselines are confirmed.
+-   Added RE-PRED.11: implemented `zero_forecast()` and
+    `mean_reversion_forecast()` (`-drawdown`, zero fitted parameters) in
+    `engine/baseline_harness.py`, plus generic
+    `build_baseline_records(model_records, forecast_fn)`. No existing
+    function modified. Added `tests/verify_secondary_baselines.py`,
+    re-asserting existing canonical values as a regression guard and
+    printing the full three-way comparison table. No canonical
+    secondary-baseline value established yet.
+-   Added RE-PRED.12: recorded, as an explicit open question,
+    that baseline-choice robustness (addressed by RE-PRED.11) and
+    sampling-noise robustness (whether excess values are distinguishable
+    from chance given N=19 dependent records) are different questions.
+    The second remains unresolved and unauthorized for naive i.i.d.
+    resampling, per RE-PRED.1.
+-   No code changed in RE-PRED.10.1 or RE-PRED.12.
 
 ## Version 1.52
 

@@ -165,6 +165,87 @@ def missing_baseline_forecast_count(
     return count
 
 
+def zero_forecast(episode) -> float:
+    """
+    RE-PRED.11 -- baseline secundario "zero": no se espera ningun
+    retorno futuro.
+
+    Sin parametros, sin dependencia de ObservableUniverse ni de ningun
+    comparable historico -- es un valor fijo conocido de antemano.
+    Sirve de piso: si el modelo no le gana ni a esto, no aporta
+    ninguna direccion util.
+
+    directional_hit_rate() excluye forecast==0 por diseño (un cero no
+    expresa direccion) y rank_correlation() devuelve None cuando todos
+    los forecasts son identicos (sin variacion de rango) -- este
+    baseline solo puede dar señal en MAE. Es el comportamiento
+    esperado, no un defecto de este baseline.
+    """
+
+    return 0.0
+
+
+def mean_reversion_forecast(episode) -> Optional[float]:
+    """
+    RE-PRED.11 -- baseline secundario "mean-reversion": rebote de
+    magnitud igual a la profundidad de la caida en el fondo,
+    coeficiente 1, cero parametros ajustados contra el historico.
+
+    Usa unicamente episode.drawdown -- un dato Event ya conocido en el
+    propio fondo del episodio, no requiere ningun comparable historico
+    ni calibracion. drawdown es negativo por convencion; el forecast es
+    su signo invertido.
+
+    Definicion elegida deliberadamente simple. No es la unica nocion
+    posible de "reversion a la media" -- una version calibrada contra
+    el historico introduciria un riesgo de sobreajuste nuevo dentro de
+    lo que debe seguir siendo un baseline ingenuo, sin parametros
+    libres (RE-PRED.11).
+    """
+
+    if episode.drawdown is None:
+        return None
+
+    return -episode.drawdown
+
+
+def build_baseline_records(
+    model_records: List[ValidationRecord],
+    forecast_fn,
+) -> List[ValidationRecord]:
+    """
+    RE-PRED.11 -- construye ValidationRecord de baseline a partir de
+    una funcion forecast_fn(episode) -> float | None, para baselines
+    que no dependen de ObservableUniverse (zero, mean-reversion).
+
+    Mismo principio de diseño que BaselineHarness (RE-PRED.9): evaluable
+    y actual se heredan directamente del ValidationRecord del modelo --
+    nunca se inventa un criterio de inclusion propio para el baseline.
+
+    comparable_count queda en 0 para estos baselines: no usan ningun
+    comparable historico, a diferencia del baseline primario.
+    """
+
+    baseline_records = []
+
+    for record in model_records:
+
+        forecast = forecast_fn(record.episode)
+
+        baseline_records.append(
+            ValidationRecord(
+                episode=record.episode,
+                horizon_years=record.horizon_years,
+                forecast=forecast,
+                actual=record.actual,
+                comparable_count=0,
+                evaluable=record.evaluable,
+            )
+        )
+
+    return baseline_records
+
+
 def excess_summary(
     model_records: List[ValidationRecord],
     baseline_records: List[ValidationRecord],
