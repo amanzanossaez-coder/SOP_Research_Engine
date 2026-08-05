@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.50\
+**Version:** 1.51\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.8)
+# Execution State (as of RE-PRED.9)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -288,7 +288,13 @@ verified:
                         claim forward: because this baseline varies per
                         episode, it does have rank variation, and its
                         rank correlation is a real, computable
-                        comparison against the model's.
+                        comparison against the model's. RE-PRED.9
+                        implements that baseline in code:
+                        `engine/baseline_harness.py` and
+                        `tests/verify_baseline_harness.py`. Structurally
+                        verified outside the pinned runtime only. No
+                        baseline value is canonical yet -- that requires
+                        confirmation under `requirements.txt`.
 
 ## Matches the diagram's named objects: ResearchEngine aligned
 
@@ -531,7 +537,19 @@ documentation-only gate-combination boundary work.
                                   episode, its rank correlation is a real,
                                   computable comparison, not an undefined
                                   quantity. Still no code and no computed
-                                  value.
+                                  value. RE-PRED.9 implements the
+                                  baseline in code
+                                  (`engine/baseline_harness.py`,
+                                  `tests/verify_baseline_harness.py`),
+                                  reusing `ObservableUniverse` and the
+                                  existing MAE / hit-rate / rank
+                                  correlation functions unmodified.
+                                  Structurally verified (record
+                                  alignment, the no-missing-forecast
+                                  invariant) outside the pinned runtime
+                                  only. No baseline value is canonical --
+                                  pending confirmation under
+                                  `requirements.txt`.
   Data Update Automation         Planned. RE-DATA.1 records future
                                   Shiller source refresh policy:
                                   downloadable source may be automated
@@ -4921,6 +4939,96 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.9 — Primary baseline implementation
+
+RE-PRED.9 implements the primary baseline defined in RE-PRED.8 in code.
+
+New files:
+
+-   `engine/baseline_harness.py` — `baseline_forecast()`, computing the
+    point-in-time expanding median of `future_return_{years}y` by
+    reusing `ObservableUniverse` and bottom_index self-exclusion, the
+    same temporal-safety machinery already verified for the model's own
+    forecast in RE-025.1; `BaselineHarness`, producing baseline
+    `ValidationRecord`s aligned 1:1 with the model's, inheriting
+    `evaluable` and `actual` directly rather than deciding its own
+    inclusion criteria; `missing_baseline_forecast_count()`, an explicit
+    diagnostic for the invariant below; `excess_summary()`, the
+    head-to-head comparison required by RE-PRED.8, reusing
+    `mean_absolute_error()`, `directional_hit_rate()` and
+    `rank_correlation()` from `engine/validation_metrics.py`
+    unmodified.
+-   `tests/verify_baseline_harness.py` — functional smoke test.
+
+No existing file was modified except `tests/verify_core.py`, which adds
+`engine/baseline_harness.py` to its structural Engines list, following
+the RE-025.7 precedent.
+
+No Frozen Core component was touched. `ObservableUniverse`,
+`SimilarityEngine`, `EvidenceEngine` and the existing metric functions
+are consumed through their public interfaces exactly as published, the
+same pattern already used to justify RE-025.1-RE-026.1.2 under the
+Frozen Core Policy.
+
+Invariant proven by construction, not merely observed:
+
+If a model `ValidationRecord` is evaluable, its baseline counterpart
+can never have `forecast=None`. The model's `SimilarityEngine.top()`
+matches are drawn from `_comparable_episodes(dataset, episode)` — the
+exact same unconditional pool this baseline uses without narrowing by
+similarity. If at least one of the model's matches had a non-`None`
+`future_return_{years}y` (a necessary condition for the model to be
+evaluable), that same value is present in the baseline's pool. The
+verification test checks this invariant explicitly via
+`missing_baseline_forecast_count()` rather than assuming it holds.
+
+Sample alignment, verified structurally:
+
+-   `episodes = 23`, `sample_size = 21`, `evaluated_count = 19` — the
+    existing canonical values, unchanged.
+-   Baseline record count equals model record count.
+-   Baseline evaluable count equals model evaluable count.
+-   `missing_baseline_forecast_count = 0`.
+
+Verification status:
+
+`tests/verify_baseline_harness.py` was run outside the pinned runtime
+only, to confirm the code executes without error and the structural
+invariants above hold. It was not run under `requirements.txt`.
+
+No baseline value is canonical yet. `mean_absolute_error()`,
+`directional_hit_rate()` and `rank_correlation()` applied to the
+baseline records produce real numbers in that non-pinned run, but
+RE-025.5 already established that different pandas/numpy versions can
+change these exact computations. Treating a non-pinned result as
+canonical here would repeat, on new code, the same category of mistake
+RE-BUG.2 spent an entire iteration correcting. The next iteration
+(RE-PRED.10) records the canonical baseline values once
+`tests/verify_baseline_harness.py` has been run and confirmed under the
+pinned runtime.
+
+Rejected shortcuts:
+
+-   Do not treat a non-pinned execution result as canonical.
+-   Do not hardcode `EXPECTED_*` baseline constants before pinned-runtime
+    confirmation.
+-   Do not modify `engine/validation_metrics.py` to special-case the
+    baseline; reuse it unmodified.
+-   Do not let the baseline invent its own evaluable set.
+
+Boundary:
+
+-   No Frozen Core component modified.
+-   No existing file modified except `tests/verify_core.py` (structural
+    list only).
+-   No canonical baseline value established.
+-   No secondary baseline implemented.
+-   No target freeze changed.
+-   No gate threshold changed.
+-   No operative wiring changed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -5172,6 +5280,20 @@ the model's, not an undefined quantity. Mean, and the remaining
 secondary baselines, remain deferred. No baseline value is computed and
 no code changes in this iteration.
 
+RE-PRED.9 implements the primary baseline in code:
+`engine/baseline_harness.py` and `tests/verify_baseline_harness.py`.
+It reuses `ObservableUniverse`, bottom_index self-exclusion and the
+existing MAE / hit-rate / rank correlation functions unmodified — no
+Frozen Core component is touched, and no existing file changes except
+`tests/verify_core.py`'s structural list. The invariant that a baseline
+forecast can never be `None` when the model's own record is evaluable
+is proven by construction (the model's matches are a subset of the
+baseline's unconditional comparable pool) and checked explicitly by the
+test, not assumed. The test has only been run outside the pinned
+runtime, to confirm the code executes and the structural invariants
+hold. No baseline value is canonical yet; RE-PRED.10 will record the
+canonical baseline metrics once confirmed under `requirements.txt`.
+
 ## Phase 3
 
 Inference Engine
@@ -5260,6 +5382,33 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.51
+
+-   Added RE-PRED.9: Primary baseline implementation.
+-   Added `engine/baseline_harness.py`: `baseline_forecast()`,
+    `BaselineHarness`, `missing_baseline_forecast_count()`,
+    `excess_summary()`.
+-   Added `tests/verify_baseline_harness.py`: functional smoke test,
+    deliberately without hardcoded canonical baseline values.
+-   Added `engine/baseline_harness.py` to `tests/verify_core.py`'s
+    structural Engines list.
+-   No Frozen Core component modified. No existing file modified except
+    `tests/verify_core.py`'s structural list.
+-   Reused `ObservableUniverse`, bottom_index self-exclusion and the
+    existing MAE / hit-rate / rank correlation functions unmodified —
+    no duplicated metric logic.
+-   Proved by construction, and checked explicitly in the test, that a
+    baseline forecast can never be `None` when the corresponding model
+    record is evaluable.
+-   Verified structurally (record alignment, evaluable-count alignment,
+    the no-missing-forecast invariant) outside the pinned runtime only.
+-   Explicitly did not hardcode canonical baseline metrics: RE-025.5
+    already established that non-pinned runs can differ from the pinned
+    canonical values, and treating a non-pinned result as canonical here
+    would repeat the mistake RE-BUG.2 corrected. Canonical baseline
+    values are deferred to RE-PRED.10, pending pinned-runtime
+    confirmation.
 
 ## Version 1.50
 
