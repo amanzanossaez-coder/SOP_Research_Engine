@@ -87,6 +87,8 @@ def main():
                 "engine/validation_metrics.py",
                 "engine/baseline_harness.py",
                 "engine/dependence_bootstrap.py",
+                "engine/evidence_quality_gate.py",
+                "engine/regime_comparability_gate.py",
                 "engine/evidence_engine.py",
                 "engine/assessment_engine.py",
                 "engine/inference_engine.py",

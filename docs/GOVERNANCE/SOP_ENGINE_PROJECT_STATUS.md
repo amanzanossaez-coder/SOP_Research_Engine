@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.58\
+**Version:** 1.59\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-035.1)
+# Execution State (as of RE-036.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -547,10 +547,31 @@ documentation-only gate-combination boundary work.
                                   thresholds and no capital posture
                                   mapping -- RE-034.1's provisional mapping
                                   remains documentation-only.
-  Regime Comparability Gate      Boundary documented in RE-031.1. No
-                                  code. No thresholds. No capital posture
-                                  mapping. Not wired into any operative
-                                  flow.
+  Regime Comparability Gate      Boundary documented in RE-031.1.
+                                  RE-036.1 adds the first isolated
+                                  implementation:
+                                  `engine/regime_comparability_gate.py`.
+                                  Three dimensions active (cape,
+                                  inflation, interest_rate) -- already
+                                  populated in `Context` per episode and
+                                  unused by `SimilarityEngine`'s score, so
+                                  no new data ingestion was needed.
+                                  Strict [min, max] coverage check against
+                                  the current match set only (local, not
+                                  global), no percentile or margin --
+                                  deliberate choice to defer that question
+                                  until an actual outlier problem is
+                                  observed. Volatility / liquidity /
+                                  policy / market-structure dimensions
+                                  remain explicitly not measurable -- no
+                                  data source exists for them. Still not
+                                  wired into run.py, DecisionEngine,
+                                  EvidenceQualityGate or
+                                  gate_combination. RE-034.1's posture
+                                  mapping has no entry yet for this gate's
+                                  real states -- that remains a separate,
+                                  future governance decision, not a
+                                  consequence of this code existing.
   Personal Capacity Boundary     Classification boundary documented in
                                   RE-032.1. No code. No thresholds. No
                                   capital posture mapping. Not yet
@@ -6034,6 +6055,123 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-036.1 — Regime Comparability Gate: first measurable dimensions
+
+RE-036.1 adds the first isolated implementation of the Regime
+Comparability Gate boundary defined in RE-031.1.
+
+Motivating finding, before any code: RE-031.1 left open which regime
+dimensions are observable with current data. `models/context.py`
+already carries `cape`, `inflation` and `interest_rate` per episode --
+computed and populated, but `SimilarityEngine`'s score only consumes
+`cape`, `pre_crash_return_3y` and `pre_crash_volatility_1y`.
+`inflation` and `interest_rate` sit unused. This answers RE-031.1's
+open question for three of its eight candidate dimensions without any
+new data ingestion: valuation, inflation and interest-rate regime are
+observable today.
+
+Design, agreed with Armando before implementation:
+
+-   Scope: local, against the current match set only (`evidence.
+    matches`), not the full historical universe. This is RE-031.1's own
+    framing of the question -- is the evidence actually informing
+    today's decision structurally representative of today's regime --
+    not a question about the dataset as a whole.
+-   Method: strict `[min, max]` coverage. For each active dimension,
+    does today's snapshot value fall within the range spanned by that
+    dimension's values across the current matches? Binary, not graded --
+    no percentile, no margin, no distance metric. Explicit reasoning:
+    a single extreme match could widen the range and make a regime look
+    "covered" when it barely is (small-N sensitivity, `n≈10`). Decision:
+    do not anticipate this with un-observed-yet complexity (percentiles,
+    trimmed ranges) -- start with the strict, fully transparent,
+    zero-magic-number version; if an outlier problem is actually
+    observed later, document it as a finding and address it then, not
+    now.
+-   Fail-closed, per RE-031.1: `None` (not `False`) when today's value
+    or the match set's values for a dimension are missing -- absence of
+    measurement is never treated as coverage, and is never treated as
+    non-coverage either. It is its own explicit state.
+-   Does not use `SimilarityEngine`'s selection, its scores, or Evidence
+    Quality as a comparability proxy -- explicit prohibitions in
+    RE-031.1. Coverage is measured independently of which episodes
+    were selected as "similar"; a match can be close by drawdown/
+    duration/speed and still sit in a completely different valuation
+    or rate regime than today.
+
+New file: `engine/regime_comparability_gate.py`.
+
+-   `LocalRegimeComparabilityInputs` -- `Optional[bool]` per dimension
+    (`cape_covered`, `inflation_covered`, `interest_rate_covered`), not
+    a score. `None` = not measurable, `True`/`False` = measured result.
+-   `_dimension_covered(today_value, match_values)` -- the strict
+    `[min, max]` check, `None` if either side is unavailable.
+-   `RegimeComparabilityGate.evaluate()` -- returns one of three states:
+    `NOT_MEASURABLE` (zero dimensions measurable), `NOT_COMPARABLE` (at
+    least one measured dimension falls outside its matches' range),
+    `COMPARABLE` (all measured dimensions fall inside). A fresh,
+    minimal vocabulary specific to this gate -- not reused from
+    `EvidenceQualityGate`'s `NOT_MEASURABLE`/`CONSERVATIVE` pair, because
+    the underlying question is different: Evidence Quality asks whether
+    the sample is internally sound; Regime Comparability asks whether
+    the sample even spans today's conditions. `NOT_COMPARABLE` has no
+    equivalent on the Evidence Quality side.
+-   `build_local_regime_comparability_inputs(snapshot, evidence)` --
+    `snapshot` is the sole source of truth for today's regime;
+    `evidence.matches` is the sole source of truth for the historical
+    sample actually in use. Same non-drifting-inputs principle as
+    `build_local_evidence_quality_inputs(evidence)`.
+
+New test file: `tests/verify_regime_comparability_gate.py`. Exercises
+`_dimension_covered()` directly (inside range, below, above, on
+boundary, missing today value, empty match values, all-`None` match
+values) and all three gate states with synthetic inputs. Also runs the
+real pipeline and asserts the builder returns well-typed output -- this
+iteration makes no canonical claim about what today's real snapshot
+produces, only that the gate runs correctly end to end.
+
+`tests/verify_core.py` updated to recognize both
+`engine/evidence_quality_gate.py` (missing from that list since
+RE-030.1) and `engine/regime_comparability_gate.py`.
+
+Structural verification: synthetic checks for `_dimension_covered()`
+and all three gate states pass in this sandbox. A synthetic end-to-end
+check (mock snapshot/matches, values placed intentionally outside
+range) confirms the builder and gate compose correctly. The real
+pipeline run is pending pinned-runtime confirmation.
+
+What this does not authorize:
+
+-   No wiring into `run.py`, `DecisionEngine`, `AssessmentEngine`,
+    `EvidenceQualityGate` or `gate_combination.py`.
+-   No entry added to RE-034.1's posture-ceiling mapping table for
+    `NOT_COMPARABLE` or `COMPARABLE` -- deciding how this gate's states
+    cap posture is a separate governance decision, not a default
+    consequence of the code existing.
+-   No percentile, margin or outlier-robustness logic -- explicitly
+    deferred until an actual problem is observed, per Armando's
+    decision above.
+-   No claim about volatility, liquidity/credit, policy or
+    market-structure regime -- these remain unmeasurable, no data
+    source exists for them yet.
+-   No `SimilarityEngine`, `EvidenceEngine` or `ObservableUniverse`
+    change.
+
+Boundary:
+
+-   Two new files: `engine/regime_comparability_gate.py`,
+    `tests/verify_regime_comparability_gate.py`.
+-   `tests/verify_core.py` updated to recognize both new/missing
+    engine files.
+-   No Frozen Core component modified.
+-   No gate state changed.
+-   No operative wiring changed.
+-   No capital posture mapping changed.
+-   Canonical real-pipeline values not published -- pending
+    pinned-runtime confirmation.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6471,6 +6609,36 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.59
+
+-   Added RE-036.1: first implementation of the Regime Comparability
+    Gate boundary from RE-031.1.
+-   Added `engine/regime_comparability_gate.py`
+    (`LocalRegimeComparabilityInputs`, `RegimeComparabilityGate`,
+    `_dimension_covered()`, `build_local_regime_comparability_inputs()`).
+-   Three active dimensions: `cape`, `inflation`, `interest_rate` --
+    already populated in `Context` per episode, unused by
+    `SimilarityEngine`'s score, no new data ingestion required.
+-   Method: strict `[min, max]` coverage of today's snapshot value
+    against the current match set's range for each dimension. No
+    percentile or margin -- deliberately deferred until an actual
+    small-N outlier problem is observed, not anticipated with
+    unneeded complexity.
+-   Fail-closed per RE-031.1: missing values produce `None`
+    (not measurable), never treated as coverage or non-coverage.
+-   Three gate states, specific to this gate, not reused from
+    `EvidenceQualityGate`: `NOT_MEASURABLE`, `NOT_COMPARABLE`,
+    `COMPARABLE`.
+-   Added `tests/verify_regime_comparability_gate.py`.
+-   `tests/verify_core.py` updated to recognize
+    `engine/regime_comparability_gate.py` and (previously missing)
+    `engine/evidence_quality_gate.py`.
+-   Not wired into any operative flow. No entry added to RE-034.1's
+    posture mapping table -- that remains a separate governance
+    decision.
+-   Structural verification only in this sandbox; real-pipeline
+    values pending pinned-runtime confirmation.
 
 ## Version 1.58
 
