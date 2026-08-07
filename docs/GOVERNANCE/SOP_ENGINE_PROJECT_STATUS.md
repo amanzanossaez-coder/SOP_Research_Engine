@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.57\
+**Version:** 1.58\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-PRED.16)
+# Execution State (as of RE-035.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -530,7 +530,23 @@ documentation-only gate-combination boundary work.
                                   DecisionEngine, AssessmentEngine or
                                   ValidationEngine. No thresholds, no
                                   capital posture mapping and no
-                                  operative authority.
+                                  operative authority. RE-035.1 closes
+                                  both remaining stub inputs:
+                                  independence_dispersion_measured is no
+                                  longer hardcoded False -- it is computed
+                                  from real pairwise outcome-window overlap
+                                  across the current match set (same
+                                  definition as RE-025.8, applied to a live
+                                  query instead of the offline validation
+                                  harness). predictive_validation_status
+                                  gains a recognized "not demonstrated"
+                                  value with a sharper explanation, per the
+                                  RE-PRED.10.1 decision not to add a new
+                                  top-level gate state. Still not wired
+                                  into any operative flow. Still no
+                                  thresholds and no capital posture
+                                  mapping -- RE-034.1's provisional mapping
+                                  remains documentation-only.
   Regime Comparability Gate      Boundary documented in RE-031.1. No
                                   code. No thresholds. No capital posture
                                   mapping. Not wired into any operative
@@ -5906,6 +5922,118 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-035.1 — Close EvidenceQualityGate's remaining stub inputs
+
+RE-035.1 closes the two hardcoded stubs in `engine/evidence_quality_gate.py`
+identified while scoping governance work: `independence_dispersion_measured`
+was always `False`, and `predictive_validation_status` only special-cased
+the literal string `"validated"`, collapsing every other case -- including
+a formally tested-and-not-demonstrated result -- into the same generic
+"not validated" explanation.
+
+First finding, before any code: fixing these stubs does not, by itself,
+change today's system-level capital posture. RE-034.1 already documents
+that Regime Comparability Gate and Personal Capacity Boundary being
+entirely unbuilt (0% -- boundary docs only) caps posture at `Conserve`
+regardless of what Evidence Quality says. That remains the real
+bottleneck; RE-035.1 is correctness work on Evidence Quality Gate, not a
+fix to the visible decision output.
+
+Changes:
+
+-   `_overlapping_match_pairs(evidence)` -- new function. Counts pairs
+    within the CURRENT match set (`evidence.matches`) whose outcome
+    windows (`bottom_date` .. `bottom_date + horizon_years`) overlap.
+    Same boolean definition as RE-025.8's `overlapping_outcome_windows()`,
+    reimplemented rather than reused: that function takes
+    `ValidationRecord` (offline backtesting, one `horizon_years` per
+    record), this takes `Similarity` matches sharing one
+    `evidence.horizon_years` -- different enough types that forcing a
+    shared function would need a more convoluted adapter than a small
+    parallel implementation. Fourth controlled duplication of this
+    pattern in the project (validation_harness, baseline_harness,
+    dimension_diagnostic already reimplement the analogous
+    `ObservableUniverse`/`bottom_index` exclusion for the same reason).
+-   `LocalEvidenceQualityInputs.overlapping_match_pairs: Optional[int]` --
+    new field, so the measurement is exposed, not silently discarded
+    behind a bare boolean.
+-   `build_local_evidence_quality_inputs()` now sets
+    `independence_dispersion_measured=True` and
+    `overlapping_match_pairs=<real count>`, computed from the actual
+    match set, instead of hardcoding `False`.
+-   `PREDICTIVE_VALIDATION_NOT_DEMONSTRATED = "not_demonstrated"` -- new
+    recognized input value for `predictive_validation_status`. Does not
+    add a new gate output state -- `EvidenceQualityGate.evaluate()` still
+    only returns `NOT_MEASURABLE` or `CONSERVATIVE`, per RE-PRED.10.1's
+    explicit decision to sharpen explanations rather than add a third
+    state. When this value is passed, `evaluate()` now appends a specific
+    explanation ("evaluated under a pre-registered protocol, required
+    advantage not shown") instead of the generic "not validated" one.
+    The module holds no RE-PRED-specific numbers -- it is the caller's
+    responsibility to decide when this value applies, keeping the gate
+    structure decoupled from any one research finding.
+-   `tests/verify_evidence_quality_gate.py` updated: the hardcoded
+    `False` expectation is replaced with a real-value check; a new case
+    exercises the `not_demonstrated` path explicitly.
+
+Structural verification: a synthetic smoke test (three mock episodes,
+one overlapping pair) confirmed `_overlapping_match_pairs()` and the new
+`evaluate()` branch behave as designed before any pinned-runtime check.
+
+Confirmed under `RUNTIME : PINNED`, real pipeline, real match set:
+
+    independence_dispersion_measured: True
+    overlapping_match_pairs: 5
+    state (predictive_validation_status=PREDICTIVE_VALIDATION_NOT_DEMONSTRATED):
+        not measurable
+    explanations: ["predictive validation status: not demonstrated --
+        evaluated under a pre-registered protocol, required advantage
+        not shown"]
+
+The "independence / dispersion not measured" explanation no longer
+appears, exactly as designed -- the gate's remaining `NOT_MEASURABLE`
+reason today is purely `predictive_validation_status`, not a stub.
+
+Separate, pre-existing, unrelated finding surfaced while running the
+full test suite: `tests/verify_evidence_quality_gate.py`'s existing
+`EXPECTED_LOCAL_CONSISTENCY` assertion (fixed in RE-030.2) now fails --
+`0.9518456229064439` expected, `0.9524468147359584` produced, a
+5th-decimal drift. RE-035.1 does not touch consistency computation at
+all, and Armando confirmed he did not modify the Shiller source file.
+Root cause not yet investigated -- candidate explanation is an upstream
+Shiller data revision (historical CPI revisions shift real returns for
+all episodes, not just recent ones), not confirmed. This is logged as
+an open item for a future iteration, deliberately not fixed here: RE-
+DOC-002 prohibits silently rewriting a canonical value without
+understanding why it changed.
+
+What this does not authorize:
+
+-   No gate output state added beyond `NOT_MEASURABLE`/`CONSERVATIVE`.
+-   No threshold defined for `overlapping_match_pairs` -- it is exposed,
+    not yet used to fail or pass anything, consistent with
+    coverage/consistency/diversity today also having no threshold, only
+    a presence check.
+-   No wiring into `run.py`, `DecisionEngine`, `AssessmentEngine` or
+    `ValidationEngine`.
+-   No capital posture mapping change -- RE-034.1's provisional mapping
+    stands unchanged.
+-   No claim that this changes today's system-level posture output.
+
+Boundary:
+
+-   Two files changed: `engine/evidence_quality_gate.py`,
+    `tests/verify_evidence_quality_gate.py`.
+-   No Frozen Core component modified.
+-   No `SimilarityEngine`, `EvidenceEngine` or `ObservableUniverse`
+    change.
+-   No gate state changed.
+-   No operative wiring changed.
+-   No fix attempted for the unrelated `EXPECTED_LOCAL_CONSISTENCY`
+    drift -- logged as an open item, not resolved in this iteration.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6343,6 +6471,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.58
+
+-   Added RE-035.1: closed both hardcoded stubs in
+    `engine/evidence_quality_gate.py`.
+-   `independence_dispersion_measured` is now computed for real
+    (pairwise outcome-window overlap across the current match set, same
+    definition as RE-025.8) instead of hardcoded `False`. New field
+    `overlapping_match_pairs` exposes the count.
+-   Added `PREDICTIVE_VALIDATION_NOT_DEMONSTRATED` as a recognized
+    `predictive_validation_status` value, producing a sharper
+    explanation -- no new gate output state added, per RE-PRED.10.1.
+-   Updated `tests/verify_evidence_quality_gate.py` accordingly; added a
+    case exercising the `not_demonstrated` path.
+-   Noted explicitly: this does not change today's system-level capital
+    posture -- RE-034.1's mapping still caps at `Conserve` because
+    Regime Comparability and Personal Capacity are entirely unbuilt.
+-   Confirmed under `RUNTIME : PINNED`: `independence_dispersion_measured
+    = True`, `overlapping_match_pairs = 5` on the real match set; the
+    `not_demonstrated` explanation path fires correctly.
+-   Logged a separate, pre-existing, unrelated finding: the existing
+    `EXPECTED_LOCAL_CONSISTENCY` canonical value (RE-030.2) no longer
+    matches the live pipeline (`0.9518456229064439` expected,
+    `0.9524468147359584` produced). RE-035.1 does not touch consistency
+    computation. Root cause not investigated; not fixed in this
+    iteration, per RE-DOC-002.
 
 ## Version 1.57
 

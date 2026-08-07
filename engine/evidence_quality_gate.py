@@ -7,6 +7,18 @@ NOT_MEASURABLE = "not measurable"
 CONSERVATIVE = "conservative"
 EXPECTED_MATCHES = 10
 
+# RE-035.1 -- valor reconocido de predictive_validation_status distinto
+# de "validated" y de None: evidencia que SI fue evaluada bajo un
+# protocolo pre-registrado (RE-PRED.1) y no demostro la ventaja
+# requerida (RE-PRED.13/16), frente a "unavailable" (nunca evaluada) o
+# cualquier otro string no reconocido. No introduce un tercer estado de
+# salida del gate -- RE-PRED.10.1 descarto explicitamente esa opcion a
+# favor de explicaciones mas nitidas dentro de NOT_MEASURABLE/
+# CONSERVATIVE. Este modulo no conoce, y no debe conocer, los numeros
+# concretos de ninguna iteracion RE-PRED: quien construya
+# GlobalModelValidationState decide cuando este valor aplica.
+PREDICTIVE_VALIDATION_NOT_DEMONSTRATED = "not_demonstrated"
+
 
 @dataclass
 class LocalEvidenceQualityInputs:
@@ -21,6 +33,14 @@ class LocalEvidenceQualityInputs:
     consistency: Optional[float] = None
     diversity: Optional[float] = None
     independence_dispersion_measured: bool = False
+
+    # RE-035.1 -- numero de pares de matches del set actual cuyas
+    # ventanas de outcome se solapan (misma definicion que RE-025.8,
+    # aplicada aqui al match set de una consulta en vivo, no al
+    # historico de validacion). None mientras independence_dispersion_
+    # measured sea False -- ausencia de medicion, no un 0 que afirmaria
+    # "medido y sin solapes".
+    overlapping_match_pairs: Optional[int] = None
 
 
 @dataclass
@@ -80,6 +100,15 @@ class EvidenceQualityGate:
 
         if global_state.predictive_validation_status is None:
             explanations.append("predictive validation status unavailable")
+        elif (
+            global_state.predictive_validation_status
+            == PREDICTIVE_VALIDATION_NOT_DEMONSTRATED
+        ):
+            explanations.append(
+                "predictive validation status: not demonstrated "
+                "-- evaluated under a pre-registered protocol, "
+                "required advantage not shown"
+            )
         elif global_state.predictive_validation_status != "validated":
             explanations.append("global model-validation state not validated")
 
@@ -95,6 +124,45 @@ class EvidenceQualityGate:
                 "no less-restrictive Evidence Quality state is authorized"
             ],
         )
+
+
+def _overlapping_match_pairs(evidence) -> int:
+    """
+    RE-035.1 -- cuenta pares del match set ACTUAL cuyas ventanas de
+    outcome (bottom_date .. bottom_date + horizon_years) se solapan.
+
+    Misma definicion booleana que RE-025.8's overlapping_outcome_
+    windows() -- start_a < end_b and start_b < end_a -- pero
+    reimplementada aqui en vez de reutilizada, porque opera sobre un
+    tipo distinto: Similarity (matches de una consulta en vivo, con un
+    unico evidence.horizon_years compartido), no ValidationRecord
+    (registros de backtesting, cada uno con su propio horizon_years y
+    su propio evaluable). Cuarta duplicacion controlada de este mismo
+    criterio en el proyecto (ya usado en validation_harness,
+    baseline_harness y dimension_diagnostic para bottom_index self-
+    exclusion) -- mismo principio: tres lineas de logica publica, no
+    una dependencia cruzada forzando un adaptador entre tipos que no
+    deberian conocerse.
+    """
+
+    horizon = evidence.horizon_years
+
+    windows = [
+        (
+            match.episode.bottom_date,
+            match.episode.bottom_date + horizon,
+        )
+        for match in evidence.matches
+    ]
+
+    pairs = 0
+
+    for i, (left_start, left_end) in enumerate(windows):
+        for right_start, right_end in windows[i + 1:]:
+            if left_start < right_end and right_start < left_end:
+                pairs += 1
+
+    return pairs
 
 
 def build_local_evidence_quality_inputs(
@@ -139,9 +207,12 @@ def build_local_evidence_quality_inputs(
         1.0,
     )
 
+    overlapping_pairs = _overlapping_match_pairs(evidence)
+
     return LocalEvidenceQualityInputs(
         coverage=coverage,
         consistency=consistency,
         diversity=diversity,
-        independence_dispersion_measured=False,
+        independence_dispersion_measured=True,
+        overlapping_match_pairs=overlapping_pairs,
     )
