@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.59\
+**Version:** 1.60\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-036.1)
+# Execution State (as of RE-034.5)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -589,6 +589,17 @@ documentation-only gate-combination boundary work.
                                   AssessmentEngine or ValidationEngine.
                                   No posture engine. No thresholds. No
                                   protocol rules. No operative authority.
+                                  RE-034.5 extends RE-034.1's provisional
+                                  ceiling-mapping table with Regime
+                                  Comparability's three real states from
+                                  RE-036.1: `not comparable` -> `Conserve`;
+                                  `comparable` -> `Deploy Aggressively`
+                                  (the top of the ordered scale, so this
+                                  gate can never itself be the binding
+                                  constraint when satisfied -- the actual
+                                  ceiling comes from Evidence Quality or
+                                  Personal Capacity). Documentation-only;
+                                  no code implements this mapping yet.
   Predictive Validity Boundary   Opened in RE-PRED.1. Documentation
                                   only. No code. No new calculations.
                                   No predictive-validity claim. Defines
@@ -6172,6 +6183,85 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-034.5 — Regime Comparability posture-ceiling mapping
+
+RE-034.5 extends RE-034.1's provisional gate-ceiling mapping table with
+the three real states RE-036.1 introduced for the Regime Comparability
+Gate. It is documentation-only. No code changed.
+
+RE-034.1 only anticipated a binary "not measurable" state for Regime
+Comparability, because no code existed yet at the time. RE-036.1 gives
+the gate three real states: `NOT_MEASURABLE`, `NOT_COMPARABLE`,
+`COMPARABLE`. This iteration closes that gap. Per RE-DOC-002, RE-034.1's
+original table is not rewritten -- this adds to it, forward.
+
+Design, agreed with Armando before recording:
+
+-   Regime Comparability `not comparable` -> `Conserve`. At least as
+    restrictive as `not measurable`. This is not absence of
+    information -- it is confirmed evidence that today's regime sits
+    outside the historical sample actually informing the decision.
+    Extrapolation risk, not uncertainty.
+-   Regime Comparability `comparable` -> `Deploy Aggressively`, the top
+    of the ordered scale. Reasoning: RE-031.1 requires this gate to
+    never make posture more aggressive by itself, only cap it. Since
+    combination takes the minimum ceiling across all gates, mapping the
+    passing state to the top is the only way to encode "this gate
+    imposes no restriction of its own" -- it can never become the
+    binding constraint when satisfied. When Regime Comparability
+    passes, the real ceiling is decided entirely by Evidence Quality
+    and Personal Capacity, exactly as RE-031.1 requires ("a comparable
+    regime does not make weak evidence strong").
+
+Updated mapping table (supersedes RE-034.1's for Regime Comparability
+only; Evidence Quality and Personal Capacity entries unchanged):
+
+-   Evidence Quality `not measurable` -> `Prepare`;
+-   Evidence Quality `conservative` -> `Conserve`;
+-   Regime Comparability `not measurable` -> `Conserve`;
+-   Regime Comparability `not comparable` -> `Conserve`;
+-   Regime Comparability `comparable` -> `Deploy Aggressively`;
+-   Personal Capacity unavailable / unclassified -> `Conserve`;
+-   Any `Blocked` flag -> `Blocked`.
+
+RE-034.1 open question closed: "Should Regime Comparability have its
+own non-deployment exception in future, or is `not measurable ->
+Conserve` permanent?" Answer: `not measurable` stays at `Conserve`
+permanently as the fail-closed default -- that part of the question is
+resolved by definition, not by new logic. The real question was what
+happens once measurement exists at all, and RE-036.1 now provides that:
+`comparable` removes the cap, `not comparable` confirms it.
+
+Remaining RE-034.1 open questions, unaffected by this iteration:
+
+-   Can `Prepare` ever be authorized solely by Regime Comparability
+    while Evidence Quality remains `not measurable`? Still open --
+    this iteration does not touch Evidence Quality's own mapping.
+-   Does Personal Capacity belong in gate combination, or inside Human
+    Approval? Still open, RE-032.1 remains unclassified.
+-   How should explanations be composed when several gates cap posture
+    at the same level? Still open.
+
+What this does not authorize:
+
+-   No code implementing this mapping -- it exists only as a documented
+    decision. No function converts
+    `RegimeComparabilityGateResult.state` into a `posture_ceiling`
+    string yet.
+-   No wiring into `gate_combination.py`, `DecisionEngine` or `run.py`.
+-   No change to Evidence Quality's or Personal Capacity's own mapping
+    entries.
+
+Boundary:
+
+-   No code changed.
+-   No posture engine implemented.
+-   No operative wiring authorized.
+-   Documentation-only update to RE-034.1's provisional table, per
+    RE-DOC-002's forward-correction discipline.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6609,6 +6699,22 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.60
+
+-   Added RE-034.5: extended RE-034.1's provisional gate-ceiling mapping
+    table with Regime Comparability's three real states from RE-036.1.
+-   `not comparable` -> `Conserve` (confirmed extrapolation risk, at
+    least as restrictive as `not measurable`).
+-   `comparable` -> `Deploy Aggressively` (top of the ordered scale --
+    the only way to encode "this gate imposes no restriction of its
+    own" under min()-based combination; the real ceiling stays decided
+    by Evidence Quality and Personal Capacity).
+-   Closed RE-034.1's open question about a future non-deployment
+    exception for Regime Comparability -- resolved by definition for
+    `not measurable`, and by this new mapping for the other two states.
+-   Documentation-only. No code changed. No wiring into
+    `gate_combination.py` authorized.
 
 ## Version 1.59
 
