@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.62\
+**Version:** 1.63\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-038.1)
+# Execution State (as of RE-039.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -635,7 +635,20 @@ documentation-only gate-combination boundary work.
                                   into run.py or DecisionEngine; this is
                                   an isolated, read-only composition layer
                                   for audit/dry-run, not the future
-                                  Capital Posture Engine.
+                                  Capital Posture Engine. RE-038.1 wires
+                                  the previously-stubbed inflation/
+                                  interest_rate data this layer depends
+                                  on, confirmed under pinned runtime:
+                                  cape_covered=False,
+                                  inflation_covered=True,
+                                  interest_rate_covered=True, state
+                                  `not comparable`. RE-039.1 extracts
+                                  this same audit dry-run into a
+                                  standalone root-level script,
+                                  `audit_posture.py`, mirroring run.py's
+                                  precedent -- no logic change, just a
+                                  way to run the check without the full
+                                  test suite.
   Predictive Validity Boundary   Opened in RE-PRED.1. Documentation
                                   only. No code. No new calculations.
                                   No predictive-validity claim. Defines
@@ -6488,8 +6501,53 @@ Boundary:
 -   No gate, gate-combination or posture-mapper module modified.
 -   No gate state-mapping table changed.
 -   No operative wiring changed.
--   Canonical real-pipeline values not published -- pending
-    pinned-runtime confirmation.
+-   Confirmed under Armando's pinned runtime, exact match to sandbox:
+    `cape_covered=False, inflation_covered=True,
+    interest_rate_covered=True`, state `not comparable`, combined
+    posture ceiling `Conserve`. As with all real-pipeline dry-run
+    output in this document, this is a read against today's snapshot,
+    not a frozen historical metric -- it will change as the date
+    changes, and is never treated as a canonical claim in the
+    RE-DOC-002 sense.
+
+------------------------------------------------------------------------
+
+## RE-039.1 — Standalone posture audit CLI
+
+RE-039.1 extracts the real-pipeline audit dry-run that already lived
+inside `tests/verify_posture_mapper.py` (its final section, added in
+RE-037.1) into a dedicated, standalone entry-point script,
+`audit_posture.py`, at repository root.
+
+No logic changes. Same imports, same gate construction, same
+`evaluate_capital_posture()` call, same disclaimers reproduced
+verbatim (NOT a decision, not wired into `run.py` or `DecisionEngine`,
+Personal Capacity excluded, result provably no more restrictive than
+the real posture). The only difference from the version embedded in
+the test file is the absence of assertions and a dedicated
+`if __name__ == "__main__"` entry point, so it can be run on its own
+(`python3 audit_posture.py`) without running the full verification
+suite.
+
+Placement follows the existing precedent set by `run.py`: a root-level
+script that is not itself part of "Core" and is therefore not listed
+in `tests/verify_core.py`'s checks, consistent with `run.py` also not
+being listed there.
+
+What this does not authorize:
+
+-   No new gate, no new dimension, no change to any mapping table.
+-   No wiring into `run.py` or `DecisionEngine`.
+-   No change to `tests/verify_posture_mapper.py` -- the dry-run logic
+    there is left in place, not removed, so the test suite's coverage
+    of the real pipeline is unaffected.
+
+Boundary:
+
+-   One new file: `audit_posture.py`.
+-   No files modified.
+-   No Frozen Core component touched.
+-   No gate, gate-combination or posture-mapper module modified.
 
 ------------------------------------------------------------------------
 
@@ -6930,6 +6988,24 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.63
+
+-   Added RE-039.1: standalone `audit_posture.py` at repository root,
+    extracting the real-pipeline audit dry-run already present in
+    `tests/verify_posture_mapper.py` into its own entry point. No
+    logic change -- same gates, same disclaimers, no assertions, can
+    be run on its own without the full verification suite.
+-   Placement mirrors `run.py`'s existing precedent: not listed in
+    `tests/verify_core.py` (root-level entry scripts aren't "Core").
+-   RE-038.1's real-pipeline values confirmed under Armando's pinned
+    runtime, exact match to sandbox: `cape_covered=False,
+    inflation_covered=True, interest_rate_covered=True`, state
+    `not comparable`, combined posture ceiling `Conserve`.
+-   Closes items B and C from the "seguimos, dime que tocaria hacer"
+    path review (B: data-wiring hygiene, C: standalone posture audit
+    tool). Path A (Personal Capacity classification) remains open,
+    next only if there is time/energy in a future session.
 
 ## Version 1.62
 
