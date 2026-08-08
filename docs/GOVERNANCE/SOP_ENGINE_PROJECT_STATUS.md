@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.63\
+**Version:** 1.64\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-039.1)
+# Execution State (as of RE-032.2)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -195,13 +195,21 @@ verified:
                         posture when today's market regime is not
                         structurally comparable to the historical
                         evidence being used.
-  Personal Capacity     Planned / classification boundary only
-  Boundary              (RE-032.1). No code exists. Not called by run.py,
-                        DecisionEngine, AssessmentEngine or any gate.
-                        RE-032.1 does not assume this becomes a parallel
-                        computable gate; it classifies whether Personal
-                        Capacity belongs as a gate, human approval
-                        requirement or mixed control.
+  Personal Capacity     Classified in RE-032.2 as a mixed control --
+  Boundary              Armando's explicit decision, not inferred. Still
+                        no code. Not called by run.py, DecisionEngine,
+                        AssessmentEngine or any gate. Verifiable-facts
+                        channel (liquidity, debt service, concentration,
+                        etc.) is the future computable-gate half --
+                        participates in gate combination via min(), same
+                        ceiling-only pattern as Evidence Quality and
+                        Regime Comparability. Attested-judgement channel
+                        (drawdown tolerance, psychological capacity,
+                        etc.) is the Human Approval half -- never enters
+                        gate-combination math, never an automatic
+                        ceiling. RE-032.1's two-channel separation is
+                        preserved by construction, not merged into one
+                        score.
   Capital Posture       Vocabulary documented only (RE-033.1). No code
                         exists. No posture engine exists. No gate
                         combination logic exists. RE-033.1 defines the
@@ -589,10 +597,22 @@ documentation-only gate-combination boundary work.
                                   trailing 12-month rate
                                   (`InflationRate1Y`).
   Personal Capacity Boundary     Classification boundary documented in
-                                  RE-032.1. No code. No thresholds. No
-                                  capital posture mapping. Not yet
-                                  classified as computable gate, human
-                                  approval requirement or mixed control.
+                                  RE-032.1. RE-032.2 resolves the primary
+                                  classification question: mixed control,
+                                  Armando's explicit decision. Still no
+                                  code, no thresholds, no capital posture
+                                  mapping implemented -- classification is
+                                  not implementation. Verifiable facts ->
+                                  future computable gate, combined via
+                                  min() like Evidence Quality/Regime
+                                  Comparability. Attested judgement ->
+                                  Human Approval prerequisite, outside
+                                  gate-combination math entirely. This
+                                  also answers one of RE-032.1's open
+                                  questions directly: Personal Capacity
+                                  participates in gate combination AND
+                                  sits inside Human Approval -- split by
+                                  channel, not either/or.
   Capital Posture Vocabulary     Documented in RE-033.1. No code. No
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
@@ -6551,6 +6571,87 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.2 — Personal Capacity classified as a mixed control
+
+RE-032.2 resolves RE-032.1's primary classification question:
+
+    Is Personal Capacity a parallel gate,
+    a human-approval requirement,
+    or a mixed control?
+
+Answer: mixed control. This is Armando's explicit decision, not an
+inference drawn from the surrounding design -- recorded here as a
+governance decision, the same way every prior consequential choice in
+this document has been (RE-036.1's dimension proposal, RE-034.5's
+posture-ceiling table, RE-037.1's implementation approach all required
+the same explicit sign-off before being written).
+
+Reasoning offered at decision time, for the record: RE-032.1 already
+mandated that Personal Capacity's two input channels -- verifiable
+facts and attested judgement -- must not be averaged into a single
+score. That requirement is, structurally, already a mixed-control
+design; classifying it as a pure gate or pure Human-Approval
+requirement would have meant walking back a constraint RE-032.1 had
+already set. A pure gate would force self-reported, crisis-sensitive
+inputs like drawdown tolerance through the same automatic min()
+combination as objective evidence -- exactly the "opaque confidence
+score" RE-032.1 prohibits, and exactly the input most unreliable when
+it matters most (RE-032.1's own drawdown-tolerance-risk paragraph). A
+pure Human-Approval requirement would discard computability for the
+half of Personal Capacity that is genuinely objective and verifiable
+(liquidity, debt service, concentration) for no structural reason.
+
+Resolved split:
+
+-   Verifiable-facts channel (available liquidity, near-term cash
+    needs, fixed obligations, debt service, income concentration,
+    portfolio concentration, required emergency reserve, known time
+    horizon constraints): becomes a future computable gate. When
+    implemented, it participates in gate combination via `min()`,
+    exactly like Evidence Quality and Regime Comparability -- ceiling
+    only, cannot make posture more aggressive, fails closed on missing
+    data.
+-   Attested-judgement channel (perceived income stability,
+    willingness to tolerate drawdown, ability to avoid forced selling,
+    psychological capacity to hold through stress, household/life
+    constraints): becomes a Human Approval prerequisite. It never
+    enters `gate_combination.py`'s math, never produces an automatic
+    posture ceiling, and is never computed by an engine -- consistent
+    with the Constitution's principle that engines produce evidence,
+    never portfolio decisions.
+
+This directly answers one of RE-032.1's own open questions: "Does
+Personal Capacity participate in gate-combination logic, or does it
+sit inside Human Approval before any capital action is allowed?" --
+both, split by channel, not either/or.
+
+What this does not authorize:
+
+-   No code. This is a classification decision, not an implementation.
+-   No new gate, no new file, no schema for which specific facts or
+    attestations are collected.
+-   No Human Approval workflow defined -- its existence is now
+    required by this classification, but its mechanics (who approves,
+    how, how often, expiry, cooling-off periods after crisis-time
+    revisions) remain fully open, per RE-032.1's own open-questions
+    list.
+-   No change to `posture_mapper.py`, `gate_combination.py`, or any
+    existing gate's mapping table.
+-   Does not resolve which specific facts are verifiable from existing
+    records versus requiring manual entry -- still open.
+
+Boundary:
+
+-   No files changed except this document.
+-   No code, no thresholds, no taxonomy.
+-   Personal Capacity remains entirely outside the operative flow and
+    outside the existing posture-mapper audit tooling
+    (`audit_posture.py`, `tests/verify_posture_mapper.py`) -- both
+    continue to state its exclusion explicitly, unchanged by this
+    classification.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6988,6 +7089,26 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.64
+
+-   Added RE-032.2: Personal Capacity classified as a mixed control --
+    Armando's explicit decision, resolving RE-032.1's primary
+    classification question.
+-   Verifiable-facts channel (liquidity, debt service, concentration,
+    etc.) -> future computable gate, combined via `min()` like Evidence
+    Quality and Regime Comparability.
+-   Attested-judgement channel (drawdown tolerance, psychological
+    capacity, etc.) -> Human Approval prerequisite, never enters
+    gate-combination math, never an automatic ceiling.
+-   Answers directly one of RE-032.1's open questions: Personal
+    Capacity participates in gate combination AND sits inside Human
+    Approval -- split by channel, not either/or.
+-   Documentation-only. No code, no new gate, no schema for which
+    specific facts/attestations are collected, no Human Approval
+    workflow mechanics defined -- all remain open for future
+    iterations.
+-   Starts Path A from the prior session's roadmap review.
 
 ## Version 1.63
 
