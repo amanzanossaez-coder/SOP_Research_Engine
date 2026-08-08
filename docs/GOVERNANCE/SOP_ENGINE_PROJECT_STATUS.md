@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.60\
+**Version:** 1.61\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-034.5)
+# Execution State (as of RE-037.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -600,6 +600,26 @@ documentation-only gate-combination boundary work.
                                   ceiling comes from Evidence Quality or
                                   Personal Capacity). Documentation-only;
                                   no code implements this mapping yet.
+                                  RE-037.1 implements that mapping in code
+                                  for the first time:
+                                  `engine/posture_mapper.py` translates
+                                  `EvidenceQualityGateResult` and
+                                  `RegimeComparabilityGateResult` into
+                                  `GateCombinationInput` per RE-034.1/
+                                  RE-034.5's tables, and
+                                  `evaluate_capital_posture()` combines
+                                  the two real gates that exist today via
+                                  `combine_gate_outputs()`, unmodified.
+                                  Personal Capacity explicitly excluded --
+                                  not classified (RE-032.1), no gate
+                                  exists -- so this combined posture is
+                                  provably optimistic relative to a full
+                                  combination, and that gap is stated in
+                                  the module, not hidden. Still not wired
+                                  into run.py or DecisionEngine; this is
+                                  an isolated, read-only composition layer
+                                  for audit/dry-run, not the future
+                                  Capital Posture Engine.
   Predictive Validity Boundary   Opened in RE-PRED.1. Documentation
                                   only. No code. No new calculations.
                                   No predictive-validity claim. Defines
@@ -6262,6 +6282,100 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-037.1 — Isolated posture mapper (Evidence Quality + Regime Comparability)
+
+RE-037.1 implements, for the first time in code, the mapping tables
+documented in RE-034.1 and RE-034.5 -- turning "which posture ceiling
+does this gate state imply" from a documentation-level worked example
+into a real, callable function, still fully isolated from any
+operative flow.
+
+New file: `engine/posture_mapper.py`.
+
+-   `EVIDENCE_QUALITY_POSTURE_CEILING` / `REGIME_COMPARABILITY_POSTURE_
+    CEILING` -- dict literals, one entry per documented mapping row.
+    Every entry traces to a specific status-doc section (RE-034.1 for
+    Evidence Quality, RE-034.5 for Regime Comparability); no mapping is
+    invented here.
+-   `evidence_quality_to_gate_input()` / `regime_comparability_to_gate_
+    input()` -- translate a gate's already-computed `Result` into a
+    `GateCombinationInput`. Neither re-evaluates gate logic; both raise
+    `ValueError` on an unrecognized state rather than silently
+    defaulting to a ceiling -- an undocumented state must fail loudly,
+    not resolve to a guess.
+-   `evaluate_capital_posture(evidence_quality_result,
+    regime_comparability_result)` -- composes both translations and
+    calls `combine_gate_outputs()` (`engine/gate_combination.py`,
+    RE-034.3) exactly as published. No combination logic is
+    reimplemented.
+
+Explicit, load-bearing caveat: Personal Capacity does not participate.
+RE-032.1 has not classified it (parallel gate / human-approval
+prerequisite / mixed control) and no code implements it. Per RE-034.1's
+own worked example, an unavailable/unclassified Personal Capacity caps
+posture at `Conserve` -- omitting it here means `evaluate_capital_
+posture()`'s output is provably at least as permissive as a complete
+combination would be. This is stated directly in the function's
+docstring, not left implicit.
+
+New test file: `tests/verify_posture_mapper.py`.
+
+-   Synthetic checks: each documented mapping row individually: `blocked
+    =False` always (neither gate has a veto mechanism yet); unrecognized
+    states raise `ValueError`; several combined scenarios confirm the
+    `min()` semantics -- notably that Regime Comparability `comparable`
+    (mapped to the top of the scale) never overrides a more restrictive
+    Evidence Quality state, and that `not comparable` caps posture even
+    when Evidence Quality alone would allow more.
+-   Real-pipeline audit dry-run: builds both gates' real results against
+    today's snapshot and prints the full chain -- individual states,
+    explanations, and the combined ceiling. Explicitly uses
+    `PREDICTIVE_VALIDATION_NOT_DEMONSTRATED` for
+    `GlobalModelValidationState`, reflecting RE-PRED.16's confirmed
+    finding -- a deliberate choice stated in the script, not an
+    automatic default. Read-only: prints a report, does not persist or
+    act on anything.
+
+`tests/verify_core.py` updated to recognize `engine/posture_mapper.py`
+and (previously missing) `engine/gate_combination.py`.
+
+Structural verification: synthetic checks for every mapping row,
+unrecognized-state errors, and four combined scenarios pass in this
+sandbox. The real-pipeline dry-run could not complete in this sandbox
+this iteration -- the same intermittent iCloud file-lock issue already
+seen in RE-035.1/RE-036.1 (`OSError: Resource deadlock avoided`), this
+time failing on a plain module import before any data access. Unrelated
+to this change. Pending pinned-runtime confirmation.
+
+What this does not authorize:
+
+-   No wiring into `run.py`, `DecisionEngine`, `AssessmentEngine` or
+    `ValidationEngine`.
+-   No claim that this is the Capital Posture Engine -- that remains a
+    larger, future, operative component; this is a smaller, isolated
+    composition layer for audit purposes only.
+-   No Personal Capacity placeholder invented to fill the gap --
+    explicitly absent, explicitly stated.
+-   No change to `gate_combination.py`, `evidence_quality_gate.py` or
+    `regime_comparability_gate.py`.
+-   No capital action of any kind -- this layer prints or returns a
+    ceiling, it does not act on it.
+
+Boundary:
+
+-   Two new files: `engine/posture_mapper.py`,
+    `tests/verify_posture_mapper.py`.
+-   `tests/verify_core.py` updated to recognize both new/missing
+    engine files.
+-   No Frozen Core component modified.
+-   No existing gate or combination module modified.
+-   No gate state changed.
+-   No operative wiring changed.
+-   Canonical real-pipeline audit output not published -- pending
+    pinned-runtime confirmation.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6699,6 +6813,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.61
+
+-   Added RE-037.1: first code implementation of RE-034.1/RE-034.5's
+    posture-ceiling mapping tables.
+-   Added `engine/posture_mapper.py`
+    (`evidence_quality_to_gate_input()`, `regime_comparability_to_
+    gate_input()`, `evaluate_capital_posture()`). Unrecognized gate
+    states raise `ValueError` rather than silently defaulting.
+-   Explicitly excludes Personal Capacity (RE-032.1 unclassified, no
+    gate exists) -- stated in the module, not hidden; output is
+    provably at least as permissive as a full combination would be.
+-   Added `tests/verify_posture_mapper.py`: synthetic checks for every
+    mapping row and combined scenario, plus a read-only audit dry-run
+    against today's real snapshot using
+    `PREDICTIVE_VALIDATION_NOT_DEMONSTRATED` (RE-PRED.16).
+-   `tests/verify_core.py` updated to recognize
+    `engine/posture_mapper.py` and (previously missing)
+    `engine/gate_combination.py`.
+-   Not wired into `run.py`, `DecisionEngine` or any operative flow --
+    this is an isolated composition layer for audit purposes, not the
+    Capital Posture Engine.
+-   Real-pipeline dry-run not completed in sandbox this iteration
+    (transient iCloud file-lock error, unrelated to the change);
+    pending pinned-runtime confirmation.
 
 ## Version 1.60
 
