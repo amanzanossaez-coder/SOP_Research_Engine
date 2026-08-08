@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.61\
+**Version:** 1.62\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-037.1)
+# Execution State (as of RE-038.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -572,6 +572,22 @@ documentation-only gate-combination boundary work.
                                   real states -- that remains a separate,
                                   future governance decision, not a
                                   consequence of this code existing.
+                                  Correction to RE-036.1 (RE-DOC-002):
+                                  that iteration claimed `inflation`/
+                                  `interest_rate` were "already populated
+                                  in Context per episode" -- false, both
+                                  were hardcoded `None` for every episode
+                                  and for today's snapshot's
+                                  `interest_rate`. RE-037.1's real
+                                  audit dry-run exposed this (both
+                                  dimensions read `not measurable`).
+                                  RE-038.1 wires both for real, and
+                                  additionally corrects `inflation` from
+                                  a raw CPI index level (near-monotonic
+                                  over a century, would make coverage
+                                  fail almost tautologically) to a
+                                  trailing 12-month rate
+                                  (`InflationRate1Y`).
   Personal Capacity Boundary     Classification boundary documented in
                                   RE-032.1. No code. No thresholds. No
                                   capital posture mapping. Not yet
@@ -6376,6 +6392,107 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-038.1 — Connect inflation/interest_rate; fix inflation level vs. rate
+
+RE-038.1 closes two data-wiring gaps surfaced by RE-037.1's real audit
+dry-run, and corrects a design error made in RE-036.1.
+
+Correction to RE-036.1 (RE-DOC-002, forward, not silently rewritten):
+that iteration stated `inflation` and `interest_rate` were "already
+populated in `Context` per episode" -- this was false. Both fields were
+hardcoded `None` in `engine/drawdown_engine.py::filter_episodes()` for
+every historical episode, and `interest_rate` was also hardcoded `None`
+in `engine/snapshot_engine.py::_build_snapshot()` for today's snapshot
+(`inflation` there was already wired to `row["CPI"]`). This is exactly
+why RE-037.1's real dry-run showed both dimensions as `not measurable`
+-- not a data-availability question, a stub, discovered only once the
+posture mapper made the full chain visible end to end.
+
+Fix, part one -- wiring:
+
+-   `engine/drawdown_engine.py::filter_episodes()`:
+    `inflation`/`interest_rate` now read from the dataframe instead of
+    being hardcoded.
+-   `engine/snapshot_engine.py::_build_snapshot()`: `interest_rate` now
+    reads from the dataframe (`inflation` was already correct).
+-   `interest_rate` uses the `Rate GS10` column (US 10-Year Treasury
+    Constant Maturity Rate) -- identified from
+    `SnapshotEngine.latest()`'s own leftover debug print (`POSIBLES
+    COLUMNAS MACRO`), now removed since it served its purpose.
+-   Both fields share CAPE's existing characteristic of not filtering
+    `NaN` at the source (`loaders/shiller_loader.py` only coerces
+    `Date`/`P`) -- not a new risk introduced here, an existing,
+    project-wide pattern, out of scope to fix in this iteration.
+
+Fix, part two -- a real design error, caught before it mattered:
+wiring `inflation` to raw `CPI` (the fix originally planned) would have
+been wrong. `CPI` is an index level, near-monotonically increasing over
+a century of history. Comparing today's level against any historical
+episode's level would make Regime Comparability's `[min, max]` coverage
+check fail almost tautologically -- not because today's inflation
+regime is genuinely unprecedented, but because the index is chronologically
+later, which it always will be. This was caught by inspecting the real
+dry-run's numbers (a raw CPI level around 336) before publishing it as
+a finding, not by design review alone.
+
+-   New function `engine/drawdown_engine.py::calculate_inflation_rate()`
+    -- adds `InflationRate1Y = CPI.pct_change(12)` to the dataframe,
+    same `.rolling()`/`.pct_change()` pattern already used by
+    `calculate_volatility()`. Called from `run_drawdown_engine()`
+    immediately after `calculate_volatility()`.
+-   Both `Context.inflation` sites (episodes and snapshot) now read
+    `InflationRate1Y`, not `CPI`.
+
+Structural verification, real pipeline, this sandbox -- NOT canonical:
+
+    Before fix:  inflation_covered=None, interest_rate_covered=None
+    After fix:   cape_covered=False, inflation_covered=True,
+                 interest_rate_covered=True
+    Regime Comparability state: not comparable
+    Regime Comparability explanations: ["cape: today's value outside
+        the matched episodes' range"]
+
+Only CAPE remains out of range. This is a materially cleaner result
+than before the fix -- the earlier `not comparable` verdict from
+RE-037.1's dry-run was contaminated by two dimensions being
+unmeasurable, not genuinely uncovered; today's result isolates the
+actual signal.
+
+A `FutureWarning` from pandas appeared during this sandbox run
+(`Downcasting object dtype arrays on .fillna/.ffill/.bfill is
+deprecated`), triggered inside `pct_change()` handling leading `NaN`
+values in `CPI`. Not an error, not addressed in this iteration --
+flagged so it is not mistaken for something new if it appears under
+the pinned runtime too.
+
+What this does not authorize:
+
+-   No change to `SimilarityEngine`, `SIMILARITY_WEIGHTS`, or any
+    Frozen Core component -- neither `inflation` nor `interest_rate`
+    is consumed there.
+-   No NaN-filtering fix for CAPE or any other Context field -- flagged
+    as a known, pre-existing, project-wide characteristic, not resolved
+    here.
+-   No change to RE-036.1's `[min, max]` coverage method itself.
+-   No claim about the `EXPECTED_LOCAL_CONSISTENCY` drift (RE-030.2) --
+    unrelated, still open, deliberately left alone per the earlier
+    decision not to touch data provenance questions without a
+    confirmed root cause.
+
+Boundary:
+
+-   Two files changed: `engine/drawdown_engine.py`,
+    `engine/snapshot_engine.py`.
+-   No new files.
+-   No Frozen Core component modified.
+-   No gate, gate-combination or posture-mapper module modified.
+-   No gate state-mapping table changed.
+-   No operative wiring changed.
+-   Canonical real-pipeline values not published -- pending
+    pinned-runtime confirmation.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -6813,6 +6930,31 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.62
+
+-   Added RE-038.1: connected `inflation`/`interest_rate`, previously
+    hardcoded `None` everywhere; corrected `inflation` from raw CPI
+    level to a trailing 12-month rate.
+-   Corrected forward (RE-DOC-002) a false claim in RE-036.1: these
+    fields were never actually populated, despite that iteration's
+    text saying so -- surfaced by RE-037.1's real audit dry-run.
+-   `engine/drawdown_engine.py`: new `calculate_inflation_rate()`
+    (`InflationRate1Y = CPI.pct_change(12)`), same pattern as
+    `calculate_volatility()`. `filter_episodes()` now wires both
+    fields from the dataframe instead of hardcoding `None`.
+-   `engine/snapshot_engine.py`: `interest_rate` now wired to
+    `Rate GS10`. Removed the leftover `POSIBLES COLUMNAS MACRO` debug
+    print that appeared in every test run -- it had served its
+    purpose (identifying the column).
+-   Sandbox structural check (NOT canonical): before,
+    `inflation_covered`/`interest_rate_covered` were both `None`; after,
+    both measurable (`True`), leaving only `cape` as the real driver of
+    `not comparable` -- a materially cleaner result.
+-   No `SimilarityEngine` change -- neither field is consumed there.
+-   Left the `EXPECTED_LOCAL_CONSISTENCY` drift (RE-030.2) and the
+    CAPE/context NaN-filtering pattern explicitly untouched -- both
+    out of scope for this iteration.
 
 ## Version 1.61
 

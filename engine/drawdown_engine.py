@@ -37,6 +37,25 @@ def calculate_volatility(df):
     return df
 
 
+def calculate_inflation_rate(df):
+    """
+    RE-038.1 -- tasa de inflacion interanual, no nivel de indice.
+
+    El CPI de Shiller es un nivel de indice, casi monotono creciente a
+    lo largo de un siglo -- comparar niveles absolutos de hoy contra
+    episodios historicos casi garantiza "fuera de rango" siempre, sin
+    decir nada real sobre si el regimen inflacionario actual se parece
+    al de esos episodios. pct_change(12) sobre datos mensuales da la
+    tasa interanual, una serie sin esa tendencia secular -- mismo
+    patron que calculate_volatility() ya usa (rolling/pct_change sobre
+    la misma columna de precio).
+    """
+
+    df["InflationRate1Y"] = df["CPI"].pct_change(12)
+
+    return df
+
+
 def detect_drawdowns(df):
 
     drawdowns = []
@@ -153,9 +172,29 @@ def filter_episodes(drawdowns, df):
 
                     pre_crash_volatility_1y=d["bottom"]["Volatility1Y"],
 
-                    inflation=None,
+                    # RE-038.1 -- ambos campos antes hardcoded a None
+                    # para todos los episodios, sin excepcion.
+                    #
+                    # inflation usa InflationRate1Y (tasa interanual,
+                    # calculate_inflation_rate()), no el nivel de CPI
+                    # directamente -- el nivel es casi monotono
+                    # creciente en un siglo de historia y haria que
+                    # "cobertura de regimen" fuera casi tautologicamente
+                    # "fuera de rango" para cualquier snapshot actual.
+                    #
+                    # interest_rate usa "Rate GS10", el tipo a 10 anios
+                    # del Tesoro de EEUU, la columna estandar de tipos
+                    # en el dataset de Shiller -- confirmada por
+                    # inspeccion directa de las columnas reales
+                    # (SnapshotEngine.latest() la listaba entre las
+                    # candidatas).
+                    #
+                    # Ambos comparten con CAPE (linea de arriba) el
+                    # mismo patron de acceso sin filtrar NaN -- no se
+                    # corrige aqui, fuera de alcance de esta iteracion.
+                    inflation=d["bottom"]["InflationRate1Y"],
 
-                    interest_rate=None,
+                    interest_rate=d["bottom"]["Rate GS10"],
 
                 ),
 
@@ -255,6 +294,8 @@ def run_drawdown_engine():
     df = calculate_drawdown(df)
 
     df = calculate_volatility(df)
+
+    df = calculate_inflation_rate(df)
 
     drawdowns = detect_drawdowns(df)
 

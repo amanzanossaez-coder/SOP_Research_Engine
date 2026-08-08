@@ -55,9 +55,14 @@ class SnapshotEngine:
 
             pre_crash_volatility_1y=pre_crash_volatility_1y,
 
-            inflation=row["CPI"],
+            inflation=row["InflationRate1Y"],
 
-            interest_rate=None,
+            # RE-038.1 -- antes hardcoded a None. "Rate GS10" -- mismo
+            # criterio y misma columna que drawdown_engine.py::
+            # filter_episodes() usa ahora para los episodios historicos,
+            # para que ambos lados de la comparacion de Regime
+            # Comparability Gate usen la misma fuente.
+            interest_rate=row["Rate GS10"],
 
         )
 
@@ -83,23 +88,11 @@ class SnapshotEngine:
 
     def latest(self) -> Snapshot:
 
+        # RE-038.1 -- se retira el print de depuracion "POSIBLES
+        # COLUMNAS MACRO" que buscaba a mano la columna de tipo de
+        # interes en cada ejecucion. Ya cumplio su proposito: identifico
+        # "Rate GS10", ahora conectada explicitamente en _build_snapshot.
+
         data = self.dataset.data
-
-        print("\n========== POSIBLES COLUMNAS MACRO ==========\n")
-
-        for column in data.columns:
-
-            name = str(column).upper()
-
-            if (
-                "CPI" in name
-                or "RATE" in name
-                or "GS" in name
-                or "YIELD" in name
-                or "INTEREST" in name
-            ):
-                print(column)
-
-        print("\n=============================================\n")
 
         return self._build_snapshot(len(data) - 1)
