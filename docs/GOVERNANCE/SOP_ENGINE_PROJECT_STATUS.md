@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.66\
+**Version:** 1.67\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-032.4)
+# Execution State (as of RE-032.5)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -196,9 +196,21 @@ verified:
                         structurally comparable to the historical
                         evidence being used.
   Personal Capacity     Classified in RE-032.2 as a mixed control --
-  Boundary              Armando's explicit decision, not inferred. Still
-                        no code. Not called by run.py, DecisionEngine,
-                        AssessmentEngine or any gate. Verifiable-facts
+  Boundary              Armando's explicit decision, not inferred.
+                        RE-032.3 enumerates the nine verifiable-facts
+                        categories; RE-032.4 defines the attested-
+                        judgement channel and the Human Approval
+                        procedural boundary. RE-032.5 adds the first
+                        isolated code for the verifiable-facts half:
+                        engine/personal_capacity_facts_gate.py. Not
+                        called by run.py, DecisionEngine, AssessmentEngine
+                        or any other gate -- isolated, same as
+                        EvidenceQualityGate and RegimeComparabilityGate
+                        were before their respective posture-mapper
+                        integrations. No real-pipeline data source
+                        exists for any of the nine facts -- all live
+                        outside the Research Engine, so only synthetic
+                        verification is possible. Verifiable-facts
                         channel (liquidity, debt service, concentration,
                         etc.) is the future computable-gate half --
                         participates in gate combination via min(), same
@@ -640,7 +652,34 @@ documentation-only gate-combination boundary work.
                                   asymmetric signal) is active. Tolerance-
                                   reducing revisions apply immediately,
                                   always. Still no code, no storage
-                                  schema, no wiring.
+                                  schema, no wiring. RE-032.5 adds the
+                                  first isolated code for the
+                                  verifiable-facts half:
+                                  `engine/personal_capacity_facts_gate.py`.
+                                  Nine `Optional[bool]` local inputs,
+                                  uniform positive polarity. Three
+                                  states -- `constrained` if any fact
+                                  confirms a breach, `adequate` only if
+                                  all nine are confirmed, `not
+                                  measurable` otherwise (missing data is
+                                  never favorable). Emergency reserve
+                                  breach additionally sets an orthogonal
+                                  `blocked` flag, reusing
+                                  `GateCombinationInput.blocked`
+                                  (RE-034.3) -- resolves RE-032.3's open
+                                  question about its binary-vs-graded
+                                  treatment: both, not either/or, same
+                                  pattern as Personal Capacity's own
+                                  channel split. Provisional, stated as
+                                  such: only emergency reserve produces
+                                  a hard block in this iteration: other
+                                  failed facts only constrain. No
+                                  real-pipeline data source exists for
+                                  any of the nine facts -- synthetic
+                                  verification only. Not wired into
+                                  posture_mapper.py or
+                                  gate_combination.py -- integration is
+                                  RE-040.x, still open.
   Capital Posture Vocabulary     Documented in RE-033.1. No code. No
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
@@ -6901,6 +6940,119 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.5 — Personal Capacity Facts Gate: first isolated code
+
+RE-032.5 adds the first code for Personal Capacity's computable half
+-- the nine verifiable-facts categories enumerated in RE-032.3. The
+attested-judgement channel and Human Approval boundary (RE-032.4) are
+entirely separate and remain undecided in code; nothing here computes
+them or ever will, by design.
+
+New file: `engine/personal_capacity_facts_gate.py`.
+
+Structure, same pattern as `EvidenceQualityGate` (RE-030.1) and
+`RegimeComparabilityGate` (RE-036.1):
+
+-   `LocalPersonalCapacityFactsInputs` -- nine `Optional[bool]`
+    fields, one per RE-032.3 category, uniform positive polarity
+    throughout (`True` = adequate/acceptable/covered/manageable,
+    `False` = confirmed breach, `None` = not measured). A missing fact
+    is never treated as favorable.
+-   `PersonalCapacityFactsGate.evaluate()` combines the nine into a
+    `PersonalCapacityFactsGateResult`.
+
+Combination logic, three states:
+
+-   `constrained` if any of the nine is `False` -- one confirmed
+    breach is sufficient; a real problem does not need the full
+    picture to be visible before it counts.
+-   `adequate` only if all nine are `True` -- full confirmation
+    required, partial data never qualifies.
+-   `not measurable` otherwise (some `None`, no confirmed breach) --
+    the fail-closed default: absence of evidence is not evidence of
+    adequacy, same principle as the other two gates.
+
+Result carries `failed_fields`, `missing_fields` and `blocking_fields`
+explicitly, not just a state string and free-text explanations --
+more structurally auditable, consistent with this document's
+explainability-over-sophistication principle.
+
+Emergency Reserve resolved: RE-032.3 flagged Required Emergency
+Reserve as a likely candidate for different treatment (binary breach
+vs. graded contributor) without deciding it. RE-032.5 resolves it as
+both, not either/or -- the same pattern already used for Personal
+Capacity's own channel split. `emergency_reserve_adequate` counts
+toward the graded `state` like the other eight fields, and
+additionally sets an orthogonal `blocked` flag when `False`, reusing
+`GateCombinationInput.blocked` (RE-034.3) rather than inventing a new
+mechanism. `state` and `blocked` are independent: a blocked result
+typically also carries `state=constrained`, never `state="Blocked"` --
+that string belongs only to `gate_combination.py`'s `BLOCKED` constant,
+consumed by a future translator (RE-040.x), not produced here.
+
+Provisional, stated as such, not expanded: only
+`emergency_reserve_adequate` is a hard-block field in this iteration
+(`HARD_BLOCK_FIELDS = ["emergency_reserve_adequate"]`). Other failed
+facts only degrade `state` to `constrained`. Whether additional facts
+(e.g. confirmed forced-sale risk, extreme debt service) should become
+hard blockers, and on what principle, is left open for a future
+iteration. Not decided here by ad hoc expansion under time pressure --
+each of those candidates is arguably already a threshold question
+within an existing category (extreme debt service is a stricter
+`debt_service_manageable` threshold, not a new category), and
+widening `blocked` too easily would dilute its meaning as a genuine
+circuit-breaker.
+
+Honest limitation, stated rather than hidden: unlike the other two
+gates, this one has no `build_local_*_inputs()` function and no
+real-pipeline data source. None of the nine facts is tracked anywhere
+in this repository -- all live in Armando's own accounting / SOP
+ledger, outside the Research Engine's declared scope. Only synthetic
+verification is possible until that changes; `tests/verify_
+personal_capacity_facts_gate.py` has no real-pipeline dry-run section,
+unlike `tests/verify_regime_comparability_gate.py` or `tests/verify_
+posture_mapper.py`.
+
+New test file: `tests/verify_personal_capacity_facts_gate.py` --
+synthetic checks: all-unmeasured, all-adequate, single regular
+failure, reserve failure (state + blocked together), reserve
+unmeasured (not treated as breach), partial data with no failure,
+failure dominating missing data, and multiple simultaneous failures
+including reserve.
+
+`tests/verify_core.py` updated to recognize
+`engine/personal_capacity_facts_gate.py`.
+
+What this does not authorize:
+
+-   No wiring into `run.py`, `DecisionEngine`,
+    `posture_mapper.py` or `gate_combination.py` -- integration is
+    RE-040.x, explicitly future work, same staged pattern already used
+    for the other two gates before their own posture-mapper
+    integrations (RE-034.5/RE-037.1).
+-   No numeric thresholds for any of the nine facts -- this gate only
+    combines already-determined booleans; determining them (e.g. what
+    counts as "adequate" liquidity) happens entirely outside this
+    repository.
+-   No expansion of hard-block fields beyond emergency reserve.
+-   No attested-judgement channel or Human Approval code -- RE-032.4's
+    content is not represented here and never will be computed.
+-   No resolution of how this gate's states map to posture ceilings --
+    that mapping table is RE-040.x's scope, mirroring RE-034.5's
+    precedent for Regime Comparability.
+
+Boundary:
+
+-   Two new files: `engine/personal_capacity_facts_gate.py`,
+    `tests/verify_personal_capacity_facts_gate.py`.
+-   One file modified: `tests/verify_core.py`.
+-   No Frozen Core component touched.
+-   No existing gate, gate-combination or posture-mapper module
+    modified.
+-   Personal Capacity remains entirely outside the operative flow.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7338,6 +7490,30 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.67
+
+-   Added RE-032.5: first isolated code for Personal Capacity's
+    verifiable-facts channel. New `engine/personal_capacity_facts_
+    gate.py` -- nine `Optional[bool]` local inputs, uniform positive
+    polarity, three states (`constrained`/`adequate`/`not measurable`).
+-   Result includes `failed_fields`, `missing_fields` and
+    `blocking_fields` explicitly, not just a state string.
+-   Resolved RE-032.3's open question on Required Emergency Reserve:
+    it counts toward the graded state like the other eight facts, and
+    additionally sets an orthogonal `blocked` flag (reusing
+    `GateCombinationInput.blocked`, RE-034.3) when breached -- both,
+    not either/or. Documented as provisional: only this field is a
+    hard blocker in this iteration; expanding to other fields is left
+    open, explicitly not decided here.
+-   No real-pipeline data source exists for any of the nine facts --
+    stated explicitly; only synthetic verification
+    (`tests/verify_personal_capacity_facts_gate.py`) is possible.
+-   `tests/verify_core.py` updated to recognize the new file.
+-   Not wired into `run.py`, `DecisionEngine`, `posture_mapper.py` or
+    `gate_combination.py` -- integration is RE-040.x, still open.
+-   Closes the first-code half of Path A opened this session; the
+    attested-judgement channel is never computed, by design (RE-032.4).
 
 ## Version 1.66
 
