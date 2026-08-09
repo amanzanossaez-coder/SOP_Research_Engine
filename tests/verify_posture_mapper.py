@@ -29,10 +29,16 @@ from engine.evidence_quality_gate import (
     PREDICTIVE_VALIDATION_NOT_DEMONSTRATED,
     build_local_evidence_quality_inputs,
 )
-from engine.gate_combination import CONSERVE, DEPLOY_AGGRESSIVELY, PREPARE
+from engine.gate_combination import (
+    BLOCKED,
+    CONSERVE,
+    DEPLOY_AGGRESSIVELY,
+    PREPARE,
+)
 from engine.posture_mapper import (
     evaluate_capital_posture,
     evidence_quality_to_gate_input,
+    personal_capacity_facts_to_gate_input,
     regime_comparability_to_gate_input,
 )
 from engine.regime_comparability_gate import (
@@ -42,6 +48,12 @@ from engine.regime_comparability_gate import (
     RegimeComparabilityGate,
     RegimeComparabilityGateResult,
     build_local_regime_comparability_inputs,
+)
+from engine.personal_capacity_facts_gate import (
+    ADEQUATE as PC_ADEQUATE,
+    CONSTRAINED as PC_CONSTRAINED,
+    NOT_MEASURABLE as PC_NOT_MEASURABLE,
+    PersonalCapacityFactsGateResult,
 )
 from engine.drawdown_engine import run_drawdown_engine
 from engine.research_engine import ResearchEngine
@@ -136,6 +148,59 @@ def main() -> None:
         ),
     )
 
+    # -- Single-gate translation, Personal Capacity Facts, RE-040.1 --
+
+    pc_adequate_input = personal_capacity_facts_to_gate_input(
+        PersonalCapacityFactsGateResult(
+            state=PC_ADEQUATE, blocked=False, explanations=["x"],
+        )
+    )
+    assert_equal(
+        "pc_adequate_ceiling", pc_adequate_input.posture_ceiling, DEPLOY_AGGRESSIVELY,
+    )
+    assert_equal("pc_adequate_blocked", pc_adequate_input.blocked, False)
+
+    pc_constrained_input = personal_capacity_facts_to_gate_input(
+        PersonalCapacityFactsGateResult(
+            state=PC_CONSTRAINED, blocked=False, explanations=["x"],
+        )
+    )
+    assert_equal(
+        "pc_constrained_ceiling", pc_constrained_input.posture_ceiling, CONSERVE,
+    )
+
+    pc_not_measurable_input = personal_capacity_facts_to_gate_input(
+        PersonalCapacityFactsGateResult(
+            state=PC_NOT_MEASURABLE, blocked=False, explanations=["x"],
+        )
+    )
+    assert_equal(
+        "pc_not_measurable_ceiling", pc_not_measurable_input.posture_ceiling, CONSERVE,
+    )
+
+    pc_blocked_input = personal_capacity_facts_to_gate_input(
+        PersonalCapacityFactsGateResult(
+            state=PC_CONSTRAINED,
+            blocked=True,
+            explanations=["hard block: emergency_reserve_adequate"],
+        )
+    )
+    assert_equal("pc_blocked_propagates", pc_blocked_input.blocked, True)
+    assert_contains(
+        "pc_blocked_explanation_reaches_input",
+        pc_blocked_input.explanations,
+        "hard block: emergency_reserve_adequate",
+    )
+
+    assert_raises(
+        "unknown_personal_capacity_state_raises",
+        lambda: personal_capacity_facts_to_gate_input(
+            PersonalCapacityFactsGateResult(
+                state="made up", blocked=False, explanations=[],
+            )
+        ),
+    )
+
     # -- Combined posture, synthetic --
 
     both_weak = evaluate_capital_posture(
@@ -179,6 +244,74 @@ def main() -> None:
         CONSERVE,
     )
 
+    # -- Combined posture with Personal Capacity Facts, RE-040.1 --
+
+    # personal_capacity_facts_result omitted (None): must behave exactly
+    # as before RE-040.1 -- no ghost gate, no change to existing results.
+    omitted_matches_two_gate_call = evaluate_capital_posture(
+        EvidenceQualityGateResult(state=EQ_NOT_MEASURABLE, explanations=["eq unmeasured"]),
+        RegimeComparabilityGateResult(state=COMPARABLE, explanations=["regime comparable"]),
+    )
+    assert_equal(
+        "personal_capacity_omitted_ceiling",
+        omitted_matches_two_gate_call.posture_ceiling,
+        PREPARE,
+    )
+
+    # All three present, facts adequate: facts gate imposes no
+    # restriction of its own -- weakest gate (Evidence Quality,
+    # not measurable) still determines the ceiling.
+    three_gates_facts_adequate = evaluate_capital_posture(
+        EvidenceQualityGateResult(state=EQ_NOT_MEASURABLE, explanations=["eq unmeasured"]),
+        RegimeComparabilityGateResult(state=COMPARABLE, explanations=["regime comparable"]),
+        PersonalCapacityFactsGateResult(
+            state=PC_ADEQUATE, blocked=False, explanations=["all nine facts adequate"],
+        ),
+    )
+    assert_equal(
+        "three_gates_facts_adequate_ceiling",
+        three_gates_facts_adequate.posture_ceiling,
+        PREPARE,
+    )
+
+    # Facts gate constrained: becomes the binding (weakest) gate.
+    three_gates_facts_constrained = evaluate_capital_posture(
+        EvidenceQualityGateResult(state=CONSERVATIVE, explanations=["eq conservative"]),
+        RegimeComparabilityGateResult(state=COMPARABLE, explanations=["regime comparable"]),
+        PersonalCapacityFactsGateResult(
+            state=PC_CONSTRAINED,
+            blocked=False,
+            explanations=["debt_service_manageable: confirmed breach"],
+        ),
+    )
+    assert_equal(
+        "three_gates_facts_constrained_ceiling",
+        three_gates_facts_constrained.posture_ceiling,
+        CONSERVE,
+    )
+
+    # Emergency reserve breach: hard block overrides everything,
+    # regardless of how favorable the other two gates are.
+    reserve_breach_blocks_everything = evaluate_capital_posture(
+        EvidenceQualityGateResult(state=CONSERVATIVE, explanations=["eq conservative"]),
+        RegimeComparabilityGateResult(state=COMPARABLE, explanations=["regime comparable"]),
+        PersonalCapacityFactsGateResult(
+            state=PC_CONSTRAINED,
+            blocked=True,
+            explanations=["hard block: emergency_reserve_adequate"],
+        ),
+    )
+    assert_equal(
+        "reserve_breach_blocks_everything_ceiling",
+        reserve_breach_blocks_everything.posture_ceiling,
+        BLOCKED,
+    )
+    assert_contains(
+        "reserve_breach_explanation_visible",
+        reserve_breach_blocks_everything.explanations,
+        "Personal Capacity Facts: hard block: emergency_reserve_adequate",
+    )
+
     # -- Real pipeline, audit dry-run: structural + informative, NOT canonical --
 
     dataset = run_drawdown_engine()
@@ -204,7 +337,10 @@ def main() -> None:
     print()
     print("-- Audit dry-run against today's real snapshot --")
     print("(NOT canonical -- read-only, not wired into any operative flow,")
-    print(" Personal Capacity excluded -- see engine/posture_mapper.py docstring)")
+    print(" Personal Capacity Facts (RE-032.5/RE-040.1) excluded from this")
+    print(" dry-run -- no real data source exists for any of its nine")
+    print(" facts; attested-judgement/Human Approval (RE-032.4) excluded")
+    print(" always, has no code -- see engine/posture_mapper.py docstring)")
     print()
     print(f"predictive_validation_status used: {PREDICTIVE_VALIDATION_NOT_DEMONSTRATED}")
     print(f"  (reflects RE-PRED.16's confirmed finding -- not automatic)")

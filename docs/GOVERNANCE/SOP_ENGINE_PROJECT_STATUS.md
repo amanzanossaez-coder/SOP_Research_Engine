@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.67\
+**Version:** 1.68\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-032.5)
+# Execution State (as of RE-040.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -735,7 +735,35 @@ documentation-only gate-combination boundary work.
                                   `audit_posture.py`, mirroring run.py's
                                   precedent -- no logic change, just a
                                   way to run the check without the full
-                                  test suite.
+                                  test suite. RE-040.1 extends
+                                  `posture_mapper.py` with a third,
+                                  optional translator:
+                                  `personal_capacity_facts_to_gate_input()`,
+                                  per this document's new table
+                                  (`not measurable`/`constrained` ->
+                                  `Conserve`, `adequate` -> `Deploy
+                                  Aggressively`). `evaluate_capital_
+                                  posture()` gains an optional third
+                                  parameter, default `None` -- when
+                                  omitted, behaves exactly as before,
+                                  no ghost gate. `blocked` propagates
+                                  directly from the facts gate's own
+                                  emergency-reserve veto (RE-032.5) into
+                                  `combine_gate_outputs()`'s existing
+                                  `Blocked` short-circuit -- first real
+                                  exercise of that mechanism by any
+                                  gate. The combined result remains, by
+                                  construction, optimistic even when
+                                  this third gate is supplied: the
+                                  attested-judgement/Human Approval
+                                  channel (RE-032.4) has no code and is
+                                  never included. `audit_posture.py` and
+                                  the real-pipeline dry-run in
+                                  `tests/verify_posture_mapper.py` are
+                                  intentionally left at two gates -- no
+                                  real data source exists for any of the
+                                  nine facts, so there is nothing honest
+                                  to feed the third input there.
   Predictive Validity Boundary   Opened in RE-PRED.1. Documentation
                                   only. No code. No new calculations.
                                   No predictive-validity claim. Defines
@@ -7053,6 +7081,107 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-040.1 — Personal Capacity Facts Gate wired into posture_mapper
+
+RE-040.1 integrates RE-032.5's `PersonalCapacityFactsGate` into
+`engine/posture_mapper.py`, following the same staged pattern already
+used for `EvidenceQualityGate` (RE-030.1 -> RE-034.5/RE-037.1) and
+`RegimeComparabilityGate` (RE-036.1 -> RE-034.5/RE-037.1): isolated
+gate first, posture-ceiling mapping and combination wiring second.
+
+New posture-ceiling table, `PERSONAL_CAPACITY_FACTS_POSTURE_CEILING`:
+
+    not measurable -> Conserve
+    constrained    -> Conserve
+    adequate       -> Deploy Aggressively
+
+`adequate -> Deploy Aggressively` does not mean "authorizes an
+aggressive deployment" -- it means this gate imposes no restriction of
+its own, exactly the same reading already established for Regime
+Comparability's `comparable -> Deploy Aggressively` (RE-034.5). The
+actual ceiling, if any, still comes from whichever gate is genuinely
+restrictive; `min()` in `combine_gate_outputs()` enforces that. This is
+stated explicitly in the code comment, not left to be inferred, after
+this exact ambiguity was flagged during review before writing the code.
+
+`not measurable -> Conserve`, stricter than Evidence Quality's
+`not measurable -> Prepare` (RE-034.1): not knowing whether someone can
+personally afford the risk is treated as more serious than not knowing
+whether the model's predictions are validated.
+
+New function `personal_capacity_facts_to_gate_input()`, same pattern
+as the other two translators: raises `ValueError` on an unrecognized
+state, copies `explanations` through unchanged. `blocked` propagates
+directly from `PersonalCapacityFactsGateResult.blocked` (RE-032.5's
+emergency-reserve veto, currently the only one) into
+`GateCombinationInput.blocked` -- no reinterpretation. This is the
+first time any gate actually exercises `combine_gate_outputs()`'s
+`Blocked` short-circuit (RE-034.3), which until now had only been
+tested synthetically.
+
+`evaluate_capital_posture()` gains a third parameter,
+`personal_capacity_facts_result`, optional, default `None`. Reviewed
+and confirmed before writing: when omitted, no gate is added to the
+combination -- not a placeholder, not a default-favorable value, no
+ghost gate. Existing two-gate callers (`audit_posture.py`,
+`tests/verify_posture_mapper.py`'s real-pipeline dry-run) are
+unaffected by construction, not merely by convention.
+
+Explicitly reviewed and confirmed before writing: when `blocked=True`
+reaches `combine_gate_outputs()`, the cause must not go dark.
+`personal_capacity_facts_to_gate_input()` copies the full
+`explanations` list through (which already includes, e.g., `"hard
+block: emergency_reserve_adequate"` from RE-032.5), so the formatted
+combined result names the actual blocking field, not just the fact
+that something is blocked.
+
+Even with this third gate wired in, the combined result remains, by
+construction, optimistic: the attested-judgement channel and Human
+Approval procedural boundary (RE-032.4) have no code and are never
+computed here or anywhere. This is stated in
+`evaluate_capital_posture()`'s own docstring, not left implicit.
+
+`audit_posture.py` and the real-pipeline section of `tests/verify_
+posture_mapper.py` are deliberately left unchanged, at two gates only:
+no real data source exists for any of the nine verifiable facts (per
+RE-032.5's own stated limitation), so there is nothing honest to
+supply as the third argument there. The dry-run's disclaimer text is
+updated to name this precisely, rather than leave the older, now
+partially-inaccurate "Personal Capacity excluded" wording in place.
+
+New synthetic tests in `tests/verify_posture_mapper.py`: per-state
+translation checks, blocked propagation into the translated
+`GateCombinationInput`, three-gate combined scenarios (facts adequate
+-- ceiling still set by the weakest gate; facts constrained -- becomes
+the binding gate), and the reserve-breach case producing `Blocked`
+with the specific cause visible in the combined explanations.
+
+What this does not authorize:
+
+-   No change to `engine/gate_combination.py` -- `combine_gate_outputs()`
+    is consumed exactly as published (RE-034.3), same discipline as
+    RE-037.1.
+-   No change to `EvidenceQualityGate` or `RegimeComparabilityGate`'s
+    own mapping tables.
+-   No wiring into `run.py` or `DecisionEngine` -- the entire
+    posture-mapper layer remains an isolated, read-only composition
+    for audit/dry-run, not the future Capital Posture Engine.
+-   No real data feeding Personal Capacity Facts anywhere -- still
+    entirely synthetic.
+-   No attested-judgement/Human Approval code -- RE-032.4's content
+    remains undecided in code, permanently, by design.
+
+Boundary:
+
+-   One file modified: `engine/posture_mapper.py`.
+-   One test file modified: `tests/verify_posture_mapper.py`.
+-   No new files.
+-   No Frozen Core component touched.
+-   No existing gate's internal logic modified.
+-   Personal Capacity remains entirely outside the operative flow.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7490,6 +7619,37 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.68
+
+-   Added RE-040.1: wires RE-032.5's `PersonalCapacityFactsGate` into
+    `engine/posture_mapper.py`. New `PERSONAL_CAPACITY_FACTS_POSTURE_
+    CEILING` table (`not measurable`/`constrained` -> `Conserve`,
+    `adequate` -> `Deploy Aggressively`, stricter default than Evidence
+    Quality's `not measurable` -> `Prepare`).
+-   New `personal_capacity_facts_to_gate_input()` translator.
+    `evaluate_capital_posture()` gains an optional third parameter,
+    default `None` -- omitted means no gate added, never a ghost
+    placeholder.
+-   `blocked` propagates directly from the facts gate's own
+    emergency-reserve veto into `combine_gate_outputs()`'s existing
+    `Blocked` short-circuit -- first real exercise of that mechanism.
+    `explanations` copied through in full so the specific blocking
+    cause stays visible in the combined result, not just the fact of
+    being blocked.
+-   Combined result remains, by construction, optimistic even with
+    this third gate present -- the attested-judgement/Human Approval
+    channel (RE-032.4) has no code and is never included.
+-   `audit_posture.py` and the real-pipeline dry-run in `tests/verify_
+    posture_mapper.py` deliberately left at two gates -- no real data
+    source exists for the nine facts; disclaimer text updated to state
+    this precisely.
+-   New synthetic tests: per-state translation, blocked propagation,
+    three-gate combined scenarios including the reserve-breach ->
+    `Blocked` case with cause visible in explanations.
+-   Design ambiguity flagged and resolved before writing code:
+    `adequate -> Deploy Aggressively` documented explicitly as "this
+    gate does not restrict," not as "authorizes aggressive deployment."
 
 ## Version 1.67
 
