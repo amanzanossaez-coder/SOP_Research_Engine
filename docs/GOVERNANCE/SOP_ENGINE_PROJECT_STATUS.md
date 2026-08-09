@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.68\
+**Version:** 1.69\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-040.1)
+# Execution State (as of RE-041.1)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -683,7 +683,45 @@ documentation-only gate-combination boundary work.
   Capital Posture Vocabulary     Documented in RE-033.1. No code. No
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
-                                  as an orthogonal veto.
+                                  as an orthogonal veto. RE-041.1 fills
+                                  in RE-033.1's two explicitly deferred
+                                  numbers -- `Deploy Partially`'s bounded
+                                  fraction and `Deploy Aggressively`'s
+                                  maximum amount -- with a full Dry
+                                  Powder Protocol specification.
+                                  Documentation-only, no code, no
+                                  operative wiring. `Conserve`/`Prepare`/
+                                  `Blocked` remain 0% deployment,
+                                  unchanged from RE-033.1. Mechanism:
+                                  tranches sized as a fraction of
+                                  remaining Dry Powder (not initial
+                                  capital), gated by a dual cadence
+                                  (minimum days OR additional drawdown
+                                  points since the last tranche, reusing
+                                  the same `Drawdown` field already used
+                                  by `market_crisis` in RE-032.4), capped
+                                  by a per-posture cumulative ceiling
+                                  that acts only as a backstop for
+                                  extreme, prolonged scenarios -- not the
+                                  everyday control, which remains the
+                                  tranche+cadence mechanism. A ratchet
+                                  rule prevents refilling the cumulative
+                                  ceiling by oscillating between
+                                  postures; only a new episode (full
+                                  recovery to a new peak, same definition
+                                  already used by `drawdown_engine.py`)
+                                  resets it. Going beyond the
+                                  `Deploy Aggressively` ceiling requires
+                                  a fresh Human Approval attestation
+                                  (RE-032.4) -- reuses that existing
+                                  mechanism rather than inventing a new
+                                  one. Explicitly noted: under today's
+                                  real Evidence Quality state
+                                  (`not measurable`), this protocol
+                                  cannot trigger regardless of drawdown
+                                  depth -- built for when evidence
+                                  quality is validated, not for
+                                  immediate effect.
   Gate Combination Layer         v0 — isolated structure added in
                                   RE-034.3. `engine/gate_combination.py`
                                   exists and is verified by
@@ -7182,6 +7220,151 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.1 — Dry Powder Protocol specification
+
+RE-041.1 fills in the two numbers RE-033.1 deliberately left open:
+`Deploy Partially`'s bounded fraction and `Deploy Aggressively`'s
+maximum amount. Documentation-only -- no code, no operative wiring, no
+automatic execution. `Conserve`, `Prepare` and `Blocked` remain 0%
+deployment, exactly as RE-033.1 already fixed; this iteration does not
+touch them.
+
+A priori, not calibrated: same discipline already applied throughout
+Personal Capacity's definition. No number here was fit against the
+19-episode historical sample -- the mechanism follows from risk-
+management structure (multi-leg drawdowns are common; irreversible,
+all-at-once commitment removes optionality for a worse leg later),
+not from backtesting against this project's small sample.
+
+Mechanism, four rules:
+
+1.  **Tranche on remainder.** Each deployment event releases a fixed
+    fraction of the Dry Powder remaining at that moment (`DP_t`), not
+    of the initial episode balance. This alone produces an asymptotic
+    decay curve that never reaches zero -- but, checked explicitly
+    during design review, decay alone is not a substitute for an
+    explicit ceiling: enough events can still deploy the large majority
+    of Dry Powder without any single decision authorizing that total.
+    Rule 3 exists specifically to close that gap.
+
+2.  **Dual cadence.** A new tranche requires either a minimum number
+    of days since the last one, or additional drawdown of a fixed
+    number of percentage points (absolute, not relative) since the
+    last tranche -- reusing the live snapshot's `Drawdown` field,
+    the same one `market_crisis` already uses in RE-032.4, not a new
+    concept. `Deploy Aggressively` gets both a larger tranche and a
+    shorter cadence than `Deploy Partially` -- intensity escalates
+    with posture on both dimensions, not just one.
+
+3.  **Per-posture cumulative ceiling, backstop only.** Each posture
+    carries a maximum cumulative fraction of the episode's initial Dry
+    Powder that may ever be deployed while that posture (or a more
+    permissive one) is active. This is explicitly a circuit-breaker for
+    extreme, prolonged scenarios, not the everyday control -- day to
+    day, posture, remaining balance and cadence already do the
+    limiting. Setting the ceiling too tight would reintroduce the
+    exact paralysis a single fixed global cap was rejected for during
+    design review (a long multi-leg crash exhausting the cap on an
+    early leg, then blocking further deployment even as the evidence
+    stays favorable and valuations improve).
+
+4.  **Ratchet; reset only by episode.** The effective ceiling is the
+    highest one reached so far in the current episode -- posture
+    dropping back to `Prepare` and rising again does not refill spent
+    capacity. Explicitly closed during design review: without this
+    rule, cycling between postures could be used to "recharge" tranche
+    capacity, reopening exactly the kind of self-serving loophole this
+    session has repeatedly closed elsewhere (RE-032.4's crisis-time
+    revision asymmetry is the same principle applied here). The
+    cumulative counter resets only when a new episode begins -- full
+    recovery to a new peak, the same definition `drawdown_engine.py`
+    already uses for episode boundaries, not a calendar period.
+
+Beyond the `Deploy Aggressively` ceiling: blocked, unless a fresh
+Human Approval attestation (RE-032.4) explicitly authorizes it. Reuses
+the existing procedural mechanism rather than inventing a new one --
+the last fraction of Dry Powder is never spent by formula alone.
+
+Parameters (v1, subject to revision, not treated as permanent):
+
+    Deploy Partially:
+        tranche (% of remaining Dry Powder):     12%
+        cumulative ceiling (% of episode's
+            initial Dry Powder):                 40%
+        cadence:  30 days OR 5.0 percentage points
+                  of additional drawdown
+
+    Deploy Aggressively:
+        tranche (% of remaining Dry Powder):     22%
+        cumulative ceiling (% of episode's
+            initial Dry Powder):                 80%
+        cadence:  14 days OR 5.0 percentage points
+                  of additional drawdown
+
+    Beyond 80%: blocked without a fresh Human Approval
+    attestation (RE-032.4). v1 never authorizes 100%
+    deployment by formula alone.
+
+Sanity check performed before adopting these numbers (illustrative,
+not a claim about real market behavior): under a fast, repeated
+price-trigger scenario, `Deploy Aggressively`'s 80% ceiling is reached
+around the 7th tranche; `Deploy Partially`'s 40% ceiling around the
+4th. Both bind only under a genuinely severe, prolonged scenario, not
+in ordinary operation -- consistent with the backstop framing in
+Rule 3.
+
+Design process note: two independently drafted proposals were compared
+before adopting this specification. One used a single 21-day cadence
+for both postures, which would have silently dropped the
+intensity-escalates-with-posture principle already agreed earlier in
+this session (`Deploy Aggressively` should unlock faster, not just
+larger, tranches). Rejected for that specific, technical reason -- not
+for tone, though that proposal's self-congratulatory framing
+("impecable", "hermético") was also noted as a caution sign worth
+naming: language that declares a design closed and perfect is often a
+sign it has not been stress-tested enough. Its one genuinely good idea
+-- treating the fraction beyond the ceiling as requiring an explicit
+unlocking decision rather than staying silently frozen forever -- was
+kept and tied to the existing Human Approval mechanism (RE-032.4)
+rather than a new one.
+
+Explicitly noted, not hidden: under today's real Evidence Quality
+state (`not measurable`, per `tests/verify_posture_mapper.py`'s real
+dry-run), combined posture cannot exceed `Prepare` regardless of
+drawdown depth. This protocol cannot trigger today no matter how
+severe a real drawdown becomes. It is specified now as forward
+infrastructure, for if and when Evidence Quality is ever validated --
+not because it changes anything immediately.
+
+What this does not authorize:
+
+-   No code. No `DryPowderProtocol` module, no wiring into
+    `posture_mapper.py`, `gate_combination.py`, `run.py` or
+    `DecisionEngine`.
+-   No automatic execution of any deployment -- this remains, even
+    once coded, subject to Human Approval per the existing policy
+    (`Deploy Partially`/`Deploy Aggressively` require explicit
+    human approval with timestamp before execution, already fixed
+    earlier in this document).
+-   No relaxation of Evidence Quality, Regime Comparability or
+    Personal Capacity's existing gates or ceilings.
+-   No claim that these specific numbers are final -- v1, explicitly
+    revisable, not fit against history.
+-   No change to Portfolio Reallocation Protocol, which remains a
+    fully separate, still-undefined protocol per RE-029.1's original
+    separation.
+
+Boundary:
+
+-   No files changed except this document.
+-   No code, no thresholds implemented in any module, no operative
+    wiring.
+-   This protocol remains entirely outside the operative flow, same as
+    every gate and the posture-mapper layer it would eventually
+    consume.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7619,6 +7802,38 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.69
+
+-   Added RE-041.1: Dry Powder Protocol specification, filling in
+    RE-033.1's two deferred numbers (`Deploy Partially`'s bounded
+    fraction, `Deploy Aggressively`'s maximum amount).
+    Documentation-only -- no code, no operative wiring.
+-   Mechanism: tranches sized on remaining Dry Powder (not initial
+    balance), dual cadence (minimum days OR additional drawdown
+    points, reusing RE-032.4's `Drawdown` field), per-posture
+    cumulative ceiling as a backstop (not the everyday control),
+    ratchet with reset only at a new episode, and a hard stop beyond
+    the `Deploy Aggressively` ceiling requiring a fresh Human Approval
+    attestation (RE-032.4) rather than a new mechanism.
+-   v1 parameters: Partially 12%/tranche, 40% cumulative cap, 30-day/
+    5pp cadence; Aggressively 22%/tranche, 80% cumulative cap, 14-day/
+    5pp cadence. Never 100% by formula alone. Explicitly a priori, not
+    calibrated against the 19-episode sample.
+-   Explicitly documents that under today's real Evidence Quality
+    state (`not measurable`), this protocol cannot trigger regardless
+    of drawdown depth -- built as forward infrastructure, not for
+    immediate effect.
+-   Design process recorded: an earlier draft using a single cadence
+    for both postures was rejected for a specific technical reason
+    (it would have dropped the intensity-escalates-with-posture
+    principle), separate from noting that its self-congratulatory
+    framing was itself a caution sign. Its one good idea -- requiring
+    explicit unlock beyond the ceiling -- was kept and tied to the
+    existing Human Approval mechanism.
+-   Closes the last item on this session's fixed priority list
+    ("Dry Powder Protocol"). B1 (RE-030.2 consistency drift) remains
+    the only other open, deliberately deferred item.
 
 ## Version 1.68
 
