@@ -34,7 +34,19 @@ LESS_RESTRICTIVE_STATES = {
 }
 
 EXPECTED_LOCAL_COVERAGE = 0.9
-EXPECTED_LOCAL_CONSISTENCY = 0.9518456229064439
+
+# RE-030.3 -- corrected forward (RE-DOC-002), not silently rewritten.
+# The prior value, 0.9518456229064439, was correct at the time RE-030.2
+# recorded it, but predates RE-BUG.2's calendar-month duration fix.
+# That fix changed duration_months, which feeds SimilarityEngine's
+# duration_score/speed_score, which shifted which episodes land in the
+# top-10 match set -- without touching the Shiller data file,
+# core/constants.py, or this gate's consistency formula, all three
+# confirmed unchanged by direct investigation (B1). RE-BUG.3 updated
+# verify_research_engine.py / verify_assessment_engine.py /
+# verify_validation_metrics.py after the fix, but this file was missed.
+# Confirmed under Armando's pinned runtime.
+EXPECTED_LOCAL_CONSISTENCY = 0.9524468147359584
 EXPECTED_LOCAL_DIVERSITY = 0.6
 
 

@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.69\
+**Version:** 1.70\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-041.1)
+# Execution State (as of RE-030.3)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -7365,6 +7365,108 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-030.3 — EXPECTED_LOCAL_CONSISTENCY root cause found and corrected (closes B1)
+
+RE-030.3 closes the `EXPECTED_LOCAL_CONSISTENCY` drift left open and
+deliberately unresolved since earlier this session (logged as B1):
+`tests/verify_evidence_quality_gate.py` expected `0.9518456229064439`,
+Armando's pinned runtime measured `0.9524468147359584`. At the time,
+root cause could not be confirmed from available evidence, and
+re-downloading Shiller data to investigate was explicitly rejected --
+it would have destroyed forensic value and required re-verifying
+nearly every canonical value in the project (see the earlier decision
+in this document). The drift was logged and deliberately left alone.
+
+Root cause investigation (this iteration), by direct evidence, not
+guesswork:
+
+1.  Ruled out a floating-point tie-flip at the match-set boundary
+    (hypothesis: a numpy/pandas version difference flips which episode
+    lands in the top-10 cutoff). Measured the actual 10th-vs-11th-place
+    similarity score gap in the real pipeline: 0.019 -- several orders
+    of magnitude larger than any plausible cross-version floating-point
+    noise (~1e-15). This mechanism cannot explain a drift of this size.
+2.  Confirmed `SimilarityEngine.compare()`'s sort is stable, with
+    ties broken by the fixed original episode order -- no `set` or
+    dict-iteration nondeterminism anywhere in the ranking path.
+3.  Confirmed via `git log --oneline -- data/raw/shiller.xlsx`: exactly
+    one commit in the file's entire history (the initial project
+    commit). The Shiller data file has never changed. This also
+    corrects an earlier, mistaken note in this document claiming "no
+    git history for the data file" -- that was this session's sandbox
+    `git log` crashing on path-filtered queries (a known, recurring
+    instability), not an actual absence of history. The file is
+    tracked normally; it simply required Armando's own terminal to
+    read reliably.
+4.  Confirmed via `git diff` between the commit that added
+    `SIMILARITY_WEIGHTS`/`SIMILARITY_SCALES` history and today: the
+    only change to `core/constants.py` ever made (RE-024.1) is purely
+    additive (`OUTCOME_HORIZONS_YEARS`) and does not touch either
+    dictionary's values.
+5.  Confirmed via `git diff` between the commit that introduced
+    `build_local_evidence_quality_inputs()` (RE-030.2) and the commit
+    that first measured the drift (RE-035.1): the `returns`/
+    `pstdev(returns)` consistency-calculation block in
+    `engine/evidence_quality_gate.py` is byte-identical across that
+    range. The formula itself never changed.
+6.  Found the actual cause: `RE-BUG.2` (calendar-month duration
+    arithmetic fix) sits chronologically between RE-030.2 and
+    RE-035.1. RE-BUG.3 already documents that this fix corrected
+    `duration_months` and `recovery_months` calculations project-wide.
+    `duration_months` feeds `SimilarityEngine`'s `duration_score`
+    directly and `speed_score` indirectly (via `speed_down`) --
+    changing it shifts every episode's similarity ranking, which can
+    and did change which episodes land in the top-10 match set feeding
+    `pstdev()`. RE-BUG.3 explicitly lists which verification suites it
+    updated after the fix (`verify_research_engine.py`,
+    `verify_assessment_engine.py`, `verify_validation_metrics.py`) --
+    `tests/verify_evidence_quality_gate.py` is not on that list. It was
+    missed, not wrong: `0.9518456229064439` was the correct pre-fix
+    value at the moment RE-030.2 recorded it; RE-BUG.2 legitimately
+    changed the ground truth two iterations later, and nothing ever
+    went back to refresh this one constant.
+
+This was not a transcription error, not sandbox noise, not a data
+change, and not a package-pinning inconsistency. It is a fully
+explained, already-approved consequence of a bug fix this project
+already reviewed and accepted (RE-BUG.1/RE-BUG.2/RE-BUG.3) -- the only
+error was a documentation-refresh gap.
+
+Fix, forward-corrected (RE-DOC-002), not silently rewritten:
+`tests/verify_evidence_quality_gate.py`'s `EXPECTED_LOCAL_CONSISTENCY`
+updated to `0.9524468147359584`, with an inline comment recording the
+root cause, confirmed under Armando's pinned runtime.
+`EXPECTED_LOCAL_COVERAGE` and `EXPECTED_LOCAL_DIVERSITY` were checked
+and remain correct -- coverage depends only on match count (unchanged
+at 9 of 10) and diversity on the set of decades spanned by the match
+set (unchanged at the same six decades), so neither happened to be
+sensitive to which specific episodes shifted at the match-set boundary.
+
+What this does not authorize:
+
+-   No change to `engine/evidence_quality_gate.py`'s logic -- the
+    consistency formula itself was confirmed correct and untouched.
+-   No change to `SimilarityEngine`, `SIMILARITY_WEIGHTS`,
+    `SIMILARITY_SCALES`, or any Frozen Core component.
+-   No re-verification of other canonical values in this document --
+    this investigation's scope was strictly `EXPECTED_LOCAL_CONSISTENCY`
+    only; other constants were not audited by this iteration and are
+    not implied to be at similar risk without their own investigation.
+-   No retroactive rewrite of RE-030.2 or RE-BUG.3's own changelog
+    entries -- the correction is recorded forward, here, per RE-DOC-002.
+
+Boundary:
+
+-   One file modified: `tests/verify_evidence_quality_gate.py`.
+-   No new files.
+-   No Frozen Core component touched.
+-   No gate logic modified.
+-   Structural verification only in this sandbox -- pending
+    confirmation under Armando's pinned runtime before being treated as
+    fully closed.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7802,6 +7904,37 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.70
+
+-   Added RE-030.3: root cause of the `EXPECTED_LOCAL_CONSISTENCY`
+    drift (B1) found and corrected, closing the last open item from
+    this session's roadmap.
+-   Systematically ruled out, with direct evidence: floating-point
+    tie-flip at the match-set boundary (actual gap 0.019, far too large
+    for cross-version noise), `SimilarityEngine` sort nondeterminism
+    (confirmed stable), a Shiller data file change (exactly one commit
+    in its entire history), and a `core/constants.py` weights/scales
+    change (only ever an additive, unrelated change).
+-   Found the real cause: RE-BUG.2's calendar-month duration fix sits
+    chronologically between RE-030.2 (set the now-stale expected value)
+    and RE-035.1 (measured the drift). It corrected `duration_months`,
+    which feeds `SimilarityEngine`'s ranking directly, shifting the
+    top-10 match set. RE-BUG.3 updated three other verification suites
+    after the fix but missed this one.
+-   Corrected forward (RE-DOC-002): `EXPECTED_LOCAL_CONSISTENCY` updated
+    to `0.9524468147359584` with root cause recorded inline.
+    `EXPECTED_LOCAL_COVERAGE`/`EXPECTED_LOCAL_DIVERSITY` checked and
+    confirmed unaffected.
+-   Also corrects an earlier, mistaken working note that no git history
+    existed for the Shiller data file -- that was sandbox `git log`
+    instability on path-filtered queries, not a real absence of
+    history.
+-   Closes Task #11 and the last remaining open item from this
+    session's fixed priority list. No other open items remain except
+    ones explicitly deferred by design (Personal Capacity's attested
+    channel has no code, by design; Dry Powder Protocol numbers are
+    v1, explicitly revisable).
 
 ## Version 1.69
 
