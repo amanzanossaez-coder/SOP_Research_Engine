@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.65\
+**Version:** 1.66\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-032.3)
+# Execution State (as of RE-032.4)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -625,7 +625,22 @@ documentation-only gate-combination boundary work.
                                   questions directly: Personal Capacity
                                   participates in gate combination AND
                                   sits inside Human Approval -- split by
-                                  channel, not either/or.
+                                  channel, not either/or. RE-032.4 defines
+                                  the attested-judgement channel's five
+                                  categories and the Human Approval
+                                  procedural boundary in full: binary
+                                  veto (not min()), 90-day fixed validity,
+                                  a universal 14-day cooling-off on any
+                                  tolerance-increasing revision (not
+                                  contingent on crisis detection),
+                                  extended to 30 days when market_crisis
+                                  (objective, Drawdown <= MIN_DRAWDOWN) or
+                                  personal_crisis (self-declared,
+                                  explicitly documented as a weaker,
+                                  asymmetric signal) is active. Tolerance-
+                                  reducing revisions apply immediately,
+                                  always. Still no code, no storage
+                                  schema, no wiring.
   Capital Posture Vocabulary     Documented in RE-033.1. No code. No
                                   posture engine. No gate combination
                                   implementation. `Blocked` is documented
@@ -6754,6 +6769,138 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.4 — Personal Capacity: attested-judgement channel + Human Approval procedural boundary
+
+RE-032.4 defines, in a single iteration, both the attested-judgement
+channel's categories and the Human Approval mechanics that govern it.
+Unlike RE-032.3 (facts enumerated, thresholds deferred), this channel
+has no separate future implementation step where numbers get decided
+later -- for a channel that cannot be honestly computed, the procedural
+boundary *is* the content. This ordering was corrected earlier in this
+session: it was originally planned as a fourth, later, and separate
+"Human Approval boundary" step; collapsing it into this iteration
+avoids defining attested-judgement content twice.
+
+Categories (restated from RE-032.1, unchanged): perceived income
+stability; willingness to tolerate drawdown; ability to avoid forced
+selling; psychological capacity to hold through stress; household or
+life constraints not captured in financial data.
+
+Human Approval mechanics:
+
+1.  **Nature.** Human Approval is not a scored gate and does not
+    participate in `combine_gate_outputs()`'s `min()` posture
+    combination. It is a binary procedural prerequisite for capital
+    action. This makes explicit, not new, a principle already stated
+    at the top of this document: engines produce evidence, never
+    portfolio decisions.
+
+2.  **Who approves.** Armando, as sole principal. No delegated or
+    second approver is defined. A future accountability-partner role
+    is out of scope here.
+
+3.  **States.** `missing`, `valid`, `expired`, `under_cooling_off`.
+    These describe the attestation's status. A tolerance-reducing
+    revision is an immediate event, not a persistent state -- it never
+    produces `under_cooling_off`.
+
+4.  **Validity.** Exactly 90 calendar days from the registration
+    timestamp -- a fixed rolling window, not a calendar quarter, to
+    avoid calendar-edge ambiguity (e.g., attesting March 29 and
+    expiring April 1).
+
+5.  **Rule of block.** If the state is `missing`, `expired` or
+    `under_cooling_off`, no capital action may proceed, regardless of
+    the posture ceiling computed by Evidence Quality, Regime
+    Comparability or the future Personal Capacity facts gate.
+    Analysis, monitoring and preparation remain fully functional --
+    only execution is blocked. Fail-closed, same principle as Evidence
+    Quality Gate's defaults.
+
+6.  **Tolerance direction.** Defined against RE-033.1's existing
+    ordered posture scale (`Conserve < Prepare < Deploy Partially <
+    Deploy Aggressively`), not by subjective wording. A revision
+    "increases" tolerance if it would authorize a strictly less
+    restrictive posture ceiling than the currently valid attestation;
+    it "reduces" tolerance otherwise, including ties.
+
+7.  **Cooling-off, universal by default.** Any tolerance-increasing
+    revision enters a 14-day cooling-off period before taking effect,
+    unconditionally -- not contingent on detecting a crisis. During
+    cooling-off, the previously valid attestation remains in force.
+    Tolerance-reducing revisions apply immediately, always, regardless
+    of crisis state.
+
+8.  **Crisis as an aggravating extension, not a trigger.** Two crisis
+    signals extend the cooling-off from 14 to 30 days when active:
+    `market_crisis` (objective -- live snapshot `Drawdown <=
+    MIN_DRAWDOWN`, the same constant `drawdown_engine.py` already uses
+    to detect historical episodes; not self-reported, cannot be
+    avoided or misjudged) and `personal_crisis` (a self-declared vital
+    event -- job loss, divorce, illness, etc.).
+
+    Explicit, load-bearing design correction made this session: an
+    earlier draft made `personal_crisis` a *trigger* for cooling-off,
+    conditional on it being declared. That was rejected. The failure
+    mode RE-032.1 already named -- a tolerance revision is least
+    reliable exactly when it matters most -- applies just as much to
+    the *decision to declare* a personal crisis as it does to the
+    tolerance attestation itself: the same stress, denial or avoidance
+    that erodes judgement under pressure can just as easily suppress
+    the declaration that would have protected against it. Making
+    protection depend on accurate self-detection at the worst possible
+    moment would have quietly reintroduced the exact vulnerability
+    this entire mechanism exists to close.
+
+    The fix is structural, not a better detector: the 14-day
+    cooling-off applies to every tolerance increase regardless of
+    declared state, so an undeclared personal crisis is still covered
+    by the baseline friction. `personal_crisis` (like `market_crisis`)
+    only ever makes the control *stricter* when active -- it is never
+    required for the baseline protection to work.
+
+    Honest limitation, stated rather than hidden: `market_crisis` and
+    `personal_crisis` are not equally reliable. `market_crisis` is
+    objective and cannot be evaded. `personal_crisis` is self-reported
+    and therefore exactly as unreliable, in the moment it matters
+    most, as the thing it exists to help guard against. It is kept in
+    the design because declaring it when it is true makes protection
+    stronger, and there is no incentive to falsely declare one --
+    but its absence must never be read as evidence that no personal
+    crisis exists. This is recorded as an accepted, permanent
+    limitation, not a problem this iteration claims to have solved.
+
+Future possibility, noted but explicitly out of scope here: deltas in
+the verifiable-facts channel (RE-032.3) -- e.g., a sharp drop in
+liquidity or a spike in debt service over a short window -- could
+someday serve as an indirect, passive proxy for an undeclared personal
+crisis. Not designed in this iteration; would require tracking fact
+history, which does not exist yet.
+
+What this does not authorize:
+
+-   No code, no storage schema, no attestation form or UI.
+-   No change to `gate_combination.py`, `posture_mapper.py`, or any
+    existing gate's mapping table.
+-   Does not resolve Required Emergency Reserve's binary-vs-graded
+    question (RE-032.3, still open, deferred to RE-032.5).
+-   Does not build any facts-history/delta mechanism for the noted
+    future personal-crisis proxy.
+-   Does not solve `personal_crisis` under-reporting -- explicitly
+    documented as accepted, not solved.
+
+Boundary:
+
+-   No files changed except this document.
+-   No code, no thresholds implemented, no wiring.
+-   Personal Capacity remains entirely outside the operative flow.
+-   Closes Path A's classification/definition arc for both channels
+    (RE-032.2 classification, RE-032.3 verifiable facts, RE-032.4
+    attested judgement + Human Approval). First-code implementation
+    (facts gate, RE-032.5) remains open, next.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7191,6 +7338,33 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.66
+
+-   Added RE-032.4: defines the attested-judgement channel's five
+    categories and the full Human Approval procedural boundary in one
+    iteration -- binary veto (not `min()`), 90-day fixed validity,
+    explicit state taxonomy (`missing`/`valid`/`expired`/
+    `under_cooling_off`), tolerance direction defined via RE-033.1's
+    posture ordering.
+-   Cooling-off is universal: 14 days on any tolerance-increasing
+    revision, unconditionally -- not contingent on crisis detection.
+    Extended to 30 days when `market_crisis` (objective, `Drawdown <=
+    MIN_DRAWDOWN`) or `personal_crisis` (self-declared) is active.
+    Tolerance-reducing revisions apply immediately, always.
+-   Design correction made this session: an earlier draft made
+    `personal_crisis` a required trigger for cooling-off. Rejected --
+    it would have made protection depend on accurate self-detection at
+    the exact moment self-detection is least reliable, reintroducing
+    the vulnerability the mechanism exists to close. Fixed structurally
+    by making the 14-day cooling-off unconditional; crisis signals only
+    extend it, never gate it.
+-   Explicitly documents `personal_crisis`'s unreliability relative to
+    `market_crisis` as an accepted, permanent limitation -- not framed
+    as solved.
+-   Documentation-only. No code, no storage schema, no wiring.
+-   Closes Path A's classification/definition arc (RE-032.2, RE-032.3,
+    RE-032.4). Next: RE-032.5, first code for the facts-gate half.
 
 ## Version 1.65
 
