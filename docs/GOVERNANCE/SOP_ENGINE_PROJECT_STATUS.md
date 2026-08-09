@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.64\
+**Version:** 1.65\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ path appear cleaner than it was.
 
 ------------------------------------------------------------------------
 
-# Execution State (as of RE-032.2)
+# Execution State (as of RE-032.3)
 
 This diagram describes the intended architecture. It does not
 describe what `run.py` actually executes today. Distinguishing
@@ -599,16 +599,29 @@ documentation-only gate-combination boundary work.
   Personal Capacity Boundary     Classification boundary documented in
                                   RE-032.1. RE-032.2 resolves the primary
                                   classification question: mixed control,
-                                  Armando's explicit decision. Still no
-                                  code, no thresholds, no capital posture
-                                  mapping implemented -- classification is
-                                  not implementation. Verifiable facts ->
-                                  future computable gate, combined via
-                                  min() like Evidence Quality/Regime
-                                  Comparability. Attested judgement ->
-                                  Human Approval prerequisite, outside
-                                  gate-combination math entirely. This
-                                  also answers one of RE-032.1's open
+                                  Armando's explicit decision. RE-032.3
+                                  enumerates the nine verifiable-facts
+                                  categories (liquidity, near-term cash
+                                  needs, fixed obligations, debt service,
+                                  income concentration, portfolio
+                                  concentration, required emergency
+                                  reserve, known time horizon
+                                  constraints, fiscal/operational
+                                  constraints), each with an operational
+                                  definition and a source classification
+                                  (all currently manual entry / outside
+                                  the Research Engine, some computable if
+                                  a position/vehicle ledger existed).
+                                  Still no code, no thresholds, no
+                                  capital posture mapping implemented --
+                                  enumeration is not implementation.
+                                  Verifiable facts -> future computable
+                                  gate, combined via min() like Evidence
+                                  Quality/Regime Comparability. Attested
+                                  judgement -> Human Approval
+                                  prerequisite, outside gate-combination
+                                  math entirely. This also answers one of
+                                  RE-032.1's open
                                   questions directly: Personal Capacity
                                   participates in gate combination AND
                                   sits inside Human Approval -- split by
@@ -6652,6 +6665,95 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.3 — Personal Capacity: verifiable-facts categories
+
+RE-032.3 enumerates the nine verifiable-facts categories that will
+make up the computable half of Personal Capacity's mixed control
+(RE-032.2). It answers, for each category, RE-032.1's own open
+question of whether it can be verified from existing records or
+requires manual entry. It does not define numeric thresholds, does
+not implement a gate, and does not decide how the categories combine
+with each other -- that is RE-032.5's scope.
+
+Eight of the nine categories restate RE-032.1's own "verifiable facts"
+list; the ninth (fiscal/operational constraints) is a new addition,
+made explicit here rather than left implicit inside "known time
+horizon constraints," because it has a distinct failure mode: paper
+liquidity that is not real liquidity because of tax cost or a
+structural lock-up.
+
+1.  **Available liquidity** -- unencumbered liquid assets (cash and
+    equivalents), excluding capital already allocated to the SOP's own
+    thesis. Determines the real margin before a forced sale is needed
+    in a drawdown. Source: manual entry -- outside the Research
+    Engine's scope, lives in Armando's own accounting / SOP ledger.
+
+2.  **Near-term cash needs** -- committed spending over roughly the
+    next 12 months that cannot be covered without liquidating a
+    position. A gate blind to this could authorize deployment that
+    later forces a sale at a bad time. Source: manual entry.
+
+3.  **Fixed obligations** -- non-discretionary recurring payments
+    (mortgage, insurance, etc.). Reduces real maneuvering room in a
+    drawdown regardless of declared tolerance. Source: manual entry.
+
+4.  **Debt service** -- share of income or net worth committed to debt
+    (principal plus interest). Leveraged debt reduces real tolerance
+    independent of what is declared. Source: manual entry (a simple
+    calculation if balance/rate are recorded).
+
+5.  **Income concentration** -- dependence on a single income source.
+    If income and market share the same cycle, real risk capacity is
+    lower than it appears. Source: manual entry / semi-objective.
+
+6.  **Portfolio concentration** -- degree to which investable net
+    worth is concentrated in few assets/asset classes. Affects how far
+    total net worth can fall in an adverse scenario, independent of
+    the market signal itself. Source: computable if a position ledger
+    exists (outside the Research Engine today).
+
+7.  **Required emergency reserve** -- minimum liquidity that must
+    always be protected, regardless of any market gate. Source: manual
+    entry, value set a priori, not continuously recalibrated. Flagged
+    as a likely candidate for a different treatment than the other
+    eight categories: a binary breach (below reserve -> hard block)
+    rather than a graded contributor to a combined score. Not decided
+    here -- explicitly deferred to RE-032.5.
+
+8.  **Known time horizon constraints** -- dated events requiring
+    liquidity at a known point (home purchase, planned retirement,
+    tuition). A gate blind to this could authorize deployment that
+    collides with an already-planned need. Source: manual entry.
+
+9.  **Fiscal / operational constraints** -- tax cost of liquidating
+    (capital gains, tax-year windows) and structural access
+    restrictions (lock-ups, illiquid vehicles). Source: manual entry /
+    semi-computable if vehicle and liquidity date are recorded.
+
+What this does not authorize:
+
+-   No numeric thresholds for any category.
+-   No code, no new gate, no schema or storage for these facts.
+-   No decision on how the nine categories combine with each other
+    (weighted, all-must-pass, worst-case-dominates, etc.) -- open for
+    RE-032.5.
+-   No resolution of the Required Emergency Reserve's binary-vs-graded
+    question -- explicitly flagged, not decided.
+-   No change to the attested-judgement channel or Human Approval --
+    that remains RE-032.4's scope, deliberately kept separate per the
+    ordering correction agreed before this iteration (define the
+    computable channel first; the attested channel and its Human
+    Approval boundary together, in one iteration, since for that
+    channel the boundary IS the content).
+
+Boundary:
+
+-   No files changed except this document.
+-   No code, no thresholds, no combination logic.
+-   Personal Capacity remains entirely outside the operative flow.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7089,6 +7191,28 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.65
+
+-   Added RE-032.3: enumerates the nine verifiable-facts categories
+    for Personal Capacity's computable channel (liquidity, near-term
+    cash needs, fixed obligations, debt service, income concentration,
+    portfolio concentration, required emergency reserve, known time
+    horizon constraints, fiscal/operational constraints).
+-   Each category gets an operational definition and a source
+    classification (manual entry vs computable from an existing
+    ledger) -- answers RE-032.1's open question directly.
+-   Fiscal/operational constraints added as a ninth category, not in
+    RE-032.1's original list -- distinct failure mode (paper liquidity
+    that isn't real liquidity because of tax cost or lock-up).
+-   Flags Required Emergency Reserve as a likely binary-breach case
+    rather than a graded input, without deciding it -- deferred to
+    RE-032.5.
+-   Documentation-only. No thresholds, no code, no combination logic
+    between categories.
+-   Continues Path A; RE-032.4 (attested-judgement channel + Human
+    Approval boundary, combined per the ordering correction agreed
+    this session) is next.
 
 ## Version 1.64
 
