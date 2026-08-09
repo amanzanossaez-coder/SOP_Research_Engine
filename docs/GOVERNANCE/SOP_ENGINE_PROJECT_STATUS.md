@@ -1,7 +1,43 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.70\
+**Version:** 1.71\
 **Status:** Core Stable — Evidence Layer Aligned
+
+------------------------------------------------------------------------
+
+# Honest Progress Snapshot (RE-DOC-005)
+
+Updated at the end of every work session, per Armando's standing
+instruction. This is a deliberately separate axis from the rest of
+this document: everywhere else records what exists and what is
+verified. This table records a judgment call -- how far each block
+actually is from being real, operationally usable governance, not just
+correctly implemented in isolation. "Design/specification complete"
+and "operationally usable today" are tracked as different numbers on
+purpose; collapsing them into one blended percentage would flatter the
+system's actual readiness.
+
+As of RE-030.3 (2026-08-09):
+
+| Bloque | Avance honesto |
+|---|---:|
+| Research Engine core | 95% |
+| Research Validation | 100% técnico / validez predictiva no demostrada |
+| Evidence Quality Gate | 75-80% |
+| Regime Comparability Gate | 75-80% |
+| Personal Capacity definición | 80-85% |
+| Personal Capacity operativo real | 5-10% |
+| Gate Combination / Posture Mapper | 75-80% aislado |
+| Dry Powder Protocol | 60-65% especificación / 0% código |
+| Portfolio Reallocation | 0-5% |
+| Human Approval especificación | 50% |
+| Human Approval operativo real | 0-5% |
+
+Hoy el SOP pasó de piezas de gobernanza sueltas a una arquitectura de
+veto coherente. Sigue siendo un plano bien dibujado de una máquina que,
+con los datos actuales, no puede arrancar -- y puede que
+estructuralmente no llegue a arrancar nunca, no por falta de trabajo,
+sino por el tamaño de la muestra que la alimenta.
 
 ------------------------------------------------------------------------
 
@@ -7467,6 +7503,47 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DOC-005 — Honest Progress Snapshot policy
+
+RE-DOC-005 establishes a standing, recurring section at the top of
+this document (see "Honest Progress Snapshot" above), updated at the
+end of every work session per Armando's explicit instruction.
+
+Purpose: every other section of this document records what exists and
+what has been verified -- a factual, backward-looking record. This
+snapshot is different in kind: it is a judgment call about how close
+each block actually is to being usable, not just correctly built. The
+two questions are deliberately kept separate wherever they diverge --
+most sharply for Personal Capacity and Human Approval, where the code
+is real and tested but there is no real data or tooling behind it
+anywhere. Collapsing "designed" and "operational" into one blended
+number would flatter readiness that does not exist.
+
+Discipline for future updates:
+
+-   Each session's update replaces the table and the closing line, not
+    the surrounding policy text.
+-   Percentages are estimates, not measurements -- they should read as
+    a considered judgment, not a computed metric. Round numbers or
+    ranges are preferred over false precision.
+-   Where "specification" and "operational" diverge meaningfully for a
+    block, both are recorded as separate rows or separate figures --
+    never merged into an average that would understate how far the
+    block is from being real.
+-   The closing one-line verdict should say plainly what changed and
+    what still blocks the system from acting, even when that is
+    uncomfortable to state -- consistent with this document's existing
+    RE-DOC-002 discipline of not smoothing over history.
+
+Boundary:
+
+-   Documentation-only. No code.
+-   This snapshot does not replace or override the Component Status
+    tables, Design Decision log or Changelog -- it is a compact,
+    judgment-based summary layered on top of them.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7904,6 +7981,26 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.71
+
+-   Added RE-DOC-005: standing "Honest Progress Snapshot" section at
+    the top of this document, updated at the end of every work session
+    per Armando's explicit instruction.
+-   Tracks two deliberately separate axes per block: design/
+    specification completeness vs. real operational usability --
+    collapsing them into one blended number would flatter readiness
+    that does not exist, sharpest for Personal Capacity and Human
+    Approval (code real and tested, zero real data or tooling behind
+    it anywhere).
+-   First snapshot recorded as of RE-030.3: Research Engine core 95%;
+    Research Validation 100% technical / predictive validity not
+    demonstrated; Evidence Quality Gate 75-80%; Regime Comparability
+    Gate 75-80%; Personal Capacity definition 80-85% / operational
+    5-10%; Gate Combination/Posture Mapper 75-80% isolated; Dry Powder
+    Protocol 60-65% spec / 0% code; Portfolio Reallocation 0-5%; Human
+    Approval spec 50% / operational 0-5%.
+-   Documentation-only. No code.
 
 ## Version 1.70
 
