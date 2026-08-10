@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.71\
+**Version:** 1.72\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-030.3 (2026-08-09):
+As of RE-042.1 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -25,19 +25,24 @@ As of RE-030.3 (2026-08-09):
 | Research Validation | 100% técnico / validez predictiva no demostrada |
 | Evidence Quality Gate | 75-80% |
 | Regime Comparability Gate | 75-80% |
-| Personal Capacity definición | 80-85% |
-| Personal Capacity operativo real | 5-10% |
+| Personal Capacity definición | 85-90% |
+| Personal Capacity operativo real | 15-20% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 60-65% especificación / 0% código |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
 
-Hoy el SOP pasó de piezas de gobernanza sueltas a una arquitectura de
-veto coherente. Sigue siendo un plano bien dibujado de una máquina que,
-con los datos actuales, no puede arrancar -- y puede que
-estructuralmente no llegue a arrancar nunca, no por falta de trabajo,
-sino por el tamaño de la muestra que la alimenta.
+Hoy el SOP ganó su primer insumo real: los hechos verificables de
+Personal Capacity (RE-032.3) están ahora rellenos con cifras de los dos
+patrimonios reales, no con supuestos abstractos, y ese ejercicio ya
+produjo dos hallazgos operativos concretos (déficit de pólvora seca en
+AML, exceso ocioso en AMS) sin que exista todavía ni una línea de
+código que los lea. Sigue sin existir el adaptador que conecte este
+Excel con el gate, y sigue sin resolverse cómo `LocalPersonalCapacityFactsInputs`
+debería representar dos patrimonios distintos en lugar de uno. El plano
+tiene ahora datos reales sobre la mesa por primera vez -- pero la
+máquina que los lea automáticamente todavía no existe.
 
 ------------------------------------------------------------------------
 
@@ -7544,6 +7549,121 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-042.1 — Personal Capacity Facts: real data captured for both patrimonios (AMS/AML)
+
+RE-032.5 built the gate's logic against synthetic inputs only, with an
+explicit, stated limitation: no `build_local_personal_capacity_facts_inputs()`
+adapter exists anywhere, because no real data source existed either.
+RE-042.1 closes half of that gap -- the data half, not the code half --
+by reviewing Armando's two real portfolio-tracking files (his own,
+"AMS", and his parents', "AML") and mapping RE-032.3's nine
+verifiable-facts categories against real figures for both.
+
+This was a discussion-first exercise, not a code exercise, and it
+surfaced a real design question neither RE-032.3 nor RE-032.5
+anticipated: `LocalPersonalCapacityFactsInputs` is a single-patrimonio
+dataclass, and Armando manages two. That question is not resolved by
+this iteration -- it is captured as open, deliberately, rather than
+guessed at.
+
+What came out of the discussion, confirmed by Armando line by line:
+
+-   Liquidity model unified across both patrimonios into two layers:
+    a colchón (safety floor, never touched, sized differently per
+    patrimonio -- 30.000€ for AMS from ~4 years of its annual income
+    gap, 125.000€ for AML from years of full annual expense, since AML
+    runs a surplus and has no gap to speak of) and a pólvora seca
+    range with its own suelo/techo (AMS: 70.000-120.000€; AML:
+    125.000-175.000€, confirmed to reproduce Armando's original
+    250-300k total-liquidity figure exactly).
+-   Money-market funds folded into the liquidity bucket rather than
+    tracked as a separate asset class, per Armando's correction --
+    their function is dry powder, so their classification should say
+    so.
+-   Debt service fixed permanently at "manageable" for both
+    patrimonios -- no debt exists or is planned for either.
+-   "Fixed obligations manageable" collapsed into a derived read of
+    annual expenses vs. recurring income, per Armando's own
+    clarification that this is what he meant by "obligaciones fijas"
+    -- not an independent input.
+-   Income concentration resolved qualitatively rather than by asking
+    for exact income figures: AMS has three sources, none dominant,
+    partial market correlation via ETF dividends; AML's dominant
+    source (75%) is public pension income, structurally the most
+    stable income type available, with the total (80.000€) far
+    exceeding expenses (30-35.000€).
+-   AML's Planes de Pensiones (1.157.519,11€, 27,4% of net worth)
+    confirmed permanently excluded from liquidity/dry powder -- not
+    only legally illiquid outside retirement/long-term unemployment/
+    severe illness, but tax-punitive by design: withdrawal is taxed as
+    earned income, which combined with Armando's parents' pensions
+    would push them near the 50% marginal bracket. They are earmarked
+    as inheritance, not deployable capital, under any scenario.
+-   An arithmetic error in Armando's own initial reserve sizing for
+    AMS (a stated "3 years of expenses" that neither of the two
+    obvious readings of his own numbers produced) was caught and
+    corrected before being recorded -- Armando confirmed the intended
+    figure was ~4 years of the annual income gap.
+
+Concrete findings this produced, none of which existed before this
+data was assembled:
+
+-   AML's current dry powder (74.375€) sits 50.625€ below its own
+    125.000€ suelo -- the safety cushion is intact, but the
+    opportunity-capital reserve is under-armed relative to Armando's
+    own target.
+-   AMS's current liquidity (172.330,77€) sits 22.330,77€ above its
+    own 150.000€ techo -- idle cash by Armando's own definition, with
+    no offsetting deficit anywhere else in that patrimonio.
+-   AML's Pibank time deposit (85.000€) matures 2026-08-26, its
+    Myinvestor deposit (60.000€) matures 2026-09-29 -- both flagged as
+    the near-term source for AML's not-yet-operational Fondo
+    Monetario.
+
+Deliverable: `data/raw/personal_capacity_facts.xlsx`, three tabs
+(Notas, AMS, AML), built with the project's `xlsx` skill discipline --
+formulas rather than hardcoded derived values, blue font for manual
+inputs, black for formulas, cell-level source citations pointing back
+to each real portfolio file's sheet and field, and the "Total
+patrimonio" row shaded per Armando's request for visual emphasis.
+Recalculated via LibreOffice with zero formula errors across 37
+formulas; every derived figure above was read from the recalculated
+file, not computed independently in this document.
+
+What this does not authorize:
+
+-   No adapter code. `build_local_personal_capacity_facts_inputs()`
+    (or equivalent) still does not exist. This file is not consumed by
+    `PersonalCapacityFactsGate`, `posture_mapper.py`, or any other
+    code -- it is a structured manual/semi-automatic input artifact
+    only.
+-   No resolution of the two-patrimonio representation question at the
+    dataclass level. `LocalPersonalCapacityFactsInputs` remains
+    single-patrimonio in code. Whether the future adapter produces two
+    separate gate evaluations, a combined one, or something else is
+    explicitly undecided.
+-   No change to `PersonalCapacityFactsGate`, `posture_mapper.py`, the
+    Dry Powder Protocol specification, or any Frozen Core component.
+-   Two open items intentionally left for Armando, not silently
+    assumed: AMS's income-concentration qualitative call (adequate /
+    not) is still pending his explicit confirmation; the 155.000€ vs.
+    150.000€ rounding on AMS's total-liquidity ceiling implies a
+    120.000€ pólvora-techo assumption that has not been explicitly
+    confirmed as final.
+
+Boundary:
+
+-   One new file: `data/raw/personal_capacity_facts.xlsx`. No code
+    files touched.
+-   No Frozen Core component touched.
+-   Personal Capacity remains entirely outside the operative flow.
+-   Documentation of real data, not real automation -- the honest
+    progress this represents is captured explicitly as a separate,
+    smaller number than "operational" would imply (see Honest Progress
+    Snapshot, RE-DOC-005).
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -7981,6 +8101,44 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.72
+
+-   Added RE-042.1: real data captured for Personal Capacity Facts
+    (RE-032.3) for both of Armando's real patrimonios (AMS/AML) --
+    discussion-first, no code.
+-   Unified liquidity model across both patrimonios: colchón (safety
+    floor, never touched) + pólvora seca range with its own suelo/
+    techo. AMS: colchón 30.000€, pólvora 70.000-120.000€. AML: colchón
+    125.000€, pólvora 125.000-175.000€ (reproduces Armando's original
+    250-300k total-liquidity figure exactly).
+-   Surfaced a real open design question not anticipated by RE-032.3/
+    RE-032.5: `LocalPersonalCapacityFactsInputs` is single-patrimonio
+    in code, Armando manages two. Left explicitly open, not guessed
+    at.
+-   Concrete findings produced by the real numbers: AML's dry powder
+    is 50.625€ below its own suelo (cushion intact, opportunity
+    capital under-armed); AMS's liquidity is 22.330,77€ above its own
+    techo (idle excess); two AML time deposits maturing 2026-08-26 and
+    2026-09-29 flagged as the near-term source for its not-yet-
+    operational Fondo Monetario.
+-   AML's Planes de Pensiones (1.157.519,11€, 27,4% of net worth)
+    confirmed permanently excluded from liquidity/dry powder -- both
+    legally illiquid outside narrow exceptions and tax-punitive by
+    design (withdrawal taxed as earned income, pushing combined
+    marginal rate near 50%); earmarked as inheritance.
+-   Deliverable: `data/raw/personal_capacity_facts.xlsx` (Notas/AMS/AML
+    tabs, formulas not hardcoded values, cell-level source citations,
+    recalculated via LibreOffice with zero formula errors across 37
+    formulas).
+-   Does not authorize: no adapter code exists yet
+    (`build_local_personal_capacity_facts_inputs()` still absent), no
+    resolution of the two-patrimonio dataclass question, no change to
+    `PersonalCapacityFactsGate` or `posture_mapper.py`.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Personal Capacity
+    definición 80-85% -> 85-90%; Personal Capacity operativo real
+    5-10% -> 15-20% -- real validated data now exists, but zero
+    automation and the multi-patrimonio question remain open.
 
 ## Version 1.71
 
