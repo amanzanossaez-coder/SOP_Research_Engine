@@ -102,12 +102,16 @@ def _read_patrimonio_sheet(worksheet):
     if section2_row is not None:
 
         # +2 skips the section title row and its own column-header row
-        # ("Fecha" / "Importe desplegado" / "Postura vigente" / "Nota").
+        # ("Fecha" / "Importe desplegado" / "Postura vigente" / "Nota" /
+        # "Activo / Instrumento" -- RE-041.6 appended this last column
+        # rather than inserting it, so Section 1's column widths above
+        # stay untouched).
         for r in range(section2_row + 2, worksheet.max_row + 1):
             fecha = worksheet.cell(row=r, column=1).value
             importe = worksheet.cell(row=r, column=2).value
             postura = worksheet.cell(row=r, column=3).value
             nota = worksheet.cell(row=r, column=4).value
+            activo = worksheet.cell(row=r, column=5).value
 
             if fecha is None and importe is None and postura is None:
                 continue
@@ -118,6 +122,7 @@ def _read_patrimonio_sheet(worksheet):
                     "importe": importe,
                     "postura": postura,
                     "nota": nota,
+                    "activo": activo,
                 }
             )
 

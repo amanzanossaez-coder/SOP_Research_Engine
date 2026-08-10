@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.79\
+**Version:** 1.80\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.5 (2026-08-10):
+As of RE-041.6 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -8329,6 +8329,54 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.6 — Dry Powder Ledger: "Activo / Instrumento" column, catching a real Section 1 misreading
+
+While reviewing RE-041.3's ledger, Armando caught something real: the
+file had no place to record WHAT was actually bought, only the amount
+deployed. Confirmed this is correctly optional for the protocol
+itself -- `dry_powder_protocol.py`'s math never needs to know the
+instrument, only how much came out of Dry Powder and when -- but it is
+real audit value the ledger should still capture, same spirit as the
+project's "evidencia explicable, no caja negra" principle.
+
+Same exchange also surfaced a genuine misreading of Section 1 worth
+recording: Armando's first read was that the episode-start date is
+"the day the system happens to detect it" (i.e. today, whenever he
+runs the check). Corrected: it is `CurrentEpisode.peak_date` from
+`engine/live_episode.py` -- the market's last high before the
+drawdown began, ordinarily a date in the past relative to whenever
+he's filling the cell in, not today's date. Getting this wrong would
+silently break RE-041.4's exact-match consistency check (ledger start
+vs. live-detected peak) the first time it mattered.
+
+Added "Activo / Instrumento" as a new column E in Section 2 of
+`data/raw/dry_powder_ledger.xlsx` (both AMS/AML), appended after Nota
+rather than inserted in the middle -- Section 1 shares columns A-D by
+row position with Section 2's original four columns, and reordering
+would have forced a width change on column D that Section 1's longer
+"Nota" text didn't need. `loaders/dry_powder_ledger_loader.py` now
+reads it into each tranche dict as `"activo"`. Not consumed by
+`engine/dry_powder_ledger_state.py`'s calculations -- record-keeping
+only, exactly as scoped.
+
+What this does not authorize:
+
+-   No change to any computed field -- `cum_deployed_in_episode`,
+    `highest_posture_in_episode`, etc. are unaffected; `activo` is
+    read and stored, never used in arithmetic or posture logic.
+-   No real episode or tranche data entered -- still Pendiente/empty.
+
+Boundary:
+
+-   One file corrected: `data/raw/dry_powder_ledger.xlsx` (new column
+    only, no data).
+-   One file extended: `loaders/dry_powder_ledger_loader.py`.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8766,6 +8814,23 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.80
+
+-   Added RE-041.6: "Activo / Instrumento" column (E) in
+    `data/raw/dry_powder_ledger.xlsx` Section 2 -- Armando's own catch
+    that the ledger had no place to record what was actually bought.
+    Confirmed optional for the protocol's math, real value as an audit
+    record. Appended rather than inserted, to avoid a width conflict
+    with Section 1's shared columns.
+-   `loaders/dry_powder_ledger_loader.py` now reads it into each
+    tranche dict as `"activo"` -- not consumed by any calculation.
+-   Corrected a real misreading of Section 1 surfaced in the same
+    conversation: the episode-start date is
+    `engine.live_episode.CurrentEpisode.peak_date` (the market's last
+    high before the drawdown), not "the day you happen to check."
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
 
 ## Version 1.79
 
