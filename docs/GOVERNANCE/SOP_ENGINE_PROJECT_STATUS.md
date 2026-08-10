@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.73\
+**Version:** 1.74\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-043.1 (2026-08-10):
+As of RE-043.2 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -26,26 +26,28 @@ As of RE-043.1 (2026-08-10):
 | Evidence Quality Gate | 75-80% |
 | Regime Comparability Gate | 75-80% |
 | Personal Capacity definición | 90-95% |
-| Personal Capacity operativo real | 30-35% |
+| Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 60-65% especificación / 0% código |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
 
-Hoy la máquina arrancó por primera vez con datos reales: existe un
-adaptador que lee `personal_capacity_facts.xlsx`, lo traduce a hechos
-verificables y produce una postura de capital real para AMS y AML como
-dos ejecuciones independientes, sin intervención manual en el camino.
-No es un ejercicio hipotético -- el resultado reprodujo, de forma
-totalmente automática, el mismo hallazgo que se había descubierto a
-mano la sesión anterior (AML por debajo de su suelo de pólvora seca),
-lo cual es la primera confirmación real de que el tubo completo
-(Excel -> loader -> gate -> posture_mapper) es coherente de punta a
-punta. Sigue sin estar conectado a `run.py` ni a `DecisionEngine` --
-sigue siendo, por diseño, un dry-run de auditoría, no una decisión. Y
-de los nueve hechos por patrimonio, cuatro siguen en "Pendiente":
-Armando tiene que rellenarlos, no el sistema inventarlos.
+Hoy, por primera vez, los nueve hechos verificables de un patrimonio
+real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
+medir, cero rupturas. AML también tiene los nueve hechos completos, sin
+ninguno pendiente, y su único bloqueo (`liquidity_adequate`) es un
+hallazgo real, no un vacío de datos. Ningún campo se rellenó a ciegas:
+uno de los criterios (concentración de cartera de AML) se verificó
+directamente contra el archivo fuente antes de aceptar la valoración
+propuesta, y esa verificación cambió la imagen ("repartido en 3
+fondos" resultó ser ~91% del mismo índice bajo dos proveedores
+distintos) sin cambiar la conclusión final (Armando confirmó que la
+concentración en SP500 es la tesis de partida del SOP, no un fallo).
+Sigue sin estar conectado a `run.py` ni a `DecisionEngine` -- sigue
+siendo, por diseño, un dry-run de auditoría, no una decisión, y el
+canal atestiguado/Human Approval (RE-032.4) sigue sin una sola línea
+de código.
 
 ------------------------------------------------------------------------
 
@@ -7819,6 +7821,94 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-043.2 — Personal Capacity Facts: remaining manual inputs resolved, first ADEQUATE result
+
+RE-043.2 closes the four "Pendiente" cells RE-043.1 deliberately left
+open rather than guessed at (AMS income/portfolio concentration, AML
+portfolio concentration, and the known-horizon-event field for both
+patrimonios), plus the two fiscal facts flagged as still missing.
+
+Before writing "Adecuado" for AML's portfolio concentration on
+Armando's summary alone ("repartido en 3 fondos"), the underlying
+`02. Fondos Myinvestor` sheet was read directly. The claim was true but
+incomplete: three fund vehicles exist, but two of them (Vanguard
+US500, Fidelity S&P500) track the same index, so the real split is
+Vanguard 87.2% + Fidelity 0.4% + iShares Developed World 4.0% -- roughly
+91% effectively the same US-large-cap bet under two providers, not
+three genuinely different exposures. This total reconciles exactly
+against the Resumen tab's Fondos RV figure (2.183.088,49€) once the
+sheet's own TOTAL row -- which bundles in 199.375€ of cash sitting in
+the same brokerage account, confirmed to the cent against the
+Liquidez+Depósitos figure -- is excluded. Presented back to Armando
+before any cell was written; his answer did not change the boolean
+(US/S&P500 concentration is the SOP's own starting thesis, not a flaw)
+but the verification stands on its own -- the input this iteration
+would otherwise have accepted uncritically was less diversified than
+described.
+
+Similarly, Iberdrola's "10,6% dividend yield" (from `05. Acciones`)
+was confirmed to be yield on original cost basis (110.827,52€), not on
+current market value (356.040€, where the real yield is ~3,3%) --
+recorded as context, not as the number itself, so a future reader
+does not mistake cost-basis yield for current yield.
+
+New fiscal fact: AML also carries a pending tax-loss carryforward
+(-162.000€, TEF), previously uncaptured. Both patrimonios' minusvalías
+(AMS -215.092€, AML -162.000€) now carry the same note: a 4-year
+window to offset against future capital gains, after which the credit
+expires unused if not applied. Recorded as informational context on
+each minusvalía row, not as a new boolean -- a minusvalía is favorable
+(reduces future tax), not a restriction, so `fiscal_operational_constraints_manageable`
+stays read from "Restricciones fiscales pendientes" (now "Ninguna
+conocida" for both, confirmed explicitly, not assumed).
+
+New context row, not a new fact: AMS's income concentration is
+"Adecuado" (Armando confirmed the distribution itself is fine), but he
+flagged a different, real objective that doesn't map to any of
+RE-032.3's nine categories -- closing the 7.000€/year gap with
+predictable passive income rather than the variable consultancy income
+that has covered it historically. Recorded as an "Objetivo declarado"
+row next to the gap calculation, explicitly labelled as context for a
+future reader, not a tenth fact silently added to the gate.
+
+Result: for the first time, both patrimonios have all nine fields
+populated with real, explicit values -- zero "Pendiente" cells left.
+AMS evaluates to `ADEQUATE` (nine of nine favorable). AML evaluates to
+`CONSTRAINED` with exactly one failed field (`liquidity_adequate`) and
+zero missing fields -- the dry-powder shortfall already established in
+RE-042.1/RE-043.1 is now the sole, isolated reason for AML's ceiling,
+not one signal mixed in with several unknowns.
+
+What this does not authorize:
+
+-   No change to `PersonalCapacityFactsGate`, the adapter's threshold
+    logic, or `FIELD_INPUT_TYPES` -- this iteration is data only.
+-   No numeric concentration threshold introduced for portfolio
+    concentration -- still an operator judgment call, confirmed rather
+    than computed.
+-   No new field added for AMS's declared income objective -- it is
+    context, explicitly not one of the nine gate inputs.
+-   No wiring into `run.py` or `DecisionEngine`.
+
+Boundary:
+
+-   One file modified: `data/raw/personal_capacity_facts.xlsx` (six
+    cells resolved from "Pendiente", one new minusvalía row for AML,
+    one new context row for AMS, notes updated on both existing
+    minusvalía rows).
+-   One test file modified: `tests/verify_personal_capacity_facts_gate.py`
+    (real-pipeline expectations updated: AMS now `ADEQUATE`, AML's
+    `missing_fields` now asserted empty).
+-   No code files touched besides that test.
+-   No Frozen Core component touched.
+-   Structural verification only in this sandbox -- zero formula
+    errors across the recalculated workbook, `PersonalCapacityFactsGate`
+    and `audit_posture.py` both re-run against the updated file and
+    confirmed to produce the results described above. Pending
+    confirmation under Armando's pinned runtime.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8256,6 +8346,39 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.74
+
+-   Added RE-043.2: resolved the four remaining "Pendiente" cells left
+    open by RE-043.1 (AMS income/portfolio concentration, AML
+    portfolio concentration, known-horizon-event for both).
+-   Verified AML's "repartido en 3 fondos" claim directly against `02.
+    Fondos Myinvestor` before accepting it: two of the three funds
+    track the same index, real split is ~91% effectively one
+    US-large-cap bet (Vanguard 87.2% + Fidelity 0.4%) vs. iShares
+    Developed World 4.0%. Reconciled exactly against the Resumen
+    figure once the sheet's bundled cash (199.375€, matches
+    Liquidez+Depósitos to the cent) is excluded. Presented to Armando
+    before writing anything -- his final call (Adecuado, US/SP500
+    concentration is the SOP's own thesis) stood, but the verification
+    caught a materially incomplete picture first.
+-   Verified Iberdrola's "10,6% dividend yield" is yield on cost basis,
+    not current yield (~3,3% on today's market value) -- recorded with
+    that distinction, not as a bare number.
+-   Added AML's previously-uncaptured minusvalía (-162.000€, TEF).
+    Both patrimonios' minusvalías now note the 4-year compensation
+    window and that the credit expires unused if not applied in time.
+-   Added an "Objetivo declarado" context row for AMS (close the
+    7.000€/year gap with passive recurring income, not consultancy) --
+    explicitly not a tenth gate field.
+-   Result: both patrimonios now have all nine facts populated, zero
+    "Pendiente" cells. AMS -> `ADEQUATE` (first time ever, real or
+    synthetic, all nine favorable). AML -> `CONSTRAINED` with exactly
+    one failed field and zero missing fields.
+-   Updated `tests/verify_personal_capacity_facts_gate.py`'s
+    real-pipeline expectations to match.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Personal Capacity
+    operativo real 30-35% -> 45-50%.
 
 ## Version 1.73
 

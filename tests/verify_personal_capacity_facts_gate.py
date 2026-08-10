@@ -195,11 +195,13 @@ def main() -> None:
     ams_result = gate.evaluate(real_inputs["AMS"])
     aml_result = gate.evaluate(real_inputs["AML"])
 
-    # AMS: no confirmed breach, but four fields are still "Pendiente"
-    # in the spreadsheet -- honest NOT_MEASURABLE, not a guessed pass.
-    assert_equal("ams_real_state", ams_result.state, NOT_MEASURABLE)
+    # AMS: as of the RE-043.1 follow-up session (2026-08-10), all nine
+    # cells have a real, explicit value -- no "Pendiente" left. First
+    # time this gate has ever produced ADEQUATE from real data.
+    assert_equal("ams_real_state", ams_result.state, ADEQUATE)
     assert_equal("ams_real_blocked", ams_result.blocked, False)
     assert_equal("ams_real_failed_fields", ams_result.failed_fields, [])
+    assert_equal("ams_real_missing_fields", ams_result.missing_fields, [])
 
     # AML: liquidity_adequate is a confirmed breach -- this is the same
     # finding Armando and this document already established manually
@@ -208,6 +210,9 @@ def main() -> None:
     # even though the emergency-reserve floor (colchón) is intact. This
     # is the first time that finding has come out of the real pipeline
     # rather than manual arithmetic.
+    # As of the RE-043.1 follow-up session, every other field also has
+    # a real value -- CONSTRAINED here means exactly one genuine issue,
+    # not a mix of failure and missing data anymore.
     assert_equal("aml_real_state", aml_result.state, CONSTRAINED)
     assert_equal("aml_real_blocked", aml_result.blocked, False)
     assert_equal(
@@ -215,6 +220,7 @@ def main() -> None:
         aml_result.failed_fields,
         ["liquidity_adequate"],
     )
+    assert_equal("aml_real_missing_fields", aml_result.missing_fields, [])
     assert_equal(
         "aml_real_emergency_reserve_adequate",
         real_inputs["AML"].emergency_reserve_adequate,
