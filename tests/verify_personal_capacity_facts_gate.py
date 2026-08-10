@@ -3,11 +3,11 @@
 SOP Research Engine
 Personal Capacity Facts Gate Verification
 
-RE-032.5 -- synthetic checks only. Unlike EvidenceQualityGate or
-RegimeComparabilityGate, there is no real-pipeline data source for
-Personal Capacity facts anywhere in this repository, so there is no
-real-pipeline dry-run section here -- that is a stated limitation, not
-an oversight.
+RE-032.5 -- synthetic checks. RE-043.1 adds a real-pipeline section:
+build_local_personal_capacity_facts_inputs() reading
+data/raw/personal_capacity_facts.xlsx, evaluated for both of Armando's
+real patrimonios (AMS/AML), as two independent gate calls -- per
+Armando's explicit decision that they are never merged into one.
 """
 
 from pathlib import Path
@@ -22,9 +22,11 @@ from engine.personal_capacity_facts_gate import (
     ADEQUATE,
     CONSTRAINED,
     FACT_FIELDS,
+    FIELD_INPUT_TYPES,
     NOT_MEASURABLE,
     LocalPersonalCapacityFactsInputs,
     PersonalCapacityFactsGate,
+    build_local_personal_capacity_facts_inputs,
 )
 
 
@@ -171,11 +173,66 @@ def main() -> None:
         ["emergency_reserve_adequate"],
     )
 
+    # -- FIELD_INPUT_TYPES stays in sync with FACT_FIELDS --
+
+    assert_equal(
+        "field_input_types_keys",
+        set(FIELD_INPUT_TYPES.keys()),
+        set(FACT_FIELDS),
+    )
+
+    # -- Real pipeline: data/raw/personal_capacity_facts.xlsx, both --
+    # -- patrimonios, evaluated as two independent gate calls --
+
+    real_inputs = build_local_personal_capacity_facts_inputs()
+
+    assert_equal(
+        "real_inputs_patrimonios",
+        set(real_inputs.keys()),
+        {"AMS", "AML"},
+    )
+
+    ams_result = gate.evaluate(real_inputs["AMS"])
+    aml_result = gate.evaluate(real_inputs["AML"])
+
+    # AMS: no confirmed breach, but four fields are still "Pendiente"
+    # in the spreadsheet -- honest NOT_MEASURABLE, not a guessed pass.
+    assert_equal("ams_real_state", ams_result.state, NOT_MEASURABLE)
+    assert_equal("ams_real_blocked", ams_result.blocked, False)
+    assert_equal("ams_real_failed_fields", ams_result.failed_fields, [])
+
+    # AML: liquidity_adequate is a confirmed breach -- this is the same
+    # finding Armando and this document already established manually
+    # (dry powder 74.375 vs. suelo 125.000, both read from the sheet's
+    # own formulas): AML's current liquidity sits below its own suelo,
+    # even though the emergency-reserve floor (colchón) is intact. This
+    # is the first time that finding has come out of the real pipeline
+    # rather than manual arithmetic.
+    assert_equal("aml_real_state", aml_result.state, CONSTRAINED)
+    assert_equal("aml_real_blocked", aml_result.blocked, False)
+    assert_equal(
+        "aml_real_failed_fields",
+        aml_result.failed_fields,
+        ["liquidity_adequate"],
+    )
+    assert_equal(
+        "aml_real_emergency_reserve_adequate",
+        real_inputs["AML"].emergency_reserve_adequate,
+        True,
+    )
+    assert_equal(
+        "aml_real_income_concentration_acceptable",
+        real_inputs["AML"].income_concentration_acceptable,
+        True,
+    )
+
     print("PERSONAL CAPACITY FACTS GATE : STABLE")
     print()
-    print("NOTE: synthetic checks only -- no real-pipeline dry-run exists")
-    print("for this gate. No verifiable fact is tracked anywhere in this")
-    print("repository; all nine live outside the Research Engine.")
+    print(f"ams_real_state: {ams_result.state}")
+    print(f"ams_real_missing_fields: {ams_result.missing_fields}")
+    print(f"aml_real_state: {aml_result.state}")
+    print(f"aml_real_failed_fields: {aml_result.failed_fields}")
+    print(f"aml_real_missing_fields: {aml_result.missing_fields}")
 
 
 if __name__ == "__main__":

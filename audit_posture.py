@@ -7,11 +7,20 @@ que ya vivia dentro de tests/verify_posture_mapper.py (lineas 182-219)
 a un script propio. Objetivo: poder consultar donde caen hoy los gates
 sin tener que correr la suite de tests completa.
 
+RE-043.1 -- Evidence Quality y Regime Comparability son senales de
+mercado, compartidas por todos los patrimonios; se calculan una sola
+vez. Personal Capacity Facts es, por decision explicita de Armando,
+independiente por patrimonio -- nunca fusionado. Por eso este script
+ahora produce una postura combinada POR PATRIMONIO (una por cada
+pestaña de data/raw/personal_capacity_facts.xlsx), no una unica postura
+global.
+
 Esto NO es el Capital Posture Engine -- no existe tal componente.
-Esto NO es una herramienta de decision -- es un dry-run de lectura,
-no esta conectado a run.py ni a DecisionEngine, y excluye Personal
-Capacity (ver engine/posture_mapper.py). El resultado es, en el mejor
-caso, tan permisivo o mas que la postura real -- nunca menos.
+Esto NO es una herramienta de decision -- es un dry-run de lectura, no
+esta conectado a run.py ni a DecisionEngine. El resultado es, en el
+mejor caso, tan permisivo o mas que la postura real -- nunca menos: el
+canal de juicio atestiguado y Human Approval (RE-032.4) siguen sin
+codigo y nunca participan aqui.
 """
 
 from engine.evidence_quality_gate import (
@@ -19,6 +28,10 @@ from engine.evidence_quality_gate import (
     GlobalModelValidationState,
     PREDICTIVE_VALIDATION_NOT_DEMONSTRATED,
     build_local_evidence_quality_inputs,
+)
+from engine.personal_capacity_facts_gate import (
+    PersonalCapacityFactsGate,
+    build_local_personal_capacity_facts_inputs,
 )
 from engine.posture_mapper import evaluate_capital_posture
 from engine.regime_comparability_gate import (
@@ -48,17 +61,15 @@ def main() -> None:
     )
     regime_result = RegimeComparabilityGate().evaluate(regime_local)
 
-    combined = evaluate_capital_posture(eq_result, regime_result)
-
     print("=" * 70)
     print("SOP RESEARCH ENGINE")
     print("CAPITAL POSTURE AUDIT -- read-only dry-run")
     print("=" * 70)
     print()
     print("NOT a decision. NOT wired into run.py or DecisionEngine.")
-    print("Personal Capacity excluded -- see engine/posture_mapper.py")
-    print("docstring. Result is, at best, no more restrictive than the")
-    print("real posture -- never less.")
+    print("Attested-judgement / Human Approval channel (RE-032.4) has no")
+    print("code and never participates here. Result is, at best, no more")
+    print("restrictive than the real posture -- never less.")
     print()
     print(f"predictive_validation_status used: {PREDICTIVE_VALIDATION_NOT_DEMONSTRATED}")
     print("  (reflects RE-PRED.16's confirmed finding -- not automatic)")
@@ -68,9 +79,39 @@ def main() -> None:
     print()
     print(f"Regime Comparability state: {regime_result.state}")
     print(f"Regime Comparability explanations: {regime_result.explanations}")
-    print()
-    print(f"COMBINED posture ceiling: {combined.posture_ceiling}")
-    print(f"COMBINED explanations: {combined.explanations}")
+
+    personal_capacity_inputs = build_local_personal_capacity_facts_inputs()
+
+    if personal_capacity_inputs is None:
+        print()
+        print("Personal Capacity Facts: data/raw/personal_capacity_facts.xlsx")
+        print("not found -- combined posture below excludes it, same as")
+        print("before RE-043.1.")
+        combined = evaluate_capital_posture(eq_result, regime_result)
+        print()
+        print(f"COMBINED posture ceiling: {combined.posture_ceiling}")
+        print(f"COMBINED explanations: {combined.explanations}")
+        return
+
+    pc_gate = PersonalCapacityFactsGate()
+
+    for patrimonio_name, pc_local in personal_capacity_inputs.items():
+
+        pc_result = pc_gate.evaluate(pc_local)
+        combined = evaluate_capital_posture(
+            eq_result, regime_result, pc_result
+        )
+
+        print()
+        print("-" * 70)
+        print(f"PATRIMONIO: {patrimonio_name}")
+        print("-" * 70)
+        print(f"Personal Capacity Facts state: {pc_result.state}")
+        print(f"Personal Capacity Facts blocked: {pc_result.blocked}")
+        print(f"Personal Capacity Facts explanations: {pc_result.explanations}")
+        print()
+        print(f"COMBINED posture ceiling ({patrimonio_name}): {combined.posture_ceiling}")
+        print(f"COMBINED explanations ({patrimonio_name}): {combined.explanations}")
 
 
 if __name__ == "__main__":

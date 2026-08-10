@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.72\
+**Version:** 1.73\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-042.1 (2026-08-10):
+As of RE-043.1 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -25,24 +25,27 @@ As of RE-042.1 (2026-08-10):
 | Research Validation | 100% técnico / validez predictiva no demostrada |
 | Evidence Quality Gate | 75-80% |
 | Regime Comparability Gate | 75-80% |
-| Personal Capacity definición | 85-90% |
-| Personal Capacity operativo real | 15-20% |
+| Personal Capacity definición | 90-95% |
+| Personal Capacity operativo real | 30-35% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 60-65% especificación / 0% código |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
 
-Hoy el SOP ganó su primer insumo real: los hechos verificables de
-Personal Capacity (RE-032.3) están ahora rellenos con cifras de los dos
-patrimonios reales, no con supuestos abstractos, y ese ejercicio ya
-produjo dos hallazgos operativos concretos (déficit de pólvora seca en
-AML, exceso ocioso en AMS) sin que exista todavía ni una línea de
-código que los lea. Sigue sin existir el adaptador que conecte este
-Excel con el gate, y sigue sin resolverse cómo `LocalPersonalCapacityFactsInputs`
-debería representar dos patrimonios distintos en lugar de uno. El plano
-tiene ahora datos reales sobre la mesa por primera vez -- pero la
-máquina que los lea automáticamente todavía no existe.
+Hoy la máquina arrancó por primera vez con datos reales: existe un
+adaptador que lee `personal_capacity_facts.xlsx`, lo traduce a hechos
+verificables y produce una postura de capital real para AMS y AML como
+dos ejecuciones independientes, sin intervención manual en el camino.
+No es un ejercicio hipotético -- el resultado reprodujo, de forma
+totalmente automática, el mismo hallazgo que se había descubierto a
+mano la sesión anterior (AML por debajo de su suelo de pólvora seca),
+lo cual es la primera confirmación real de que el tubo completo
+(Excel -> loader -> gate -> posture_mapper) es coherente de punta a
+punta. Sigue sin estar conectado a `run.py` ni a `DecisionEngine` --
+sigue siendo, por diseño, un dry-run de auditoría, no una decisión. Y
+de los nueve hechos por patrimonio, cuatro siguen en "Pendiente":
+Armando tiene que rellenarlos, no el sistema inventarlos.
 
 ------------------------------------------------------------------------
 
@@ -7664,6 +7667,158 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-043.1 — Personal Capacity Facts: real adapter, generic across patrimonios
+
+RE-043.1 closes the code half of the gap RE-042.1 left open: a real
+`build_local_personal_capacity_facts_inputs()` now reads
+`data/raw/personal_capacity_facts.xlsx` and produces one
+`LocalPersonalCapacityFactsInputs` per patrimonio, evaluated by
+`PersonalCapacityFactsGate` and combined into a real capital posture
+via `posture_mapper.py` -- for the first time with real numbers, not
+synthetic ones.
+
+Architecture decision, confirmed by Armando before any code was
+written: AMS and AML are two independent capital postures, never
+merged into one. This is not incidental -- it is required for a
+second, explicit reason Armando gave: the system must scale to future
+third-party patrimonios by adding a spreadsheet tab, not by touching
+code. The adapter reflects this directly: it iterates every sheet in
+the workbook except "Notas" and treats each as an independent
+patrimonio, locating each required value by the exact text of its
+"Concepto" cell rather than by row/column coordinate. Any sheet is
+free to carry extra breakdown rows or notes that differ from every
+other sheet, as long as it reuses the canonical labels the adapter
+requires.
+
+RE-032.3 explicitly declined to set numeric thresholds for any of its
+nine categories ("No numeric thresholds for any category"). Turning
+raw spreadsheet numbers into the gate's booleans required deciding
+that boundary for the first time -- proposed, critiqued, and revised
+before being written, not invented unilaterally:
+
+1.  **Available liquidity** -- `liquidez_total_actual >= suelo_total_liquidez`.
+2.  **Near-term cash needs** -- `ingresos_recurrentes >= gasto_anual`
+    OR `liquidez_total_actual >= colchón`. Documented explicitly:
+    "covered" accepts being covered by the safety cushion, not only by
+    ongoing income.
+3.  **Fixed obligations** -- v1 alias of #2, not an independent check.
+    Per Armando's own clarification that "obligaciones fijas" means
+    annual expenses, the same figure #2 already uses.
+4.  **Debt service** -- read from the "Servicio de deuda manejable"
+    cell, not hardcoded in code. An earlier draft of this proposal
+    fixed this to `True` in Python; Armando's review caught it as a
+    real near-bug, not a style note -- a hardcoded constant would never
+    notice if either patrimonio took on debt in the future.
+5.  **Income concentration** -- read directly from a "Valoración
+    cualitativa (concentración de ingresos)" cell (renamed from the
+    ambiguous "Valoración cualitativa" RE-042.1 originally used, now
+    that a second such cell exists in the same sheet).
+6.  **Portfolio concentration** -- same pattern, new cell "Valoración
+    cualitativa (concentración de cartera)" added to both sheets.
+7.  **Required emergency reserve** -- `liquidez_total_actual >= colchón`,
+    hard block on breach (RE-032.5, unchanged). Documented explicitly
+    that this shares its underlying liquidity figure with #1 at a
+    different threshold (suelo vs. colchón) -- two deliberately
+    different tests on the same number, not two independent data
+    points, per Armando's review.
+8.  **Known time horizon constraints** -- new cell "Próximo evento con
+    necesidad de liquidez conocida". Only the explicit token "Ninguno
+    conocido" reads as favorable; a blank cell reads as not-measured,
+    never as favorable by default.
+9.  **Fiscal / operational constraints** -- new cell "Restricciones
+    fiscales pendientes", same explicit-token discipline as #8
+    ("Ninguna conocida"). An earlier draft of this proposal defaulted
+    an empty cell to `True` on the reasoning that the one known fiscal
+    trap (AML's Planes de Pensiones) was already excluded elsewhere --
+    Armando's review rejected this as a real fail-closed violation
+    regardless of how safe the reasoning felt, not a style
+    preference.
+
+Input-type taxonomy, the condition Armando set for green-lighting this
+work: every field now has a documented `input_type` in
+`FIELD_INPUT_TYPES` (`engine/personal_capacity_facts_gate.py`) --
+`COMPUTED` (derived purely from other recorded figures), `OPERATOR_FACT`
+(entered directly because no formula exists, e.g. debt service),
+or `OPERATOR_JUDGMENT` (a structured call the operator makes visible
+in the same sheet, e.g. income concentration). This is a three-way
+split, not the two-way split first proposed in review: collapsing
+`OPERATOR_JUDGMENT` into the same treatment as RE-032.4's attested
+channel would import machinery (cooling-off periods, 90-day validity)
+built specifically against self-interested revision under emotional
+stress -- a risk that does not apply to an analytical judgment like
+income-source diversification. `FIELD_INPUT_TYPES` is asserted in code
+to stay in sync with `FACT_FIELDS`, not just documented by convention.
+
+A bug caught by the first real-pipeline run, not by review: the
+"Pendiente" placeholder Armando's own spreadsheet convention uses for
+"not filled in yet" was initially read by `_to_bool_explicit_none_token()`
+as real content -- any non-blank, non-"Ninguno/Ninguna conocida" text
+resolved to `False` ("confirmed breach"), so both new fields showed as
+confirmed failures for both patrimonios before a single manual cell
+had been filled in. The practical posture outcome was unaffected
+(`False` and `None` both push the ceiling toward `Conserve`), but the
+explanation was dishonest -- exactly what this iteration's own
+provenance discipline exists to prevent. Fixed by treating "pendiente"
+as a null-equivalent token, identically to a blank cell.
+
+Concrete, end-to-end validation: running the real adapter today
+produces AMS at `not measurable` (four fields still "Pendiente") and
+AML at `constrained`, driven specifically by `liquidity_adequate:
+confirmed breach` -- the exact same finding RE-042.1 established by
+manual arithmetic (AML's 74.375€ of dry powder sits below its
+125.000€ suelo). This is the first time that finding has come out of
+the automated pipeline rather than a spreadsheet formula read by a
+human. `audit_posture.py` now loops over every patrimonio the workbook
+contains and prints a combined posture per patrimonio; both currently
+resolve to `Conserve`, but for AML that ceiling now has a genuine
+Personal Capacity contribution in its explanation, not just Regime
+Comparability riding alone.
+
+New file: `loaders/personal_capacity_facts_loader.py` -- raw
+Concepto/Valor extraction only, no boolean interpretation, mirroring
+the existing `loaders/shiller_loader.py` / `engine/drawdown_engine.py`
+split (raw file I/O stays out of engine modules).
+
+What this does not authorize:
+
+-   No wiring into `run.py` or `DecisionEngine` -- `audit_posture.py`
+    remains a read-only dry-run, exactly as RE-039.1 established.
+-   No change to the attested-judgement / Human Approval channel
+    (RE-032.4) -- it remains entirely uncoded, by design, and
+    `OPERATOR_JUDGMENT` fields are explicitly not routed through it.
+-   No change to `PersonalCapacityFactsGate.evaluate()`'s own logic,
+    `HARD_BLOCK_FIELDS`, `gate_combination.py`, or any Frozen Core
+    component.
+-   No resolution of what "Restricciones fiscales pendientes" or
+    "Próximo evento con necesidad de liquidez conocida" should say for
+    either patrimonio -- both remain "Pendiente" (not-measured), left
+    for Armando to fill in, not guessed at.
+-   No numeric threshold for portfolio concentration -- category 6
+    stays an operator judgment call precisely because no threshold was
+    agreed.
+
+Boundary:
+
+-   New file: `loaders/personal_capacity_facts_loader.py`.
+-   Modified: `engine/personal_capacity_facts_gate.py` (taxonomy +
+    adapter + helpers), `audit_posture.py` (per-patrimonio loop),
+    `tests/verify_personal_capacity_facts_gate.py` (real-pipeline
+    section), `tests/verify_posture_mapper.py` (corrected a now-stale
+    claim that no real data source existed), `data/raw/personal_capacity_facts.xlsx`
+    (three new cells per patrimonio, two renamed for lookup
+    disambiguation).
+-   No Frozen Core component touched.
+-   Structural verification only in this sandbox (all `tests/verify_*.py`
+    pass except the three pre-existing, unrelated
+    `RUNTIME : MISMATCH` failures and one `match_bottoms` tie-order
+    difference in `verify_research_engine.py` -- none of today's
+    changed files are imported anywhere in that test's dependency
+    chain, so this is the same sandbox-vs-pinned-runtime gap already
+    documented elsewhere in this project, not a regression introduced
+    here). Pending confirmation under Armando's pinned runtime.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8101,6 +8256,53 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.73
+
+-   Added RE-043.1: real `build_local_personal_capacity_facts_inputs()`
+    adapter, generic across any number of patrimonio tabs
+    (data/raw/personal_capacity_facts.xlsx), evaluated as independent
+    capital postures per Armando's explicit decision -- AMS and AML
+    never merged.
+-   Defined, for the first time, the numeric/boolean threshold logic
+    RE-032.3 explicitly deferred, for all nine verifiable-facts
+    categories -- proposed, critiqued by Armando, and revised before
+    being written.
+-   Added `FIELD_INPUT_TYPES` taxonomy (COMPUTED / OPERATOR_FACT /
+    OPERATOR_JUDGMENT) per field, the condition Armando set for
+    green-lighting this iteration -- kept in sync with `FACT_FIELDS`
+    by an assertion, not by convention.
+-   Fixed a real bug caught by the first real-pipeline run: the
+    "Pendiente" placeholder was initially read as confirmed content
+    (`False`) instead of not-measured (`None`) for two new fields --
+    corrected before being shipped.
+-   Fixed a near-bug caught in review before it was written: an
+    earlier draft hardcoded `debt_service_manageable = True` in Python
+    instead of reading the Excel cell that already existed for it.
+-   Fixed a fail-closed violation caught in review before it was
+    written: an earlier draft defaulted missing fiscal-constraint data
+    to `True`. Corrected to require an explicit token
+    ("Ninguna conocida" / "Ninguno conocido"), blank = not-measured.
+-   Added `loaders/personal_capacity_facts_loader.py` -- raw
+    Concepto/Valor extraction, no interpretation, mirroring the
+    `loaders/shiller_loader.py` split.
+-   `audit_posture.py` now loops over every patrimonio and prints a
+    combined posture per patrimonio. Real result today: AMS `not
+    measurable` (four fields pending), AML `constrained` --
+    `liquidity_adequate` breach, reproducing RE-042.1's manually-found
+    result end-to-end through the automated pipeline for the first
+    time.
+-   Corrected a now-stale claim in `tests/verify_posture_mapper.py`
+    that no real Personal Capacity Facts data source existed.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Personal Capacity
+    definición 85-90% -> 90-95%; Personal Capacity operativo real
+    15-20% -> 30-35%.
+-   Three new spreadsheet cells added per patrimonio (portfolio
+    concentration judgment, known-horizon-event fact, pending-fiscal-
+    restriction fact); two existing cells renamed for lookup
+    disambiguation.
+-   Not wired into `run.py` or `DecisionEngine`. Attested-judgement /
+    Human Approval channel (RE-032.4) remains entirely uncoded.
 
 ## Version 1.72
 
