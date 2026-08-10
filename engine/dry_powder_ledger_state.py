@@ -1,22 +1,25 @@
 """
 SOP Research Engine
-Dry Powder Ledger State -- RE-041.4
+Dry Powder Ledger State -- RE-041.4 / RE-041.5
 
 Joins RE-041.2's live market-episode detection
 (engine/live_episode.py) with RE-041.3's manual ledger
 (data/raw/dry_powder_ledger.xlsx) to produce the parts of
 DryPowderProtocolInputs (engine/dry_powder_protocol.py) that neither
-piece can supply alone.
+piece can supply alone: compute_ledger_episode_state() /
+build_local_dry_powder_ledger_state().
 
-Deliberately does NOT produce a ready-to-evaluate
-DryPowderProtocolInputs. `current_posture` and
-`human_approval_above_ceiling` are not this module's concern -- they
-come from the combined-gate pipeline and Human Approval respectively,
-neither of which this module reads or should read (single
-responsibility, same discipline as every other gate/adapter this
-session). A future caller merges this module's LedgerEpisodeState with
-those two separately-sourced values to build the final
-DryPowderProtocolInputs.
+RE-041.5 adds the final assembly step, to_dry_powder_protocol_inputs():
+it still never reads or computes `current_posture` or
+`human_approval_above_ceiling` itself -- those come from the
+combined-gate pipeline and Human Approval respectively, neither of
+which this module has any business touching (single responsibility,
+same discipline as every other gate/adapter this session). The
+function only *accepts* those two as arguments from whichever caller
+already has them (e.g. audit_posture.py's per-patrimonio
+evaluate_capital_posture() result) and merges them with this module's
+own LedgerEpisodeState output. This is glue, not a new source of
+truth for either field.
 
 Scope of this iteration, stated plainly rather than silently
 shipped partial: `drawdown_pp_since_last_deployment` is NOT computed
@@ -48,6 +51,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Optional
 
+from engine.dry_powder_protocol import DryPowderProtocolInputs
 from engine.gate_combination import CONSERVE, POSTURE_ORDER
 from engine.live_episode import run_live_episode_detector
 from loaders.dry_powder_ledger_loader import (
@@ -262,6 +266,50 @@ def compute_ledger_episode_state(
         drawdown_pp_since_last_deployment=None,
         highest_posture_in_episode=highest_posture_in_episode,
         explanations=explanations,
+    )
+
+
+def to_dry_powder_protocol_inputs(
+    ledger_state: LedgerEpisodeState,
+    current_posture: str,
+    human_approval_above_ceiling: bool = False,
+) -> Optional[DryPowderProtocolInputs]:
+    """
+    RE-041.5 -- assembles a DryPowderProtocolInputs from this module's
+    output plus the two fields that are never this module's concern:
+    current_posture (combined-gate ceiling, e.g.
+    engine.posture_mapper.evaluate_capital_posture()'s result) and
+    human_approval_above_ceiling (Human Approval / RE-032.4, no code
+    yet -- defaults to False, never assumed True).
+
+    Returns None when there is nothing meaningful to evaluate yet:
+    no active episode, or an active episode whose ledger Section 1
+    isn't resolved (initial_dry_powder/remaining_dry_powder unknown).
+    dry_powder_protocol.py requires concrete floats for both, not
+    Optional -- inventing a placeholder number here would be exactly
+    the silent-guess failure mode this project rejects elsewhere.
+    """
+
+    if not ledger_state.has_active_episode:
+        return None
+
+    if (
+        ledger_state.initial_dry_powder is None
+        or ledger_state.remaining_dry_powder is None
+    ):
+        return None
+
+    return DryPowderProtocolInputs(
+        current_posture=current_posture,
+        initial_dry_powder=ledger_state.initial_dry_powder,
+        remaining_dry_powder=ledger_state.remaining_dry_powder,
+        cum_deployed_in_episode=ledger_state.cum_deployed_in_episode,
+        days_since_last_deployment=ledger_state.days_since_last_deployment,
+        drawdown_pp_since_last_deployment=(
+            ledger_state.drawdown_pp_since_last_deployment
+        ),
+        highest_posture_in_episode=ledger_state.highest_posture_in_episode,
+        human_approval_above_ceiling=human_approval_above_ceiling,
     )
 
 

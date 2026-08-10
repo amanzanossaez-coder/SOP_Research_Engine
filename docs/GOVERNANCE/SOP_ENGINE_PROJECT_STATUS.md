@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.78\
+**Version:** 1.79\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.4 (2026-08-10):
+As of RE-041.5 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,7 +29,7 @@ As of RE-041.4 (2026-08-10):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
-| Dry Powder -- rastreo de episodio en vivo | 55-60% (detección + ledger + adaptador; falta drawdown_pp_since_last_deployment y el ensamblaje final a DryPowderProtocolInputs) |
+| Dry Powder -- rastreo de episodio en vivo | 70-75% (cadena completa demostrada en audit_posture.py; falta drawdown_pp_since_last_deployment y wiring a run.py/DecisionEngine) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -8280,6 +8280,55 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.5 — Dry Powder Protocol wired into the audit dry-run (still not into run.py)
+
+RE-041.5 closes the assembly step explicitly deferred in RE-041.4:
+`engine/dry_powder_ledger_state.py::to_dry_powder_protocol_inputs()`
+merges a `LedgerEpisodeState` with a caller-supplied `current_posture`
+and `human_approval_above_ceiling` (default `False`, never assumed
+`True`) into a real `DryPowderProtocolInputs`. Returns `None` -- not a
+guessed value -- when there's nothing meaningful to evaluate: no
+active episode, or an active episode whose ledger isn't resolved yet.
+
+`audit_posture.py` now calls this per patrimonio, using the same
+`combined.posture_ceiling` it already prints from
+`evaluate_capital_posture()`, and evaluates the result through
+`DryPowderProtocol().evaluate()` when assembly succeeds. Run against
+the real files today: both AMS and AML print "not evaluated" with
+RE-041.2's own explanation ("no active market episode detected"),
+because no episode is active -- the value of this iteration is that
+the full chain (live episode detection -> ledger -> combined posture
+-> protocol evaluation) is now demonstrated end-to-end in one script,
+not that it produces a number today.
+
+This is still the same read-only dry-run `audit_posture.py` has been
+since RE-039.1 -- not a new decision surface. Nothing about `run.py`,
+`DecisionEngine`, or automatic execution changes.
+
+What this does not authorize:
+
+-   No wiring into `run.py` or `DecisionEngine` -- `audit_posture.py`
+    remains a standalone, read-only CLI.
+-   No change to `human_approval_above_ceiling`'s default -- always
+    `False` here, since Human Approval (RE-032.4) still has no code.
+-   No change to `drawdown_pp_since_last_deployment`'s RE-041.4 gap --
+    still `None`, still safe, still deferred.
+
+Boundary:
+
+-   One file extended: `engine/dry_powder_ledger_state.py`
+    (`to_dry_powder_protocol_inputs()` added).
+-   One test file extended: `tests/verify_dry_powder_ledger_state.py`.
+-   One file extended: `audit_posture.py` (per-patrimonio Dry Powder
+    Protocol dry-run printout added).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. `audit_posture.py` re-run directly and confirmed
+    to print the expected "not evaluated" result for both patrimonios
+    under today's real data.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8717,6 +8766,26 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.79
+
+-   Added RE-041.5: `engine/dry_powder_ledger_state.py::to_dry_powder_protocol_inputs()`
+    -- merges LedgerEpisodeState with a caller-supplied current_posture
+    and human_approval_above_ceiling (default False) into a real
+    DryPowderProtocolInputs. Returns None (never a guessed value) when
+    nothing is resolved enough to evaluate.
+-   `audit_posture.py` now runs Dry Powder Protocol per patrimonio
+    using the same combined posture it already prints -- full chain
+    (live episode -> ledger -> combined posture -> protocol) now
+    demonstrated end-to-end in one script. Still read-only, still not
+    wired into run.py/DecisionEngine.
+-   Run against real data today: both AMS and AML print "not
+    evaluated," consistent with RE-041.2's finding that no episode is
+    active.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. `audit_posture.py` re-run directly and confirmed.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder --
+    rastreo de episodio en vivo 55-60% -> 70-75%.
 
 ## Version 1.78
 

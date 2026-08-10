@@ -15,14 +15,29 @@ ahora produce una postura combinada POR PATRIMONIO (una por cada
 pestaña de data/raw/personal_capacity_facts.xlsx), no una unica postura
 global.
 
+RE-041.5 -- añade, por patrimonio, el dry-run de Dry Powder Protocol:
+la postura combinada de arriba mas engine/dry_powder_ledger_state.py
+(que ya cruza engine/live_episode.py con data/raw/dry_powder_ledger.xlsx)
+se ensamblan en un DryPowderProtocolInputs real y se evaluan. Hoy no
+hay ningun episodio activo (RE-041.2), asi que esto imprime
+"not evaluated" para ambos patrimonios -- el valor de esta iteracion es
+que la tuberia completa queda demostrada end-to-end, no que produzca
+una cifra hoy.
+
 Esto NO es el Capital Posture Engine -- no existe tal componente.
 Esto NO es una herramienta de decision -- es un dry-run de lectura, no
 esta conectado a run.py ni a DecisionEngine. El resultado es, en el
 mejor caso, tan permisivo o mas que la postura real -- nunca menos: el
 canal de juicio atestiguado y Human Approval (RE-032.4) siguen sin
-codigo y nunca participan aqui.
+codigo y nunca participan aqui -- human_approval_above_ceiling se pasa
+siempre como False, nunca asumido True.
 """
 
+from engine.dry_powder_ledger_state import (
+    build_local_dry_powder_ledger_state,
+    to_dry_powder_protocol_inputs,
+)
+from engine.dry_powder_protocol import DryPowderProtocol
 from engine.evidence_quality_gate import (
     EvidenceQualityGate,
     GlobalModelValidationState,
@@ -95,6 +110,8 @@ def main() -> None:
 
     pc_gate = PersonalCapacityFactsGate()
 
+    ledger_states = build_local_dry_powder_ledger_state()
+
     for patrimonio_name, pc_local in personal_capacity_inputs.items():
 
         pc_result = pc_gate.evaluate(pc_local)
@@ -112,6 +129,42 @@ def main() -> None:
         print()
         print(f"COMBINED posture ceiling ({patrimonio_name}): {combined.posture_ceiling}")
         print(f"COMBINED explanations ({patrimonio_name}): {combined.explanations}")
+
+        ledger_state = (
+            ledger_states.get(patrimonio_name) if ledger_states else None
+        )
+
+        print()
+        if ledger_state is None:
+            print(
+                f"Dry Powder Ledger ({patrimonio_name}): "
+                "data/raw/dry_powder_ledger.xlsx not found."
+            )
+            continue
+
+        print(f"Dry Powder Ledger state ({patrimonio_name}): {ledger_state}")
+
+        dp_inputs = to_dry_powder_protocol_inputs(
+            ledger_state,
+            combined.posture_ceiling,
+            human_approval_above_ceiling=False,
+        )
+
+        if dp_inputs is None:
+            print(
+                f"Dry Powder Protocol ({patrimonio_name}): not evaluated "
+                f"-- {ledger_state.explanations}"
+            )
+            continue
+
+        dp_result = DryPowderProtocol().evaluate(dp_inputs)
+
+        print(f"Dry Powder Protocol status ({patrimonio_name}): {dp_result.status}")
+        print(
+            f"Dry Powder Protocol authorized_amount ({patrimonio_name}): "
+            f"{dp_result.authorized_amount}"
+        )
+        print(f"Dry Powder Protocol reason ({patrimonio_name}): {dp_result.reason}")
 
 
 if __name__ == "__main__":

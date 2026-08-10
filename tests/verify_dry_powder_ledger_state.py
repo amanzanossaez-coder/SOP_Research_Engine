@@ -7,6 +7,9 @@ RE-041.4 -- synthetic checks on compute_ledger_episode_state() (pure
 logic, no I/O), plus a real-pipeline check on
 build_local_dry_powder_ledger_state() against the actual
 data/raw/dry_powder_ledger.xlsx and today's live market state.
+
+RE-041.5 -- synthetic checks on to_dry_powder_protocol_inputs(), the
+final assembly step.
 """
 
 from datetime import date
@@ -19,9 +22,12 @@ sys.path.insert(0, str(ROOT))
 
 
 from engine.dry_powder_ledger_state import (
+    LedgerEpisodeState,
     build_local_dry_powder_ledger_state,
     compute_ledger_episode_state,
+    to_dry_powder_protocol_inputs,
 )
+from engine.dry_powder_protocol import AUTHORIZED, DryPowderProtocol
 from engine.gate_combination import CONSERVE, DEPLOY_AGGRESSIVELY, DEPLOY_PARTIALLY
 from engine.live_episode import CurrentEpisode
 from loaders.dry_powder_ledger_loader import (
@@ -205,6 +211,52 @@ def main() -> None:
         "with_tranches_fixed_date_days_since_last",
         with_tranches_fixed_date.days_since_last_deployment,
         (as_of - date(2026, 6, 15)).days,
+    )
+
+    # -- Assembly: no active episode -> nothing to evaluate --
+
+    assert_equal(
+        "assembly_no_episode",
+        to_dry_powder_protocol_inputs(no_episode, DEPLOY_PARTIALLY),
+        None,
+    )
+
+    # -- Assembly: active episode but ledger unresolved -> nothing to --
+    # -- evaluate, never a guessed number --
+
+    assert_equal(
+        "assembly_pending_marker",
+        to_dry_powder_protocol_inputs(pending_marker, DEPLOY_PARTIALLY),
+        None,
+    )
+
+    # -- Assembly: fully resolved ledger state -> real --
+    # -- DryPowderProtocolInputs, correctly mapped, default --
+    # -- human_approval_above_ceiling=False, and it actually evaluates --
+
+    assembled = to_dry_powder_protocol_inputs(with_tranches, DEPLOY_PARTIALLY)
+    assert assembled is not None, "assembly: expected a resolved DryPowderProtocolInputs"
+    assert_equal("assembled_current_posture", assembled.current_posture, DEPLOY_PARTIALLY)
+    assert_close("assembled_initial_dp", assembled.initial_dry_powder, 100000.0)
+    assert_close("assembled_remaining_dp", assembled.remaining_dry_powder, 66000.0)
+    assert_close("assembled_cum_deployed", assembled.cum_deployed_in_episode, 34000.0)
+    assert_equal(
+        "assembled_highest_posture", assembled.highest_posture_in_episode, DEPLOY_AGGRESSIVELY
+    )
+    assert_equal("assembled_human_approval_default", assembled.human_approval_above_ceiling, False)
+
+    evaluated = DryPowderProtocol().evaluate(assembled)
+    assert_equal("assembled_evaluates_authorized", evaluated.status, AUTHORIZED)
+
+    # -- Assembly: human_approval_above_ceiling passes through --
+
+    assembled_approved = to_dry_powder_protocol_inputs(
+        with_tranches, DEPLOY_AGGRESSIVELY, human_approval_above_ceiling=True
+    )
+    assert_equal(
+        "assembled_human_approval_passthrough",
+        assembled_approved.human_approval_above_ceiling,
+        True,
     )
 
     # -- Real pipeline: today's actual ledger + live market state. As --
