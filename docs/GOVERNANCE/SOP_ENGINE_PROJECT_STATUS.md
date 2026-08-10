@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.75\
+**Version:** 1.76\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.1 code (2026-08-10):
+As of RE-041.2 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,6 +29,7 @@ As of RE-041.1 code (2026-08-10):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
+| Dry Powder -- rastreo de episodio en vivo | 25-30% (detección automática ok; ledger manual de pólvora/tramos aún sin construir) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -60,6 +61,21 @@ siendo responsabilidad de un futuro llamador). El canal
 atestiguado/Human Approval (RE-032.4) sigue sin una sola línea de
 código propia -- este módulo solo lee un booleano de aprobación que
 otro componente tendría que producir.
+
+RE-041.2 detecta episodios de mercado en vivo, sin estado: reutiliza
+`calculate_running_peak`/`calculate_drawdown` de `drawdown_engine.py`
+(sin tocar ese archivo) para responder si hay un episodio activo hoy y
+desde cuándo. Comprobado contra `data/raw/shiller.xlsx` real: a fecha
+2026.07 el mercado está exactamente en su pico, sin episodio activo.
+De los siete campos que pide `DryPowderProtocolInputs`, esto resuelve
+dos (hay episodio / desde cuándo) de forma automática. Los otros
+cinco -- pólvora seca inicial del episodio, pólvora seca remanente,
+capital acumulado desplegado, y los dos campos de cadencia -- siguen
+sin ninguna fuente, porque nadie salvo Armando puede observarlos.
+Construir ese ledger a ciegas habría sido justo el tipo de caja negra
+que este proyecto rechaza explícitamente; se le presentó la disyuntiva
+antes de escribir código y confirmó una pestaña xlsx (no un JSON) como
+formato, pendiente de diseñar en una próxima iteración.
 
 ------------------------------------------------------------------------
 
@@ -8042,6 +8058,80 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.2 — Live Episode Detector: the automatable half of Dry Powder Protocol's inputs
+
+RE-041.1 (code) left `DryPowderProtocolInputs` entirely caller-supplied
+-- no piece of the project could yet answer "is a drawdown episode
+active right now, and since when." RE-041.2 closes exactly that piece,
+no more: `engine/live_episode.py` (`detect_current_episode()`,
+`run_live_episode_detector()`) plus `tests/verify_live_episode.py`.
+
+Before writing this, the actual scope of "episode tracking en vivo"
+was checked against what already exists, not assumed. Two things
+became clear: (1) `drawdown_engine.py::detect_drawdowns()` only ever
+returns CLOSED episodes -- an episode still in progress at the end of
+the series is silently dropped, since the loop only appends on a
+Drawdown == 0 recovery row. There was no existing code anywhere that
+surfaces an unresolved, still-open episode. (2) Of the seven fields
+`DryPowderProtocolInputs` needs, only two are honestly derivable from
+market data alone: whether an episode is active, and its peak
+date/price. The other five -- `initial_dry_powder`,
+`remaining_dry_powder`, `cum_deployed_in_episode`,
+`days_since_last_deployment`, `drawdown_pp_since_last_deployment`,
+`highest_posture_in_episode` -- describe Armando's own liquidity and
+his own past deployment decisions, none of which this system can
+observe. Building a silent, invented ledger for those would have
+violated this project's own stated principle ("el sistema está
+pensado para generar evidencia explicable, no una caja negra").
+Flagged to Armando before writing any code; he confirmed the split and
+chose an xlsx tab (not a JSON state file) for that manual ledger, to
+be designed in a following iteration.
+
+`detect_current_episode(df)` deliberately does not call
+`detect_drawdowns()` -- it mirrors the same state machine instead,
+importing `MIN_DRAWDOWN`, `calculate_running_peak` and
+`calculate_drawdown` from `drawdown_engine.py` rather than
+redefining them, so both sides share one episode definition and
+Frozen Core stays untouched (no edit to `drawdown_engine.py` itself).
+Returns `None` if the latest data point is at/above its running peak
+or in a dip shallower than `MIN_DRAWDOWN` (-10%); otherwise returns a
+`CurrentEpisode` with the peak that started the episode, the deepest
+point reached so far, and the as-of (latest) reading.
+
+Checked directly against `data/raw/shiller.xlsx` before finalizing the
+test: as of the latest row (2026.07), the market sits exactly at its
+running peak (Drawdown 0.0) -- no episode is active today, consistent
+with everything else this session. `verify_live_episode.py` asserts
+this real-pipeline result explicitly (`None`), noted in the test
+itself as an assertion that should correctly start failing the day a
+real drawdown begins, not a canonical claim frozen in place.
+
+What this does not authorize:
+
+-   No ledger, no ability to answer `initial_dry_powder`,
+    `cum_deployed_in_episode`, or the since-last-tranche fields --
+    those remain entirely unbuilt, deferred to the manual-ledger
+    iteration Armando has already scoped (xlsx tab).
+-   No change to `drawdown_engine.py` (Frozen Core-adjacent, historical
+    episode detection) -- only imported from, never edited.
+-   No wiring into `dry_powder_protocol.py`, `posture_mapper.py`,
+    `gate_combination.py`, `run.py` or `DecisionEngine`.
+-   No claim about tomorrow -- this is a live, unstated function; every
+    call re-derives the answer from the Shiller file as it stands, no
+    caching, no persistence.
+
+Boundary:
+
+-   Two files added: `engine/live_episode.py`,
+    `tests/verify_live_episode.py`.
+-   No existing files modified.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones (three pinned-runtime mismatches, one
+    `match_bottoms` tie-order artifact), unchanged from RE-041.1 code.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8479,6 +8569,36 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.76
+
+-   Added RE-041.2: `engine/live_episode.py`
+    (`detect_current_episode()`, `run_live_episode_detector()`) --
+    detects whether a market drawdown episode is currently active and
+    since when, purely from Shiller data, no state, no ledger.
+-   Mirrors `drawdown_engine.py::detect_drawdowns()`'s state machine
+    rather than reusing it directly, because that function silently
+    drops any episode still open at the end of the series (only
+    appends on a Drawdown == 0 recovery row). Imports `MIN_DRAWDOWN`,
+    `calculate_running_peak`, `calculate_drawdown` from
+    `drawdown_engine.py` -- no edits to that file.
+-   Confirmed against the real `data/raw/shiller.xlsx`: as of 2026.07
+    (latest row), the market is exactly at its running peak -- no
+    active episode today. `tests/verify_live_episode.py` asserts this
+    real-pipeline result explicitly, noted as an assertion that should
+    correctly start failing once a real drawdown begins.
+-   Scoped explicitly to the two of seven `DryPowderProtocolInputs`
+    fields that are honestly derivable from market data alone (is
+    there an episode, since when). The other five -- dry powder
+    figures and deployment history -- require a manually operated
+    ledger only Armando can populate. Flagged before writing code;
+    Armando chose an xlsx tab (not JSON) for that ledger, design
+    deferred to a following iteration.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+-   Updated Honest Progress Snapshot (RE-DOC-005): added "Dry Powder --
+    rastreo de episodio en vivo" row, 25-30% (auto-detection done,
+    manual ledger not yet built).
 
 ## Version 1.75
 
