@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.76\
+**Version:** 1.77\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.2 (2026-08-10):
+As of RE-041.3 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,7 +29,7 @@ As of RE-041.2 (2026-08-10):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
-| Dry Powder -- rastreo de episodio en vivo | 25-30% (detección automática ok; ledger manual de pólvora/tramos aún sin construir) |
+| Dry Powder -- rastreo de episodio en vivo | 35-40% (detección automática ok; ledger creado, sin loader/adaptador todavía) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -8132,6 +8132,70 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.3 — Dry Powder Ledger: file structure only, no code
+
+RE-041.2 left five of `DryPowderProtocolInputs`' seven fields with no
+source at all -- nothing in the system can observe Armando's real
+liquidity or his own past deployment decisions. RE-041.3 adds exactly
+one file, `data/raw/dry_powder_ledger.xlsx`, and no code: the manual
+ledger Armando confirmed (xlsx tab, not JSON) after the file-placement
+question was put to him directly.
+
+Kept as a separate file from `personal_capacity_facts.xlsx` rather
+than new tabs in it, per the same reasoning already flagged to
+Armando: `personal_capacity_facts.xlsx` is a static snapshot (9 facts,
+overwritten in place); this is an append-only log that grows with
+every tranche ever executed. Same separation of concerns
+`shiller.xlsx` (market) already has from `personal_capacity_facts.xlsx`
+(capacity).
+
+Structure, per patrimonio tab (AMS/AML, `Notas` reserved as usual):
+
+-   Section 1, "Episodio actual" -- one marker row pair, filled only
+    once an episode is confirmed active: start date (Shiller `AAAA.MM`
+    format, must match `CurrentEpisode.peak_date` from
+    `engine/live_episode.py`) and the episode's initial Dry Powder in
+    euros. Both start as `Pendiente`, same placeholder token
+    `personal_capacity_facts_gate.py` already treats as "not measured,"
+    not as a false negative.
+-   Section 2, "Registro de tramos desplegados" -- append-only, one row
+    per tranche actually executed (money moved, not a decision on
+    paper): date, amount deployed, posture in effect at that moment
+    (data-validation dropdown restricted to `gate_combination.py`'s
+    five posture constants, to cut transcription errors during a real
+    market-stress moment), free note. Rows are never deleted or
+    overwritten; a future episode's boundary is applied by filtering on
+    date, not by clearing history.
+
+Deliberately minimal what Armando has to type by hand: date, amount,
+posture. Everything else RE-041.1's protocol needs --
+`drawdown_pp_since_last_deployment`, `days_since_last_deployment`,
+`cum_deployed_in_episode`, `remaining_dry_powder` -- is meant to be
+derived later by joining these dated rows against Shiller data, not
+entered as separate manual fields. That derivation is not built yet;
+this iteration is the file only, per the one-file-per-iteration
+discipline this session has followed throughout.
+
+What this does not authorize:
+
+-   No loader, no adapter, no `build_local_dry_powder_ledger_inputs()`
+    equivalent -- nothing in the codebase reads this file yet.
+-   No wiring into `dry_powder_protocol.py` or anything downstream.
+-   No real episode or tranche data entered -- both patrimonios'
+    Section 1 read `Pendiente`, Section 2 has no rows, because as of
+    RE-041.2 no episode is active and nothing has been deployed.
+
+Boundary:
+
+-   One file added: `data/raw/dry_powder_ledger.xlsx`.
+-   No code files touched.
+-   No Frozen Core component touched.
+-   Structural verification only: reopened with `openpyxl` and
+    confirmed sheet names, section headers and placeholder values match
+    what was written.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8569,6 +8633,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.77
+
+-   Added RE-041.3: `data/raw/dry_powder_ledger.xlsx` -- new file, no
+    code. Manual ledger for the five `DryPowderProtocolInputs` fields
+    no market data can supply: episode start date + initial Dry Powder
+    (Section 1, filled once per episode), and an append-only tranche
+    log (Section 2: date, amount, posture-at-execution via a
+    data-validation dropdown, note).
+-   Kept separate from `personal_capacity_facts.xlsx` (static snapshot
+    vs. append-only log) -- same reasoning flagged to Armando before
+    building, confirmed by him.
+-   Both patrimonio tabs (AMS, AML) start with Section 1 at
+    `Pendiente` and Section 2 empty -- consistent with RE-041.2's
+    finding that no episode is active today.
+-   No loader, no adapter, no wiring -- file structure only, per this
+    session's one-file-per-iteration discipline.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder -- rastreo
+    de episodio en vivo 25-30% -> 35-40%.
 
 ## Version 1.76
 
