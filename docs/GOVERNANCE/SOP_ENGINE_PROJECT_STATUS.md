@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.74\
+**Version:** 1.75\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-043.2 (2026-08-10):
+As of RE-041.1 code (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -28,7 +28,7 @@ As of RE-043.2 (2026-08-10):
 | Personal Capacity definición | 90-95% |
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
-| Dry Powder Protocol | 60-65% especificación / 0% código |
+| Dry Powder Protocol | 75-80% aislado / no wired |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -44,10 +44,22 @@ propuesta, y esa verificación cambió la imagen ("repartido en 3
 fondos" resultó ser ~91% del mismo índice bajo dos proveedores
 distintos) sin cambiar la conclusión final (Armando confirmó que la
 concentración en SP500 es la tesis de partida del SOP, no un fallo).
-Sigue sin estar conectado a `run.py` ni a `DecisionEngine` -- sigue
-siendo, por diseño, un dry-run de auditoría, no una decisión, y el
-canal atestiguado/Human Approval (RE-032.4) sigue sin una sola línea
-de código.
+
+El Dry Powder Protocol (RE-041.1) tiene ahora su primer código:
+módulo aislado, sin estado, con las cuatro reglas (tramo sobre pólvora
+seca remanente, cadencia dual, techo por postura sobre la pólvora
+inicial del episodio, ratchet) y los parámetros v1 exactos de la
+especificación. Dos correcciones reales se hicieron sobre la
+especificación detallada que Armando entregó -- un caso sin definir en
+la lógica de ratchet/techo, y un `KeyError` real con la postura
+`Blocked` que la propia rama de correción 1 hizo aflorar -- ambas
+señaladas y confirmadas antes de escribir código. Sigue sin estar
+conectado a `posture_mapper.py`, `gate_combination.py`, `run.py` ni a
+`DecisionEngine`; sigue sin rastreo de episodio en vivo (eso sigue
+siendo responsabilidad de un futuro llamador). El canal
+atestiguado/Human Approval (RE-032.4) sigue sin una sola línea de
+código propia -- este módulo solo lee un booleano de aprobación que
+otro componente tendría que producir.
 
 ------------------------------------------------------------------------
 
@@ -7909,6 +7921,127 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.1 (code) — Dry Powder Protocol: first isolated module
+
+RE-041.1 had specification but zero code (60-65% especificación / 0%
+código per the Honest Progress Snapshot). This iteration adds
+`engine/dry_powder_protocol.py` and `tests/verify_dry_powder_protocol.py`
+implementing the four rules exactly as specified: tranche sized on
+remaining Dry Powder (asymptotic decay, not on the initial amount),
+dual cadence (days OR drawdown points, either one is enough), a
+per-posture cumulative ceiling expressed as a fraction of the
+episode's *initial* Dry Powder, and the ratchet (effective ceiling
+never drops back down when posture does, only resets on a new
+episode). v1 parameters unchanged from the governance text: Deploy
+Partially — 12% tranche, 40% ceiling, 30 days OR 5.0pp cadence; Deploy
+Aggressively — 22% tranche, 80% ceiling, 14 days OR 5.0pp cadence.
+Beyond 80%: blocked unless `human_approval_above_ceiling` is set, in
+which case the module authorizes the *state* but explicitly returns
+`authorized_amount = None` rather than computing a number — v1 never
+deploys the last fraction of Dry Powder by formula alone.
+
+Armando handed over a fully detailed implementation spec for this
+module (dataclasses, constants, five-step evaluation order, required
+test scenarios). Two deviations from that spec were flagged to him
+before any code was written, and confirmed ("Tú tienes el control. Ok
+a las dos correcciones"):
+
+1.  The spec's step 2 (ceiling/ratchet determination) used a two-branch
+    literal check: "if highest reached was Aggressively, ceiling is
+    80%; otherwise if current is Partially, ceiling is 40%." This
+    leaves one real case undefined — the first evaluation right after
+    escalating to Deploy Aggressively, if the caller has not yet
+    updated `highest_posture_in_episode` to reflect that. Neither
+    branch fires; `active_ceiling_pct` would be unset. Fixed by
+    computing the effective ceiling posture as
+    `max(current_posture, highest_posture_in_episode)` via
+    `gate_combination.POSTURE_ORDER` — closes the gap, and is the more
+    literal reading of RE-041.1's own text ("the highest one reached
+    so far" — "so far" includes now). Caught a second, related bug
+    while building this: `POSTURE_ORDER` does not rank `Blocked` at
+    all (by design — it has no ordinal position, only a hard stop),
+    so a naive `POSTURE_ORDER[posture]` lookup raises `KeyError` the
+    first time `current_posture` or `highest_posture_in_episode` is
+    `Blocked`. Fixed with a small `_posture_order()` helper that
+    treats any unranked posture as lower than every real deployment
+    posture, so it can never win the ratchet comparison.
+2.  The spec used a Python `Enum` for the result status and
+    `frozen=True` dataclasses throughout. Every other gate in this
+    project (`EvidenceQualityGate`, `RegimeComparabilityGate`,
+    `PersonalCapacityFactsGate`) represents discrete state as plain
+    string module-level constants, and `gate_combination.py`'s own
+    `POSTURE_ORDER` dict is keyed on those same plain strings — an
+    `Enum` here would need `.value` unwrapping at every future
+    integration point for no offsetting benefit. Kept plain strings
+    for status; kept `frozen=True` on the inputs dataclass, a genuine,
+    low-risk improvement that doesn't conflict with anything.
+
+A third, smaller addition beyond the drafted spec, also flagged: the
+two cadence fields (`days_since_last_deployment`,
+`drawdown_pp_since_last_deployment`) are `Optional`, not required.
+Forcing a caller to invent a sentinel (e.g. "9999 days") to represent
+"no prior tranche exists yet in this episode" would itself be the kind
+of magic-number shortcut this project's fail-closed discipline
+rejects elsewhere. Both fields `None` means "first tranche of the
+episode" and bypasses the cadence check explicitly, rather than
+silently failing it.
+
+The test suite covers, beyond the seven scenarios Armando's spec
+listed by name: restrictive postures (Conserve/Prepare/**and**
+Blocked, not just the two named), first-tranche-of-episode bypass,
+cadence by time alone, cadence by drawdown alone, cadence blocked,
+exact trim at the ceiling, the ratchet holding its ceiling after
+posture drops back down, the undefined fresh-escalation branch from
+correction 1 above, ceiling invaded with and without Human Approval,
+and fail-closed rejection of an unrecognized posture string. All pass
+on first run after the `Blocked`/`POSTURE_ORDER` fix.
+
+What this does not authorize:
+
+-   No wiring into `posture_mapper.py`, `gate_combination.py`,
+    `run.py` or `DecisionEngine` — RE-041.1 explicitly reserves that
+    for a future iteration.
+-   No episode-state tracking. This module is stateless by design; it
+    does not read market data, does not decide when an episode starts
+    or ends, and does not compute any of its own inputs.
+    `drawdown_engine.py` remains a historical episode-detection engine
+    only, confirmed by direct read before this work started — it does
+    not track a live/current episode either, so a future caller
+    supplying this module's inputs still has that piece to build.
+-   No automatic execution of any deployment. Human Approval
+    (RE-032.4) still governs execution even once this module exists.
+-   No claim the v1 percentages are final.
+-   No change to the separate, still-undefined Portfolio Reallocation
+    Protocol.
+-   Under today's real Evidence Quality state (`not measurable`),
+    combined posture cannot exceed `Prepare` — this protocol cannot
+    trigger today regardless of drawdown depth. Forward infrastructure
+    only, same as the specification itself already noted.
+
+Boundary:
+
+-   Two files added: `engine/dry_powder_protocol.py`,
+    `tests/verify_dry_powder_protocol.py`.
+-   No existing files modified.
+-   No Frozen Core component touched.
+-   `tests/verify_dry_powder_protocol.py` follows this project's
+    existing `verify_*.py` / `assert_equal` / `main()` convention, not
+    `pytest` — confirmed `pytest` is neither in `requirements.txt` nor
+    installed in this sandbox, and none of the other 15 test files use
+    it.
+-   Structural verification only in this sandbox (pandas 2.3.3 / numpy
+    2.2.6, not Armando's pinned 3.0.5 / 2.5.1) — this module has no
+    pandas/numpy dependency at all (pure `dataclasses`/`typing`), so
+    the runtime mismatch that blocks three other test files does not
+    apply here. Full suite re-run after this change: no new failures
+    beyond the three pre-existing, already-documented ones (runtime
+    mismatch on `verify_baseline_harness.py`, `verify_secondary_baselines.py`,
+    `verify_validation_metrics.py`; the `match_bottoms` tie-order
+    artifact on `verify_research_engine.py`, unrelated to this or any
+    prior change this session).
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8346,6 +8479,39 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.75
+
+-   Added RE-041.1 (code): first isolated implementation of the Dry
+    Powder Protocol -- `engine/dry_powder_protocol.py`,
+    `tests/verify_dry_powder_protocol.py`. Stateless, pure function:
+    tranche on remaining Dry Powder, dual cadence (days OR drawdown
+    points), per-posture cumulative ceiling on the episode's initial
+    Dry Powder, ratchet effect. v1 params: Deploy Partially 12%
+    tranche / 40% ceiling / 30d or 5.0pp cadence; Deploy Aggressively
+    22% tranche / 80% ceiling / 14d or 5.0pp cadence. Beyond 80%:
+    blocked without a fresh Human Approval attestation, and even then
+    the amount is left `None`, never computed by formula.
+-   Two corrections made against Armando's detailed implementation
+    spec, flagged and confirmed before writing code: (1) the ceiling
+    posture is computed as `max(current_posture,
+    highest_posture_in_episode)` via `POSTURE_ORDER`, closing an
+    undefined branch in the drafted step-2 logic (first tick after
+    escalating to Deploy Aggressively) -- this also surfaced and fixed
+    a `KeyError` on posture `Blocked`, which `POSTURE_ORDER` does not
+    rank; (2) status uses plain string constants, not `Enum`, matching
+    every other gate in the project.
+-   `tests/verify_dry_powder_protocol.py` follows the project's
+    existing `verify_*.py` convention, not `pytest` (confirmed
+    unused/uninstalled anywhere else in the repo).
+-   Not wired into `posture_mapper.py`, `gate_combination.py`,
+    `run.py` or `DecisionEngine`. No episode-state tracking -- still
+    entirely the caller's responsibility.
+-   Full test suite re-run: no new failures beyond the three
+    pre-existing pinned-runtime mismatches and the pre-existing
+    `match_bottoms` tie-order artifact.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder Protocol
+    60-65% especificación / 0% código -> 75-80% aislado / no wired.
 
 ## Version 1.74
 
