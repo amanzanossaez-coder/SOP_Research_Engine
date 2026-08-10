@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.77\
+**Version:** 1.78\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.3 (2026-08-10):
+As of RE-041.4 (2026-08-10):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,7 +29,7 @@ As of RE-041.3 (2026-08-10):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
-| Dry Powder -- rastreo de episodio en vivo | 35-40% (detección automática ok; ledger creado, sin loader/adaptador todavía) |
+| Dry Powder -- rastreo de episodio en vivo | 55-60% (detección + ledger + adaptador; falta drawdown_pp_since_last_deployment y el ensamblaje final a DryPowderProtocolInputs) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -8196,6 +8196,90 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.4 — Dry Powder Ledger adapter: joins live episode detection with the manual ledger
+
+RE-041.4 closes the piece RE-041.2/RE-041.3 deliberately left apart:
+`engine/dry_powder_ledger_state.py`
+(`compute_ledger_episode_state()`, `build_local_dry_powder_ledger_state()`)
+plus `loaders/dry_powder_ledger_loader.py` and
+`tests/verify_dry_powder_ledger_state.py`. Given
+`data/raw/dry_powder_ledger.xlsx` and today's live market state
+(`engine/live_episode.py`), it produces `LedgerEpisodeState` per
+patrimonio: `has_active_episode`, `initial_dry_powder`,
+`remaining_dry_powder`, `cum_deployed_in_episode`,
+`days_since_last_deployment`, `highest_posture_in_episode`, and
+explanations.
+
+Deliberately does not produce a ready-to-evaluate
+`DryPowderProtocolInputs`. `current_posture` and
+`human_approval_above_ceiling` belong to the combined-gate pipeline and
+Human Approval respectively -- this module has no business computing
+either, and doesn't. A future caller merges this module's output with
+those two separately-sourced values.
+
+One small, low-risk correction to the already-shipped RE-041.3 file
+before writing this: Section 2's column-A header read "Fecha (AAAA.MM.DD
+o AAAA.MM)," which conflated two genuinely different clocks --
+`days_since_last_deployment` needs a real calendar date,
+`drawdown_pp_since_last_deployment` needs Shiller's monthly cadence.
+Corrected to "Fecha (calendario real, AAAA-MM-DD)" before any real data
+existed to be affected (both patrimonios' Section 2 were still empty).
+Flagged to Armando before touching the file; confirmed.
+
+Two fail-closed judgment calls, made explicit rather than buried in
+code: (1) if the ledger's Section 1 marker is missing or its start
+date doesn't match the live-detected episode's peak, `initial_dry_powder`
+is treated as unknown -- never falls back to a stale figure from a
+different episode. (2) if no tranche has been logged yet for the
+current episode, `highest_posture_in_episode` defaults to `Conserve`,
+so `dry_powder_protocol.py`'s own ratchet grants no unearned benefit
+until a tranche is actually logged at a higher posture.
+
+Scoped explicitly, not silently shipped partial:
+`drawdown_pp_since_last_deployment` is NOT computed this iteration.
+Doing so correctly requires a month-level lookup against the full
+prepared Shiller series for the last tranche's date, not just the
+terminal snapshot `CurrentEpisode` exposes -- a real feature, deferred
+to its own iteration. Its absence is safe: RE-041.1's cadence check is
+days OR drawdown-points, so cadence can still be satisfied on days
+alone; this field being `None` never blocks or wrongly authorizes
+anything.
+
+Tranche dates belonging to the current episode are filtered by
+converting each real calendar date to Shiller's `AAAA.MM` month and
+comparing against the episode's start month -- a month-level boundary,
+not day-level, an inherent consequence of Shiller's monthly cadence,
+documented rather than glossed over.
+
+Checked directly against the real files before finalizing the test:
+both AMS and AML currently report `has_active_episode=False`,
+consistent with RE-041.2's finding that the market sits at its running
+peak today.
+
+What this does not authorize:
+
+-   No `DryPowderProtocolInputs` assembly, no wiring into
+    `dry_powder_protocol.py`, `posture_mapper.py`, `gate_combination.py`,
+    `run.py` or `DecisionEngine`.
+-   No `drawdown_pp_since_last_deployment` computation -- explicitly
+    deferred, not silently skipped.
+-   No real episode or tranche data entered into the ledger -- this
+    iteration is adapter code only.
+
+Boundary:
+
+-   Two files added: `loaders/dry_powder_ledger_loader.py`,
+    `engine/dry_powder_ledger_state.py`.
+-   One test file added: `tests/verify_dry_powder_ledger_state.py`.
+-   One existing file corrected (not authored fresh):
+    `data/raw/dry_powder_ledger.xlsx` -- Section 2 header wording only,
+    no data changed (none existed).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8633,6 +8717,35 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.78
+
+-   Added RE-041.4: `loaders/dry_powder_ledger_loader.py` (raw I/O) +
+    `engine/dry_powder_ledger_state.py`
+    (`compute_ledger_episode_state()`, `build_local_dry_powder_ledger_state()`)
+    -- joins RE-041.2's live episode detection with RE-041.3's manual
+    ledger to produce `has_active_episode`, `initial_dry_powder`,
+    `remaining_dry_powder`, `cum_deployed_in_episode`,
+    `days_since_last_deployment`, `highest_posture_in_episode` per
+    patrimonio.
+-   Two fail-closed rules made explicit: stale/mismatched episode
+    marker -> initial dry powder treated as unknown, never a stale
+    figure; no tranches logged yet -> highest_posture_in_episode
+    defaults to Conserve, no unearned ratchet credit.
+-   `drawdown_pp_since_last_deployment` explicitly NOT computed this
+    iteration (needs a month-level Shiller lookup, deferred) -- always
+    None, documented as a known gap, safe because cadence is days OR
+    drawdown-points.
+-   Corrected `data/raw/dry_powder_ledger.xlsx` Section 2's header
+    wording (real calendar date, not Shiller AAAA.MM) before any real
+    data existed -- flagged to Armando before editing, confirmed.
+-   Does not assemble `DryPowderProtocolInputs` and does not wire into
+    anything -- `current_posture`/`human_approval_above_ceiling`
+    remain a future caller's responsibility.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder --
+    rastreo de episodio en vivo 35-40% -> 55-60%.
 
 ## Version 1.77
 
