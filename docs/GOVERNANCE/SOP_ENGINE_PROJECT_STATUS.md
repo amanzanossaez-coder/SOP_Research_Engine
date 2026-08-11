@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.85\
+**Version:** 1.86\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.8 (2026-08-11):
+As of RE-032.9 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-032.8 (2026-08-11):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 55-60% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; sin datos reales cargados, sin wiring a run.py) |
+| Human Approval operativo real | 60-65% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; sin datos reales cargados, sin wiring a run.py) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8637,6 +8637,74 @@ Boundary:
     iCloud lock noted under RE-032.6/RE-032.7 has cleared as of this
     iteration.
 
+## RE-032.9 — Human Approval: chain-resolution correctness fix
+
+Not a new capability -- a correctness fix on RE-032.6's core logic,
+found by Armando in a deliberate critical re-read of the day's work he
+explicitly requested ("hacemos la 1 y la 3 ahora"), not caught while
+either of us was designing the original version.
+
+The bug: `HumanApprovalGate.evaluate()` decided whether the latest
+attestation was a tolerance INCREASE by comparing it only against
+`attestations[-2]` -- the raw immediately preceding row -- rather than
+against whatever was actually in force. That is wrong whenever the
+immediate predecessor never itself took effect (e.g. it was still
+mid cooling-off when superseded). Concrete bypass: attest Conserve
+(day 0, effective immediately); in a bad moment attest Deploy
+Aggressively (day 1, enters 14-day cooling-off, never clears); attest
+Deploy Partially (day 2). Compared only against the raw previous row
+(Aggressively), Partially reads as a DECREASE and would apply
+immediately with zero cooling-off -- even though, compared against
+what was truly governing (Conserve, since Aggressively never took
+effect), Partially is a real increase that must go through its own
+cooling-off. This is precisely the self-gaming pattern (revising
+tolerance upward during an emotional moment) the whole mechanism
+exists to prevent, reopened by an implementation detail rather than a
+design gap.
+
+Fix: a new `_resolve_effective(attestations, as_of_date)` walks the
+full chronological history and simulates, step by step, what was
+ACTUALLY in force at each attestation's own registration moment --
+folding in both cooling-off and the 90-day validity window at every
+step, not only for the latest entry. `evaluate()` now computes
+`fallback = _resolve_effective(attestations[:-1], as_of_date=latest.registered_at)`
+and uses `fallback` everywhere the old two-row lookback (`previous`)
+was used: as the baseline for the increase/decrease comparison, and as
+the governing posture during a pending increase's cooling-off.
+
+Verified two ways:
+
+-   Manually re-traced against all ten pre-existing test cases in
+    `tests/verify_human_approval.py` -- every one produces the same
+    result under the new logic (the fix changes behavior only when a
+    predecessor never itself took effect, which none of the original
+    cases exercised).
+-   Added two new adversarial cases reproducing the exact bypass
+    above: `bypass_attempt` (Conserve → Aggressively-never-clears →
+    Partially, checked the same day) now correctly resolves to `VALID`
+    governed by Conserve with Partially parked as `pending_increase`,
+    not applied immediately; `bypass_cleared` (same three
+    attestations, checked 14 days after Partially's own registration)
+    resolves to `VALID` with Partially now in effect on its own
+    merits -- confirming the fix delays Partially by its OWN
+    cooling-off clock, never borrows or resets against Aggressively's.
+
+No change to the public interface -- `HumanApprovalResult`,
+`PendingIncrease`, `HumanApprovalInputs`, `Attestation` all unchanged.
+`engine/human_approval_state.py` and `audit_posture.py` required no
+changes.
+
+Boundary:
+
+-   One file changed: `engine/human_approval.py` (`_still_valid()` and
+    `_resolve_effective()` added; `evaluate()`'s baseline logic
+    refactored to use them).
+-   One file extended: `tests/verify_human_approval.py` (two new
+    adversarial cases).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -9076,6 +9144,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.86
+
+-   Added RE-032.9: fixed a real correctness bug in
+    `HumanApprovalGate.evaluate()`, found by Armando in a deliberate
+    critical re-read of RE-032.6/RE-032.7 he explicitly requested, not
+    caught during original design. The gate compared the latest
+    attestation only against the raw immediately-preceding row
+    (`attestations[-2]`), which allowed a tolerance-increasing
+    revision to bypass cooling-off entirely whenever its immediate
+    predecessor had itself never taken effect (e.g. was still under
+    its own cooling-off when superseded) -- exactly the self-gaming
+    pattern this mechanism exists to prevent.
+-   Fixed with a new `_resolve_effective()` that walks the full
+    chronological attestation history, simulating cooling-off and
+    90-day expiry at every step, instead of a two-row lookback.
+-   Added two adversarial test cases to
+    `tests/verify_human_approval.py` reproducing the exact bypass and
+    proving it is closed. All ten pre-existing cases re-verified
+    unchanged. Full suite re-run: no new failures beyond the same four
+    pre-existing ones.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Human Approval
+    operativo real raised 55-60% → 60-65%, noting the fix.
 
 ## Version 1.85
 

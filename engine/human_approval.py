@@ -42,6 +42,31 @@ literally, does not resolve them on its own:
     per rule 6's "including ties") takes effect immediately, same as
     any non-increasing revision.
 
+RE-032.9 -- third correction, found in a deliberate critical re-read
+requested by Armando after RE-032.6/RE-032.7 shipped, not something
+either of us caught while designing the first version. The original
+`evaluate()` only ever compared the LATEST attestation against the
+one immediately before it (`attestations[-2]`). That is wrong whenever
+that immediate predecessor never actually took effect -- e.g. it was
+itself still mid cooling-off when superseded. Concretely: attest
+Conserve (day 0, effective immediately); in a bad moment attest Deploy
+Aggressive (day 1, starts a 14-day cooling-off, never clears); attest
+Deploy Partially (day 2). Compared only against the raw previous
+declaration (Aggressive), Partially reads as a DECREASE and would take
+effect immediately, with no cooling-off -- even though, compared
+against what was actually governing at that moment (Conserve, since
+Aggressive never took effect), Partially is very much an increase.
+That is exactly the self-gaming failure mode this whole mechanism
+exists to close, reopened by an implementation detail.
+
+Fixed by `_resolve_effective()`: it walks the full chronological
+history and simulates what was ACTUALLY in force at each attestation's
+own registration moment (never just the raw prior row), correctly
+folding in both cooling-off and 90-day expiry at every step -- an
+attestation that itself expired before being superseded is treated the
+same as if it had never existed, per rule 4 applying to every
+attestation independently, not only the latest.
+
 market_crisis (RE-032.4's objective crisis signal, "Drawdown <=
 MIN_DRAWDOWN, the same constant drawdown_engine.py already uses") is
 deliberately NOT computed inside this module -- it is exactly what
@@ -139,6 +164,71 @@ def _validate_posture(label: str, posture: str) -> None:
         raise ValueError(f"{label}: unknown posture {posture!r}")
 
 
+def _still_valid(attestation: Attestation, as_of_date: date) -> bool:
+
+    return (as_of_date - attestation.registered_at).days < VALIDITY_DAYS
+
+
+def _resolve_effective(
+    attestations: list, as_of_date: date
+) -> Optional[Attestation]:
+    """
+    RE-032.9. Walks a chronologically sorted attestation history and
+    returns whichever attestation was ACTUALLY in force at as_of_date --
+    simulating cooling-off and expiry at every step along the way,
+    instead of comparing only the latest against the raw immediately
+    preceding row. See module docstring.
+
+    attestations must already be sorted oldest-first. Each attestation
+    is compared against what was effective the moment IT was
+    registered, not against the raw previous row -- an increase that
+    never cleared cooling-off before being superseded never becomes
+    the baseline for what comes after it.
+    """
+
+    effective = None
+
+    for i, a in enumerate(attestations):
+
+        reference_date = (
+            attestations[i + 1].registered_at
+            if i + 1 < len(attestations)
+            else as_of_date
+        )
+
+        if effective is not None and not _still_valid(effective, a.registered_at):
+            effective = None
+
+        baseline_posture = (
+            effective.approved_posture_ceiling if effective else CONSERVE
+        )
+
+        is_increase = (
+            POSTURE_ORDER[a.approved_posture_ceiling]
+            > POSTURE_ORDER[baseline_posture]
+        )
+
+        if not is_increase:
+            effective = a
+            continue
+
+        cooling_off_days = (
+            COOLING_OFF_CRISIS_DAYS
+            if (a.personal_crisis_declared or a.market_crisis_at_registration)
+            else COOLING_OFF_BASE_DAYS
+        )
+
+        if (reference_date - a.registered_at).days >= cooling_off_days:
+            effective = a
+        # else: a never cleared cooling-off before being superseded --
+        # stays pending, effective (its predecessor) is unchanged.
+
+    if effective is not None and not _still_valid(effective, as_of_date):
+        effective = None
+
+    return effective
+
+
 class HumanApprovalGate:
 
     def evaluate(self, inputs: HumanApprovalInputs) -> HumanApprovalResult:
@@ -161,7 +251,15 @@ class HumanApprovalGate:
             _validate_posture("approved_posture_ceiling", a.approved_posture_ceiling)
 
         latest = attestations[-1]
-        previous = attestations[-2] if len(attestations) >= 2 else None
+
+        # RE-032.9 -- fallback is what was ACTUALLY in effect right
+        # before latest was registered, resolved by walking the full
+        # chain (cooling-off + expiry simulated at every step), not
+        # just the raw prior row. See module docstring and
+        # _resolve_effective().
+        fallback = _resolve_effective(
+            attestations[:-1], as_of_date=latest.registered_at
+        )
 
         days_since_latest = (as_of_date - latest.registered_at).days
 
@@ -182,7 +280,9 @@ class HumanApprovalGate:
                 ],
             )
 
-        baseline_posture = previous.approved_posture_ceiling if previous else CONSERVE
+        baseline_posture = (
+            fallback.approved_posture_ceiling if fallback else CONSERVE
+        )
 
         is_increase = (
             POSTURE_ORDER[latest.approved_posture_ceiling]
@@ -196,7 +296,7 @@ class HumanApprovalGate:
                 blocked=False,
                 explanations=[
                     "latest attestation does not increase tolerance "
-                    f"relative to {'the prior attestation' if previous else 'the implicit Conserve baseline'} "
+                    f"relative to {'what was actually in effect (' + fallback.approved_posture_ceiling + ')' if fallback else 'the implicit Conserve baseline'} "
                     "-- applies immediately, no cooling-off"
                 ],
             )
@@ -231,26 +331,23 @@ class HumanApprovalGate:
             cooling_off_days_required=cooling_off_days,
         )
 
-        if previous is not None:
+        if fallback is not None and _still_valid(fallback, as_of_date):
 
-            days_since_previous = (as_of_date - previous.registered_at).days
-
-            if days_since_previous < VALIDITY_DAYS:
-                return HumanApprovalResult(
-                    state=VALID,
-                    effective_posture_ceiling=previous.approved_posture_ceiling,
-                    blocked=False,
-                    pending_increase=pending,
-                    explanations=[
-                        f"a tolerance-increasing revision to "
-                        f"{latest.approved_posture_ceiling} is under "
-                        f"{cooling_off_days}-day cooling-off, effective "
-                        f"{effective_date} -- the prior attestation "
-                        f"({previous.approved_posture_ceiling}, "
-                        f"registered {previous.registered_at}) remains "
-                        "in force in the meantime (rule 7)"
-                    ],
-                )
+            return HumanApprovalResult(
+                state=VALID,
+                effective_posture_ceiling=fallback.approved_posture_ceiling,
+                blocked=False,
+                pending_increase=pending,
+                explanations=[
+                    f"a tolerance-increasing revision to "
+                    f"{latest.approved_posture_ceiling} is under "
+                    f"{cooling_off_days}-day cooling-off, effective "
+                    f"{effective_date} -- what was actually in force "
+                    f"({fallback.approved_posture_ceiling}, registered "
+                    f"{fallback.registered_at}) remains in effect in "
+                    "the meantime (rule 7)"
+                ],
+            )
 
         return HumanApprovalResult(
             state=UNDER_COOLING_OFF,

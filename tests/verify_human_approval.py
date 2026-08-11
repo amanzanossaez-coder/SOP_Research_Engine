@@ -241,6 +241,88 @@ def main() -> None:
         None,
     )
 
+    # -- RE-032.9 adversarial case: the exact bypass the chain-walk --
+    # -- fix exists to close. Day0 Conserve (takes effect). Day1 --
+    # -- Deploy Aggressively (an increase relative to Conserve -> --
+    # -- enters 14-day cooling-off, never clears -- only 1 day passes --
+    # -- before Day2). Day2 Deploy Partially. --
+    # --
+    # -- Compared only against the raw previous row (Day1 Aggressive, --
+    # -- the OLD, buggy behaviour), Partially(2) < Aggressive(3) reads --
+    # -- as a decrease and would apply immediately with no cooling-off --
+    # -- -- exactly the self-gaming bypass this mechanism exists to --
+    # -- prevent. Compared against what was ACTUALLY in force (Conserve, --
+    # -- since Aggressive never cleared its own cooling-off), Partially --
+    # -- is a genuine increase and must itself go through cooling-off, --
+    # -- governed by Conserve in the meantime. --
+
+    day0 = today - timedelta(days=2)
+    day1 = today - timedelta(days=1)
+    day2 = today
+
+    bypass_attempt = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(
+                Attestation(registered_at=day0, approved_posture_ceiling=CONSERVE),
+                Attestation(
+                    registered_at=day1, approved_posture_ceiling=DEPLOY_AGGRESSIVELY
+                ),
+                Attestation(
+                    registered_at=day2, approved_posture_ceiling=DEPLOY_PARTIALLY
+                ),
+            ),
+            as_of_date=day2,
+        )
+    )
+    assert_equal("bypass_attempt_state", bypass_attempt.state, VALID)
+    assert_equal("bypass_attempt_blocked", bypass_attempt.blocked, False)
+    assert_equal(
+        "bypass_attempt_effective",
+        bypass_attempt.effective_posture_ceiling,
+        CONSERVE,
+    )
+    assert bypass_attempt.pending_increase is not None, (
+        "Deploy Partially must be parked pending cooling-off, not applied "
+        "immediately -- this is the bypass the fix closes"
+    )
+    assert_equal(
+        "bypass_attempt_pending_posture",
+        bypass_attempt.pending_increase.approved_posture_ceiling,
+        DEPLOY_PARTIALLY,
+    )
+    assert_equal(
+        "bypass_attempt_pending_cooling_off_days",
+        bypass_attempt.pending_increase.cooling_off_days_required,
+        COOLING_OFF_BASE_DAYS,
+    )
+
+    # -- Same three attestations, but enough days pass for Deploy --
+    # -- Partially's own cooling-off to clear -- it becomes effective --
+    # -- on its own merits, still never having borrowed Aggressive's --
+    # -- clock --
+
+    bypass_cleared = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(
+                Attestation(registered_at=day0, approved_posture_ceiling=CONSERVE),
+                Attestation(
+                    registered_at=day1, approved_posture_ceiling=DEPLOY_AGGRESSIVELY
+                ),
+                Attestation(
+                    registered_at=day2, approved_posture_ceiling=DEPLOY_PARTIALLY
+                ),
+            ),
+            as_of_date=day2 + timedelta(days=COOLING_OFF_BASE_DAYS),
+        )
+    )
+    assert_equal("bypass_cleared_state", bypass_cleared.state, VALID)
+    assert_equal("bypass_cleared_blocked", bypass_cleared.blocked, False)
+    assert_equal(
+        "bypass_cleared_effective",
+        bypass_cleared.effective_posture_ceiling,
+        DEPLOY_PARTIALLY,
+    )
+
     # -- Fail-closed: unknown posture string raises, never silently --
     # -- accepted --
 
