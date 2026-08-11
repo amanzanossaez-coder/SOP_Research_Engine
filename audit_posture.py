@@ -24,13 +24,26 @@ hay ningun episodio activo (RE-041.2), asi que esto imprime
 que la tuberia completa queda demostrada end-to-end, no que produzca
 una cifra hoy.
 
+RE-032.8 -- añade, por patrimonio, el dry-run de Human Approval
+(engine/human_approval_state.py contra
+data/raw/human_approval_attestations.xlsx). Impreso como bloque
+SEPARADO, nunca mezclado con "COMBINED posture ceiling": RE-032.4
+rule 1 es explicito -- Human Approval no es un gate puntuado y nunca
+participa en evaluate_capital_posture()'s min() combination. Los dos
+son prerrequisitos independientes: la postura combinada dice hasta
+donde permiten los datos; Human Approval dice, por separado, si hay
+consentimiento humano vigente para actuar en absoluto. Tampoco se
+conecta a to_dry_powder_protocol_inputs()'s human_approval_above_ceiling
+-- ese parametro es una autorizacion mas estrecha y especifica (superar
+el techo del 80%, RE-041.1), no lo mismo que "hay una atestacion
+valida", y mapear uno al otro sin una regla explicita seria inventar
+una regla que no existe. human_approval_above_ceiling sigue en False,
+sin cambios respecto a RE-041.5.
+
 Esto NO es el Capital Posture Engine -- no existe tal componente.
 Esto NO es una herramienta de decision -- es un dry-run de lectura, no
 esta conectado a run.py ni a DecisionEngine. El resultado es, en el
-mejor caso, tan permisivo o mas que la postura real -- nunca menos: el
-canal de juicio atestiguado y Human Approval (RE-032.4) siguen sin
-codigo y nunca participan aqui -- human_approval_above_ceiling se pasa
-siempre como False, nunca asumido True.
+mejor caso, tan permisivo o mas que la postura real -- nunca menos.
 """
 
 from engine.dry_powder_ledger_state import (
@@ -44,6 +57,8 @@ from engine.evidence_quality_gate import (
     PREDICTIVE_VALIDATION_NOT_DEMONSTRATED,
     build_local_evidence_quality_inputs,
 )
+from engine.human_approval import HumanApprovalGate
+from engine.human_approval_state import build_local_human_approval_inputs
 from engine.personal_capacity_facts_gate import (
     PersonalCapacityFactsGate,
     build_local_personal_capacity_facts_inputs,
@@ -82,8 +97,9 @@ def main() -> None:
     print("=" * 70)
     print()
     print("NOT a decision. NOT wired into run.py or DecisionEngine.")
-    print("Attested-judgement / Human Approval channel (RE-032.4) has no")
-    print("code and never participates here. Result is, at best, no more")
+    print("Human Approval (RE-032.4) is printed separately below, per")
+    print("patrimonio -- it is not a scored gate and never blends into")
+    print("COMBINED posture ceiling. Result is, at best, no more")
     print("restrictive than the real posture -- never less.")
     print()
     print(f"predictive_validation_status used: {PREDICTIVE_VALIDATION_NOT_DEMONSTRATED}")
@@ -111,6 +127,8 @@ def main() -> None:
     pc_gate = PersonalCapacityFactsGate()
 
     ledger_states = build_local_dry_powder_ledger_state()
+    human_approval_inputs = build_local_human_approval_inputs()
+    human_approval_gate = HumanApprovalGate()
 
     for patrimonio_name, pc_local in personal_capacity_inputs.items():
 
@@ -129,6 +147,40 @@ def main() -> None:
         print()
         print(f"COMBINED posture ceiling ({patrimonio_name}): {combined.posture_ceiling}")
         print(f"COMBINED explanations ({patrimonio_name}): {combined.explanations}")
+
+        print()
+        ha_inputs = (
+            human_approval_inputs.get(patrimonio_name)
+            if human_approval_inputs
+            else None
+        )
+        if ha_inputs is None:
+            print(
+                f"Human Approval ({patrimonio_name}): "
+                "data/raw/human_approval_attestations.xlsx not found."
+            )
+        else:
+            ha_result = human_approval_gate.evaluate(ha_inputs)
+            print(f"Human Approval state ({patrimonio_name}): {ha_result.state}")
+            print(f"Human Approval blocked ({patrimonio_name}): {ha_result.blocked}")
+            print(
+                f"Human Approval effective_posture_ceiling ({patrimonio_name}): "
+                f"{ha_result.effective_posture_ceiling}"
+            )
+            if ha_result.pending_increase is not None:
+                print(
+                    f"Human Approval pending_increase ({patrimonio_name}): "
+                    f"{ha_result.pending_increase}"
+                )
+            print(f"Human Approval explanations ({patrimonio_name}): {ha_result.explanations}")
+            print()
+            print(
+                f"NOTE ({patrimonio_name}): COMBINED posture ceiling above and "
+                "Human Approval here are independent prerequisites -- capital "
+                "action requires BOTH the combined ceiling to permit it AND "
+                "Human Approval to be valid, per RE-032.4 rule 5. Neither is "
+                "computed from the other."
+            )
 
         ledger_state = (
             ledger_states.get(patrimonio_name) if ledger_states else None

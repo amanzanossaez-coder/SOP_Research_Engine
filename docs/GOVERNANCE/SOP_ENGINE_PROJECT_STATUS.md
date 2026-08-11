@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.83\
+**Version:** 1.84\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.7 (2026-08-11):
+As of RE-032.8 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-032.7 (2026-08-11):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 45-50% (motor + xlsx real + adaptador, market_crisis resuelto contra Shiller; sin datos reales cargados, sin wiring) |
+| Human Approval operativo real | 55-60% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; sin datos reales cargados, sin wiring a run.py) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8593,6 +8593,52 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.8 — Human Approval wired into the audit dry-run
+
+`audit_posture.py` now prints Human Approval's state per patrimonio,
+using `build_local_human_approval_inputs()` against the real
+`data/raw/human_approval_attestations.xlsx`. Run today: `missing`,
+blocked, for both AMS and AML -- expected, since the ledger has no
+attestations yet.
+
+The one design decision worth recording: this is printed as a block
+completely separate from `COMBINED posture ceiling`, never blended
+into it, and not fed into `to_dry_powder_protocol_inputs()`'s
+`human_approval_above_ceiling` parameter either. Two distinct reasons:
+
+-   RE-032.4 rule 1 states plainly that Human Approval is not a scored
+    gate and never participates in `evaluate_capital_posture()`'s
+    `min()` combination -- printing it inside `COMBINED` would
+    misrepresent the governance model this project has already
+    committed to. The two are independent prerequisites: the combined
+    ceiling says what the evidence permits; Human Approval says,
+    separately, whether there is current human consent to act at all.
+-   `human_approval_above_ceiling` is a narrower, more specific
+    authorization (RE-041.1: explicitly clearing the 80% Dry Powder
+    ceiling), not the same question as "is there a valid attestation
+    at all." Mapping `HumanApprovalResult.blocked` onto that parameter
+    would have invented a rule that doesn't exist anywhere in RE-032.4
+    or RE-041.1's text -- left at `False`, unchanged from RE-041.5,
+    rather than guessed.
+
+What this does not authorize:
+
+-   No wiring into `run.py` or `DecisionEngine`.
+-   No change to `human_approval_above_ceiling`'s value or meaning.
+-   No blending of Human Approval into `combine_gate_outputs()` or
+    `evaluate_capital_posture()`.
+
+Boundary:
+
+-   One file extended: `audit_posture.py`.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. The `personal_capacity_facts.xlsx` sandbox
+    iCloud lock noted under RE-032.6/RE-032.7 has cleared as of this
+    iteration.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -9030,6 +9076,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.84
+
+-   Added RE-032.8: `audit_posture.py` now prints Human Approval state
+    per patrimonio, using the real
+    `data/raw/human_approval_attestations.xlsx`. Today: `missing`,
+    blocked, for both AMS and AML.
+-   Printed as a block fully separate from `COMBINED posture ceiling`
+    -- RE-032.4 rule 1 (not a scored gate, never blended into
+    `evaluate_capital_posture()`'s combination) -- and not fed into
+    `human_approval_above_ceiling` either, since that parameter answers
+    a narrower question (explicit authorization beyond the 80% Dry
+    Powder ceiling) that a general "is there a valid attestation"
+    result does not answer.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. The `personal_capacity_facts.xlsx` sandbox
+    lock noted in RE-032.6/RE-032.7 has cleared.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Human Approval
+    operativo real 45-50% -> 55-60%.
 
 ## Version 1.83
 
