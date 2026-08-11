@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.87\
+**Version:** 1.88\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -6457,6 +6457,54 @@ Boundary:
 -   Canonical real-pipeline values not published -- pending
     pinned-runtime confirmation.
 
+## RE-036.2 — corrects a false claim in RE-036.1's own comment
+
+Documentation-only, found by Armando in the same cold critical review
+that produced RE-032.9 and RE-041.8, and deliberately deferred at the
+time (lowest severity of the three, no live-code consequence) until
+there was time to close it.
+
+`REGIME_DIMENSIONS`'s comment stated that cape/inflation/interest_rate
+were chosen because none of the three are "consumidas por
+SimilarityEngine" -- false for cape specifically: the same comment,
+two lines later, names cape as one of the three inputs to
+`SimilarityEngine`'s own score (`cape`/`pre_crash_return_3y`/
+`pre_crash_volatility_1y`). The comment contradicted itself.
+
+Checked whether this is only a wording problem or a real design gap:
+it is only wording. `RegimeComparabilityGate`'s own class docstring
+already states the actual governing rule -- "No usa SimilarityEngine
+ni evidence quality como proxy de comparabilidad" -- and the code
+respects it: `SimilarityEngine` uses cape as one weighted dimension
+inside a distance metric to *rank and select* matching episodes;
+`RegimeComparabilityGate` independently checks whether *today's* raw
+cape value falls inside the *selected* matches' `[min, max]` range.
+Same underlying number, two unrelated questions -- cape appearing in
+both places is not a violation of the separation RE-031.1 requires,
+only the original comment's stated justification for choosing it was
+wrong.
+
+Fixed by rewriting the comment: states plainly that cape *is*
+consumed by `SimilarityEngine` (inflation/interest_rate are not), and
+explains why that overlap is fine rather than asserting the opposite.
+
+What this does not authorize:
+
+-   No change to `REGIME_DIMENSIONS`'s contents, to
+    `_dimension_covered()`'s logic, or to any gate state.
+-   No change to `SimilarityEngine`.
+-   No re-examination of the other two findings from the same review
+    (RE-032.9, RE-041.8 -- both already closed separately).
+
+Boundary:
+
+-   One file changed: `engine/regime_comparability_gate.py` (comment
+    only).
+-   No test changes -- nothing behavioral changed.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
 ------------------------------------------------------------------------
 
 ## RE-034.5 — Regime Comparability posture-ceiling mapping
@@ -9194,6 +9242,21 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.88
+
+-   Added RE-036.2: corrected a false claim in `REGIME_DIMENSIONS`'s
+    comment (`engine/regime_comparability_gate.py`) -- it said
+    cape/inflation/interest_rate were chosen because none are
+    consumed by `SimilarityEngine`, contradicted two lines later by
+    the same comment naming cape as one of `SimilarityEngine`'s own
+    score inputs. Documentation-only, the last of the three findings
+    from today's cold critical review (RE-032.9, RE-041.8 already
+    closed). Confirmed it's wording only, not a design gap -- cape
+    serving two independent purposes (ranking matches vs. checking
+    today's raw value against the matches' range) does not violate
+    RE-031.1's ban on using `SimilarityEngine` as a comparability
+    proxy. No test changes, no behavior changed.
 
 ## Version 1.87
 

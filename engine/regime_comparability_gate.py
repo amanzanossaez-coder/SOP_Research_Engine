@@ -7,12 +7,25 @@ COMPARABLE = "comparable"
 NOT_COMPARABLE = "not comparable"
 
 # RE-036.1 -- primer corte de dimensiones. cape/inflation/interest_rate
-# ya estan pobladas en Context por episodio y NO son consumidas por
-# SimilarityEngine (que solo usa cape/pre_crash_return_3y/
-# pre_crash_volatility_1y en su score) -- no requieren ninguna
-# ingesta de datos nueva. volatility/liquidity/policy/market-structure
-# permanecen fuera de alcance: RE-031.1 no autoriza inferir su
-# medicion sin una fuente de datos real.
+# ya estan pobladas en Context por episodio -- no requieren ninguna
+# ingesta de datos nueva.
+#
+# RE-036.2 -- correccion (RE-DOC-002): el comentario original decia
+# que las tres NO eran consumidas por SimilarityEngine. Es falso para
+# cape, que SimilarityEngine si usa en su score (junto a
+# pre_crash_return_3y/pre_crash_volatility_1y) -- inflation/interest_rate
+# si son enteramente ajenas a SimilarityEngine. Que cape aparezca en
+# los dos sitios no es una contradiccion de diseno: SimilarityEngine la
+# usa como una dimension mas dentro de una distancia ponderada para
+# RANKEAR episodios; este gate comprueba, de forma independiente, si
+# el valor de cape de HOY cae dentro del rango bruto de los episodios
+# ya seleccionados -- una pregunta distinta, la misma separacion que el
+# docstring de RegimeComparabilityGate ya exige mas abajo ("No usa
+# SimilarityEngine ni evidence quality como proxy de comparabilidad").
+#
+# volatility/liquidity/policy/market-structure permanecen fuera de
+# alcance: RE-031.1 no autoriza inferir su medicion sin una fuente de
+# datos real.
 REGIME_DIMENSIONS = ["cape", "inflation", "interest_rate"]
 
 
