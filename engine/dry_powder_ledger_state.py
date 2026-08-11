@@ -47,6 +47,25 @@ in code:
     max(current_posture, highest_posture_in_episode) ratchet logic,
     this means the ratchet grants no unearned benefit until at least
     one tranche has actually been logged at a higher posture.
+
+RE-041.8 -- correctness fix found in a cold critical re-read Armando
+requested of the day's work. A tranche row with a valid fecha and
+importe but a missing or unrecognized postura ("Pendiente", a typo, an
+empty cell) was silently excluded from the highest_posture_in_episode
+computation with no trace in explanations -- unlike fecha and importe
+on the same row, which already produced an explicit skip-explanation
+when malformed. The importe still correctly counted toward
+cum_deployed_in_episode either way (the money was really deployed
+regardless of whether the posture that justified it was legibly
+recorded) -- what was missing was only the explanation. Fixed by
+appending one whenever postura doesn't resolve, without changing the
+importe/cum_deployed_in_episode behavior. Deliberately NOT the same
+shape as human_approval_state.py's handling of an unrecognized
+postura, which skips the whole row -- that is correct there because an
+attestation IS its posture, with nothing else meaningful to keep if it
+doesn't resolve; a tranche is a real deployment of money whether or
+not its posture field was filled in correctly, so discarding the row
+would have been the wrong fix, not a matching one.
 """
 
 from dataclasses import dataclass, field
@@ -212,10 +231,28 @@ def compute_ledger_episode_state(
 
         postura = tranche.get("postura")
 
-        if postura in POSTURE_ORDER and (
-            POSTURE_ORDER[postura] > POSTURE_ORDER[highest_posture_in_episode]
-        ):
-            highest_posture_in_episode = postura
+        if postura in POSTURE_ORDER:
+            if (
+                POSTURE_ORDER[postura]
+                > POSTURE_ORDER[highest_posture_in_episode]
+            ):
+                highest_posture_in_episode = postura
+        else:
+            # RE-041.8 -- the importe still counts (money was really
+            # deployed regardless of whether the posture that
+            # justified it was legibly recorded), but silently leaving
+            # highest_posture_in_episode unchanged with no trace was
+            # the actual bug: a mistyped or "Pendiente" postura on the
+            # tranche that pushed the episode to a higher posture would
+            # leave the ratchet ceiling silently wrong, with nothing
+            # telling Armando it happened.
+            explanations.append(
+                f"tranche on {tranche_date} counted toward "
+                f"cum_deployed_in_episode ({importe:.2f}), but its "
+                f"postura is missing or unrecognized "
+                f"({tranche.get('postura')!r}) -- not considered for "
+                "the ratchet's highest_posture_in_episode"
+            )
 
     if episode_tranches:
 

@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.86\
+**Version:** 1.87\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.9 (2026-08-11):
+As of RE-041.8 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,7 +29,7 @@ As of RE-032.9 (2026-08-11):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
-| Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
+| Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; corregido un vacío real de silencio en postura no reconocida encontrado en revisión crítica -- RE-041.8; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 60-65% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; sin datos reales cargados, sin wiring a run.py) |
@@ -8442,6 +8442,56 @@ Boundary:
     any file this iteration touched, expected to clear on Armando's
     own machine.
 
+## RE-041.8 — Dry Powder Ledger: unrecognized postura now leaves a trace
+
+Correctness fix, found by Armando in a second cold critical review he
+explicitly requested of the entire day's work (RE-041.x and RE-032.x
+together), after RE-032.9 had already closed the first finding from
+that review.
+
+The bug: in `compute_ledger_episode_state()`, a tranche row with a
+valid `fecha` and `importe` but a missing or unrecognized `postura`
+("Pendiente", a typo, an empty cell) was silently excluded from the
+`highest_posture_in_episode` computation -- no entry in `explanations`,
+nothing to tell Armando it happened. This is inconsistent with the
+same loop's handling of `fecha` and `importe`, both of which already
+produce an explicit skip-explanation when malformed, and it directly
+contradicts `human_approval_state.py`'s own docstring claim of
+applying "the same discipline ... already applies to malformed tranche
+rows" -- on inspection, that claim was not actually true for postura.
+Operational consequence: a tranche that genuinely pushed the episode
+to a higher posture, but whose postura cell was left unfilled or
+mistyped, would leave the ratchet ceiling silently wrong, with no
+visible warning.
+
+Fix: `importe` still counts toward `cum_deployed_in_episode` exactly
+as before -- the money was really deployed regardless of whether the
+posture that justified it was legibly recorded, so discarding the row
+would have been the wrong fix. What changed is that an unrecognized or
+missing `postura` now appends an explanation naming the amount and the
+unrecognized value, instead of updating nothing and saying nothing.
+
+Deliberately NOT given the same shape as
+`human_approval_state.py`'s handling of an unrecognized postura, which
+skips the whole row: that is correct there because an attestation IS
+its posture -- with nothing else meaningful to keep if it doesn't
+resolve. A tranche is a real deployment of money whether or not its
+posture field was filled in correctly; mirroring Human Approval's
+row-skip here would have silently dropped real deployed capital from
+`cum_deployed_in_episode`; a materially worse outcome than the
+explanation gap it would have replaced.
+
+Boundary:
+
+-   One file changed: `engine/dry_powder_ledger_state.py`.
+-   One file extended: `tests/verify_dry_powder_ledger_state.py` (one
+    new case: valid fecha/importe, unrecognized postura -- importe
+    still counted, highest_posture_in_episode unaffected by the bad
+    row, explanation present).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
 ------------------------------------------------------------------------
 
 ## RE-032.6 — Human Approval: first isolated code
@@ -9144,6 +9194,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.87
+
+-   Added RE-041.8: fixed a real correctness gap in
+    `compute_ledger_episode_state()` (`engine/dry_powder_ledger_state.py`),
+    found by Armando in a second cold critical review he requested of
+    the full day's work. A tranche row with a valid fecha/importe but a
+    missing or unrecognized postura was silently excluded from
+    `highest_posture_in_episode` with no trace in `explanations` --
+    unlike fecha/importe on the same row, which already produce
+    explicit skip-explanations when malformed.
+-   Fixed by appending an explanation whenever postura doesn't
+    resolve, without changing importe/cum_deployed_in_episode behavior
+    -- the money still counts, only the missing explanation was added.
+    Deliberately not the same shape as `human_approval_state.py`'s
+    row-skip for unrecognized posturas: an attestation IS its posture,
+    a tranche is real deployed money regardless of whether its posture
+    field was legible.
+-   Added one new case to `tests/verify_dry_powder_ledger_state.py`
+    proving the fix. Full suite re-run: no new failures beyond the
+    same four pre-existing ones.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder --
+    rastreo de episodio en vivo, noting the fix.
 
 ## Version 1.86
 

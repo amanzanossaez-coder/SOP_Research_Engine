@@ -276,6 +276,49 @@ def main() -> None:
         0.0,
     )
 
+    # -- RE-041.8: a tranche with valid fecha/importe but a missing or --
+    # -- unrecognized postura -- importe must still count toward --
+    # -- cum_deployed_in_episode (real money, regardless of whether --
+    # -- the posture field was legible), but must now leave a trace --
+    # -- in explanations instead of silently not updating the ratchet --
+
+    bad_postura = compute_ledger_episode_state(
+        SAMPLE_EPISODE,
+        {
+            "episode_marker": {
+                EPISODE_START_LABEL: 2026.03,
+                INITIAL_DRY_POWDER_LABEL: 100000.0,
+            },
+            "tranches": [
+                {
+                    "fecha": "2026-04-02",
+                    "importe": 12000.0,
+                    "postura": DEPLOY_PARTIALLY,
+                    "nota": "primer tramo, postura correcta",
+                },
+                {
+                    "fecha": "2026-06-15",
+                    "importe": 22000.0,
+                    "postura": "Pendiente",
+                    "nota": "postura sin rellenar todavia",
+                },
+            ],
+        },
+        as_of_calendar_date=date(2026, 8, 10),
+    )
+    assert_close(
+        "bad_postura_cum_deployed", bad_postura.cum_deployed_in_episode, 34000.0
+    )
+    assert_equal(
+        "bad_postura_highest_posture",
+        bad_postura.highest_posture_in_episode,
+        DEPLOY_PARTIALLY,
+    )
+    assert any(
+        "postura is missing or unrecognized" in explanation
+        for explanation in bad_postura.explanations
+    ), "expected an explanation for the unrecognized postura, found none"
+
     # -- Assembly: no active episode -> nothing to evaluate --
 
     assert_equal(
