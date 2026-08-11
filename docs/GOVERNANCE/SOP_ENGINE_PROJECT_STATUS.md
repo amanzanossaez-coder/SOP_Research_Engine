@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.81\
+**Version:** 1.82\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.7 (2026-08-11):
+As of RE-032.6 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-041.7 (2026-08-11):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 0-5% |
+| Human Approval operativo real | 20-25% (motor puro aislado, primer código; sin xlsx, sin adaptador, sin wiring) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8444,6 +8444,86 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.6 — Human Approval: first isolated code
+
+RE-032.4 fully specified the attested-judgement channel and Human
+Approval's procedural mechanics with no code (states, 90-day validity,
+14/30-day cooling-off, market_crisis/personal_crisis). RE-032.6 is the
+first code against that spec: `engine/human_approval.py`
+(`HumanApprovalGate.evaluate()`) plus `tests/verify_human_approval.py`.
+Pure logic, no I/O, no storage -- same split as every other gate this
+project has built.
+
+Translating RE-032.4's prose into code surfaced a real contradiction
+in the governance doc's own text, plus one genuine gap, both resolved
+with Armando directly before writing anything:
+
+1.  Rules 5 and 7 conflict as literally written. Rule 5:
+    `under_cooling_off` blocks all capital action. Rule 7: "the
+    previously valid attestation remains in force" during cooling-off
+    -- which implies action CAN proceed, just under the old terms.
+    Resolved (Armando's formulation): cooling-off delays the
+    *effectiveness* of a tolerance-increasing revision; it never
+    invalidates a prior, still-valid attestation. The top-level state
+    stays `valid` (governed by the predecessor) with the pending
+    revision surfaced separately as `pending_increase`, whenever a
+    valid predecessor exists. `under_cooling_off` as a blocking
+    top-level state is reserved for when there is no valid predecessor
+    to fall back on.
+2.  A first-ever attestation is measured against an implicit baseline
+    equivalent to `Conserve` -- no attestation is treated the same as
+    having attested to nothing but the floor. A first attestation
+    authorizing anything above `Conserve` is itself a tolerance
+    increase and goes through the same cooling-off as any revision; at
+    or below `Conserve` (a tie counts as a decrease, per rule 6) takes
+    effect immediately.
+
+`market_crisis` is deliberately not recomputed here -- it is exactly
+`engine.live_episode`'s existing `Drawdown <= MIN_DRAWDOWN` check
+(RE-041.2), so duplicating that threshold inside Human Approval would
+have violated this project's own repeated anti-duplication discipline.
+Each `Attestation` instead carries `market_crisis_at_registration: bool`,
+a fact about conditions the day that specific attestation was
+registered -- left for a future adapter to resolve via
+`engine.live_episode.drawdown_at_month()`, the exact primitive
+RE-041.7 built yesterday for an unrelated purpose and now reusable
+here. Cooling-off length for a revision is fixed by conditions at ITS
+OWN registration, not re-evaluated live on every check -- stated as a
+readable-but-open interpretation, not a certainty.
+
+What this does not authorize:
+
+-   No storage schema, no attestation form, no
+    `data/raw/human_approval_attestations.xlsx` -- Armando has already
+    agreed to a per-patrimonio xlsx (same tab-per-patrimonio pattern as
+    `personal_capacity_facts.xlsx`/`dry_powder_ledger.xlsx`, not a
+    `patrimony` column on a flat table) for a following iteration; not
+    built yet.
+-   No wiring into `gate_combination.py`, `posture_mapper.py`,
+    `run.py` or `DecisionEngine`. Human Approval is explicitly not a
+    scored gate (RE-032.4 rule 1) and never participates in
+    `combine_gate_outputs()`'s `min()` combination -- it is checked
+    separately as a binary procedural prerequisite, a distinction this
+    module's docstring restates rather than assumes obvious.
+-   Does not resolve `personal_crisis` under-reporting -- still an
+    accepted, documented limitation (RE-032.4), not solved.
+
+Boundary:
+
+-   Two files added: `engine/human_approval.py`,
+    `tests/verify_human_approval.py`.
+-   No existing files modified.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. One unrelated, still-unresolved sandbox
+    environment issue: `data/raw/personal_capacity_facts.xlsx` remains
+    locked by the iCloud mount (`BadZipFile`/`Resource deadlock
+    avoided`) as of this iteration -- unrelated to any file touched
+    here, expected to clear on Armando's own machine per the same
+    class of issue already documented under RE-041.7.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8881,6 +8961,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.82
+
+-   Added RE-032.6: `engine/human_approval.py`
+    (`HumanApprovalGate.evaluate()`) -- first code for RE-032.4's
+    attested-judgement channel/Human Approval boundary. Pure logic, no
+    I/O, no storage, not wired anywhere.
+-   Resolved a real contradiction between RE-032.4's rules 5 and 7
+    (cooling-off blocking vs. "previous attestation remains in force")
+    with Armando directly: cooling-off delays effectiveness, never
+    invalidates a still-valid predecessor; `under_cooling_off` only
+    blocks when no valid predecessor exists. Pending revisions surface
+    via a separate `pending_increase` field, not folded into state.
+-   Resolved a genuine gap: a first-ever attestation is measured
+    against an implicit `Conserve` baseline, so a first attestation
+    above `Conserve` goes through cooling-off too, same as any
+    revision.
+-   `market_crisis` deliberately not recomputed -- reuses
+    `engine.live_episode`'s existing `Drawdown <= MIN_DRAWDOWN` check
+    (RE-041.2) via a per-attestation `market_crisis_at_registration`
+    fact, resolved by a future adapter using
+    `engine.live_episode.drawdown_at_month()` (RE-041.7).
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Human Approval
+    operativo real 0-5% -> 20-25%.
 
 ## Version 1.81
 
