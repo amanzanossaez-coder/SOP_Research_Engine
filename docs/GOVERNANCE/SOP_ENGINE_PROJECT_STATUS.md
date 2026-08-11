@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.84\
+**Version:** 1.85\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -9076,6 +9076,35 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.85
+
+-   New standing convention, requested by Armando: every xlsx this
+    project creates or edits gets `wrap_text=True` applied on write --
+    long cell text (explanatory notes especially) wraps inside the
+    cell instead of spilling across the row. Applies going forward
+    automatically, not just when asked.
+-   Applied retroactively to the three existing project xlsx files
+    (`dry_powder_ledger.xlsx`, `human_approval_attestations.xlsx`,
+    `personal_capacity_facts.xlsx`) -- cosmetic only, no data changed
+    (commits `bc4c965`, `6503f12`).
+-   Self-caught mistake in the same pass, recorded rather than
+    smoothed over: the first attempt re-saved all three files with
+    plain `openpyxl.Workbook.save()`, which does not recalculate
+    formulas -- this silently dropped the cached value of every
+    formula cell (`personal_capacity_facts.xlsx`'s "Gap anual",
+    "Suelo de liquidez total", etc.), and
+    `tests/verify_personal_capacity_facts_gate.py` immediately caught
+    it (`ams_real_state` came back `not measurable` instead of
+    `adequate`). Same class of bug this project has hit before with
+    this exact save path. Fixed within the same turn, before handing
+    anything to Armando, using the established LibreOffice
+    `--convert-to` recalculation workaround (`--outdir` to a scratch
+    directory, then copied back -- writing to the same path LibreOffice
+    is reading from had failed outright). Full suite re-verified clean
+    afterward.
+-   No governance-doc entry existed for these two commits until this
+    one -- added after the fact rather than left undocumented.
 
 ## Version 1.84
 
