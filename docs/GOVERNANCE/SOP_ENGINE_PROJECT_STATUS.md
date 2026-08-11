@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.82\
+**Version:** 1.83\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.6 (2026-08-11):
+As of RE-032.7 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-032.6 (2026-08-11):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 20-25% (motor puro aislado, primer código; sin xlsx, sin adaptador, sin wiring) |
+| Human Approval operativo real | 45-50% (motor + xlsx real + adaptador, market_crisis resuelto contra Shiller; sin datos reales cargados, sin wiring) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8524,6 +8524,75 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.7 — Human Approval: real attestation ledger + adapter
+
+Closes the storage/adapter gap RE-032.6 explicitly deferred.
+`data/raw/human_approval_attestations.xlsx` (new file, AMS/AML/Notas
+tabs, same style as `dry_powder_ledger.xlsx`) is the manual event log
+Armando confirmed: one row per attestation, columns limited to what
+only he can know -- date, approved posture ceiling (dropdown), whether
+a personal crisis was declared that day, a note. No expiry, no
+cooling-off state, no "is this valid" column -- per Armando's own
+caution, the xlsx records facts, the code computes state.
+
+Two new files do the interpretation: `loaders/human_approval_loader.py`
+(raw I/O, same per-patrimonio-tab convention as every loader this
+project has) and `engine/human_approval_state.py`
+(`build_local_human_approval_inputs()`), which resolves
+`market_crisis_at_registration` for each row -- not typed by
+Armando -- by converting the row's real calendar date to Shiller's
+month and checking `Drawdown <= MIN_DRAWDOWN` at that point, RE-032.4's
+own literal definition, reusing `engine.live_episode.drawdown_at_month()`
+(RE-041.7) rather than a second copy of that threshold check.
+
+Two small refactors done in service of this, both pure extractions, no
+logic change, verified against the existing test suite before
+proceeding: `engine.live_episode.calendar_date_to_shiller_month()`
+(previously a private copy inside `dry_powder_ledger_state.py`) and a
+new `engine/manual_entry_parsing.py`
+(`to_float_or_none()`/`to_calendar_date_or_none()`, the
+"Pendiente"-aware cell parsing every manual-entry adapter in this
+project needs) -- `dry_powder_ledger_state.py` now imports both rather
+than keeping its own copies. Consistent with the anti-duplication
+discipline Armando himself invoked earlier this session for
+`market_crisis`.
+
+Fail-closed on malformed rows: an unparseable date or an unrecognized
+posture string is skipped with a printed explanation, never guessed --
+same discipline `dry_powder_ledger_state.py` already applies to
+malformed tranche rows.
+
+What this does not authorize:
+
+-   No wiring into `gate_combination.py`, `posture_mapper.py`,
+    `run.py`, `DecisionEngine`, or `audit_posture.py` -- Human Approval
+    remains unconnected to any decision surface, and RE-032.4 rule 1
+    (not a scored gate, never blended into a posture ceiling) still
+    has no code path exercising it anywhere.
+-   No real attestation data entered -- both AMS and AML start empty;
+    `HumanApprovalGate.evaluate()` against today's real file correctly
+    returns `MISSING`, `blocked=True` for both.
+
+Boundary:
+
+-   One file added: `data/raw/human_approval_attestations.xlsx`.
+-   Three files added: `loaders/human_approval_loader.py`,
+    `engine/human_approval_state.py`,
+    `engine/manual_entry_parsing.py`.
+-   One test file added: `tests/verify_human_approval_state.py`.
+-   One file refactored (extraction only):
+    `engine/dry_powder_ledger_state.py`.
+-   One file extended (extraction only): `engine/live_episode.py`
+    (`calendar_date_to_shiller_month()`).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones, plus the still-unresolved
+    `personal_capacity_facts.xlsx` sandbox iCloud lock noted under
+    RE-032.6, persisting into this iteration -- unrelated to any file
+    touched here.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8961,6 +9030,33 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.83
+
+-   Added RE-032.7: `data/raw/human_approval_attestations.xlsx` (new,
+    AMS/AML/Notas), `loaders/human_approval_loader.py`,
+    `engine/human_approval_state.py`
+    (`build_local_human_approval_inputs()`). Ledger records only what
+    Armando alone can know (date, approved posture, personal crisis
+    declared, note) -- no expiry/cooling-off/validity columns, per his
+    own caution that the xlsx is data, not logic.
+-   `market_crisis_at_registration` resolved per attestation via
+    `engine.live_episode.drawdown_at_month()` against
+    `MIN_DRAWDOWN` -- RE-032.4's own literal definition, no duplicated
+    threshold logic.
+-   Two extraction-only refactors: `engine.live_episode.calendar_date_to_shiller_month()`
+    and new `engine/manual_entry_parsing.py`
+    (`to_float_or_none()`/`to_calendar_date_or_none()`) --
+    `dry_powder_ledger_state.py` now imports both instead of keeping
+    private copies. No logic change, verified against its existing
+    tests before proceeding.
+-   Fail-closed on malformed rows: unparseable dates/unrecognized
+    postures are skipped with a printed explanation, never guessed.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones and the still-unresolved
+    `personal_capacity_facts.xlsx` sandbox lock noted under RE-032.6.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Human Approval
+    operativo real 20-25% -> 45-50%.
 
 ## Version 1.82
 

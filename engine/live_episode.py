@@ -29,6 +29,7 @@ Frozen Core stays untouched (no changes to drawdown_engine.py).
 """
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 from loaders.shiller_loader import load_shiller_data
@@ -176,6 +177,18 @@ def run_live_episode_detector() -> Optional[CurrentEpisode]:
         return None
 
     return detect_current_episode(df)
+
+
+def calendar_date_to_shiller_month(d: date) -> float:
+    """
+    RE-032.7 -- extracted from engine/dry_powder_ledger_state.py (no
+    logic change), so a second caller (engine/human_approval_state.py,
+    resolving Attestation.market_crisis_at_registration) can convert a
+    real calendar date to Shiller's own AAAA.MM float convention
+    without a second copy of this conversion existing in the codebase.
+    """
+
+    return d.year + d.month / 100
 
 
 def drawdown_at_month(df, target_month: float) -> Optional[float]:

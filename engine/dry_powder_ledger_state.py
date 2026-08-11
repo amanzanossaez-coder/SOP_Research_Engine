@@ -50,24 +50,23 @@ in code:
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
 from engine.dry_powder_protocol import DryPowderProtocolInputs
 from engine.gate_combination import CONSERVE, POSTURE_ORDER
 from engine.live_episode import (
+    calendar_date_to_shiller_month,
     detect_current_episode,
     drawdown_at_month,
     load_prepared_shiller_df,
 )
+from engine.manual_entry_parsing import to_calendar_date_or_none, to_float_or_none
 from loaders.dry_powder_ledger_loader import (
     EPISODE_START_LABEL,
     INITIAL_DRY_POWDER_LABEL,
     load_dry_powder_ledger_raw,
 )
-
-
-_PLACEHOLDER_TOKENS = {"pendiente"}
 
 
 @dataclass
@@ -87,47 +86,6 @@ class LedgerEpisodeState:
     explanations: list[str] = field(default_factory=list)
 
 
-def _to_float_or_none(value):
-
-    if value is None:
-        return None
-
-    if isinstance(value, str) and value.strip().lower() in _PLACEHOLDER_TOKENS:
-        return None
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _to_calendar_date_or_none(value):
-
-    if isinstance(value, datetime):
-        return value.date()
-
-    if isinstance(value, date):
-        return value
-
-    if isinstance(value, str):
-
-        text = value.strip()
-
-        if not text or text.lower() in _PLACEHOLDER_TOKENS:
-            return None
-
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(text, fmt).date()
-            except ValueError:
-                continue
-
-    return None
-
-
-def _calendar_date_to_shiller_month(d: date) -> float:
-
-    return d.year + d.month / 100
 
 
 def compute_ledger_episode_state(
@@ -174,8 +132,8 @@ def compute_ledger_episode_state(
 
     episode_marker = raw_patrimonio.get("episode_marker", {})
 
-    ledger_start = _to_float_or_none(episode_marker.get(EPISODE_START_LABEL))
-    initial_dry_powder = _to_float_or_none(
+    ledger_start = to_float_or_none(episode_marker.get(EPISODE_START_LABEL))
+    initial_dry_powder = to_float_or_none(
         episode_marker.get(INITIAL_DRY_POWDER_LABEL)
     )
 
@@ -217,7 +175,7 @@ def compute_ledger_episode_state(
 
     for tranche in raw_patrimonio.get("tranches", []):
 
-        tranche_date = _to_calendar_date_or_none(tranche.get("fecha"))
+        tranche_date = to_calendar_date_or_none(tranche.get("fecha"))
 
         if tranche_date is None:
             explanations.append(
@@ -225,7 +183,7 @@ def compute_ledger_episode_state(
             )
             continue
 
-        tranche_month = _calendar_date_to_shiller_month(tranche_date)
+        tranche_month = calendar_date_to_shiller_month(tranche_date)
 
         if tranche_month < ledger_start:
             # belongs to a prior, already-closed episode -- the ledger
@@ -241,7 +199,7 @@ def compute_ledger_episode_state(
 
     for tranche_date, tranche in episode_tranches:
 
-        importe = _to_float_or_none(tranche.get("importe"))
+        importe = to_float_or_none(tranche.get("importe"))
 
         if importe is None:
             explanations.append(
@@ -274,7 +232,7 @@ def compute_ledger_episode_state(
                 "on days_since_last_deployment alone"
             )
         else:
-            last_tranche_month = _calendar_date_to_shiller_month(
+            last_tranche_month = calendar_date_to_shiller_month(
                 last_tranche_date
             )
             drawdown_then = drawdown_at_month(shiller_df, last_tranche_month)
