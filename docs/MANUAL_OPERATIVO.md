@@ -1,11 +1,19 @@
 # MANUAL OPERATIVO — SOP Research Engine
 
-> **¿Qué es esto?** La guía de qué hacer en tu día a día, bloque a
-> bloque. Para el "por qué" de cada regla, o para ver el código,
-> consulta `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`.
+Este manual sirve para operar el SOP en la práctica.
+
+No explica por qué existen las reglas ni cómo está diseñado el sistema.
+Eso vive en `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`.
+
+Aquí solo se explica:
+
+- qué revisar;
+- qué rellenar;
+- cuándo actuar;
+- cuándo no hacer nada.
 
 Se escribe bloque a bloque, en el orden en que cada pieza queda cerrada.
-Hoy: Dry Powder Protocol.
+Hoy: Dry Powder Protocol. Human Approval, pendiente.
 
 ------------------------------------------------------------------------
 
@@ -23,9 +31,10 @@ Hoy: Dry Powder Protocol.
   Regime Comparability, Personal Capacity), que combinadas producen la
   postura del día. Dry Powder Protocol arranca **después**: dado que
   la postura de hoy ya autoriza desplegar algo, ¿cuánto exactamente?
-- **Importante:** es una calculadora de riesgo. No ejecuta nada, no
-  mueve dinero, no se conecta a ningún bróker. La decisión y la
-  ejecución son siempre tuyas.
+- **Importante:** este protocolo no ejecuta nada. No mueve dinero, no
+  conecta con ningún bróker. Solo te dice si, según las reglas, hoy se
+  puede desplegar un tramo y cuál sería el importe — la decisión de
+  ejecutarlo es siempre tuya.
 
 **Las 4 reglas clave:**
 
@@ -43,20 +52,22 @@ Hoy: Dry Powder Protocol.
 3.  **Techo de seguridad por episodio, cortafuegos, no control diario.**
     No puedes desplegar en total más del 40% de la pólvora inicial en
     `Partially` ni más del 80% en `Aggressively`. Si lo alcanzas, se
-    frena — **y aquí hay un matiz importante que se pierde fácil:**
-    solo el techo del 80% (`Deploy Aggressively`) tiene una vía de
-    excepción, y solo con una atestación de Human Approval vigente que
-    lo autorice explícitamente. El techo del 40% en `Partially` **no
-    tiene excepción por atestación** — una vez alcanzado, no se
-    desplegará más bajo esa postura hasta que el episodio se cierre o
-    la postura escale a `Aggressively` (que tiene su propio techo,
-    independiente).
+    frena. El techo del 40% y el del 80% no funcionan igual — ver el
+    aviso justo debajo de esta lista.
 4.  **Ratchet: el techo no retrocede dentro del mismo episodio.** Si el
     mercado empeora y subes a `Aggressively`, ese techo se mantiene
     como referencia aunque luego la postura se relaje a `Partially` —
     no se "recarga" capacidad de tramo por bajar y volver a subir. Solo
     se resetea cuando el episodio se cierra de verdad (recuperación
-    completa, ver 1.5).
+    completa, ver 1.4).
+
+> **El matiz que más se pierde: el 40% y el 80% no son la misma regla.**
+> El techo del 40% en `Deploy Partially` **no tiene excepción.** Si se
+> alcanza, no se despliega más bajo esa postura — punto. El techo del
+> 80% en `Deploy Aggressively` **sí puede superarse**, pero solo con
+> una atestación de Human Approval vigente y explícita. El sistema no
+> calcula automáticamente cuánto desplegar más allá de ese techo —
+> esa cifra la fijas tú a mano, según lo atestiguado.
 
 Ninguno de estos números (12%, 22%, 30 días, 14 días, 5 pp, 40%, 80%)
 está ajustado contra el histórico de mercado — son parámetros de
@@ -105,7 +116,7 @@ solo la primera vez que aparece:**
     tuyo, nadie más lo sabe.
 
 Si el episodio sigue abierto en la siguiente revisión, no tocas la
-Sección 1 otra vez — se queda como está hasta el cierre (ver 1.5).
+Sección 1 otra vez — se queda como está hasta el cierre (ver 1.4).
 
 > **Regla de oro:** si no sabes qué poner en una celda, escribe
 > literalmente `Pendiente`. El sistema lo lee como "no lo sé todavía"
@@ -147,14 +158,30 @@ exactos:
 | `ceiling reached, approved beyond ceiling` | Solo puede pasar en `Deploy Aggressively`, con una atestación de Human Approval vigente que lo autorice. El sistema **no calcula** el importe por fórmula aquí. | Fijar tú a mano la cifra, según lo atestiguado. |
 | `authorized` | Luz verde: el sistema te da una cifra concreta (`authorized_amount`). | Recomendación de compra — decides si la ejecutas. |
 
-### 1.4 Cuándo se borra el historial
+### 1.4 Qué pasa cuando termina un episodio
 
-**Nunca.** Un episodio se cierra cuando el mercado recupera del todo su
-máximo anterior (Drawdown vuelve a 0). Cuando eso pase, en el próximo
-episodio la Sección 1 vuelve a pedir fecha y pólvora seca inicial
-nuevas — el ratchet y el acumulado se calculan solo sobre las filas de
-la Sección 2 cuya fecha caiga dentro del episodio actual. Las filas del
-episodio anterior se quedan en el histórico, sin tocar.
+El historial no se borra nunca. Un episodio se cierra cuando el mercado
+recupera del todo su máximo anterior (Drawdown vuelve a 0). Cuando eso
+pase, en el próximo episodio la Sección 1 vuelve a pedir fecha y
+pólvora seca inicial nuevas — el ratchet y el acumulado se calculan
+solo sobre las filas de la Sección 2 cuya fecha caiga dentro del
+episodio actual. Las filas del episodio anterior se quedan en el
+histórico, sin tocar.
+
+### Checklist rápido
+
+Antes de actuar:
+
+- Ejecuta `python3 audit_posture.py`.
+- Comprueba si hay episodio activo.
+- Si no hay episodio activo, no hagas nada.
+- Si hay episodio activo, revisa la pestaña AMS o AML.
+- Si es la primera vez que aparece este episodio, rellena antes la
+  Sección 1 (fecha inicio + pólvora seca inicial) — sin eso, el
+  sistema no calcula ningún tramo.
+- Si el sistema autoriza un tramo, decide si lo ejecutas.
+- Si lo ejecutas, registra una fila nueva en la Sección 2 del Excel.
+- No borres ni sobrescribas filas anteriores.
 
 ------------------------------------------------------------------------
 
