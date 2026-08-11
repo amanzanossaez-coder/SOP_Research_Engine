@@ -1,6 +1,6 @@
 """
 SOP Research Engine
-Dry Powder Ledger State -- RE-041.4 / RE-041.5
+Dry Powder Ledger State -- RE-041.4 / RE-041.5 / RE-041.7
 
 Joins RE-041.2's live market-episode detection
 (engine/live_episode.py) with RE-041.3's manual ledger
@@ -21,16 +21,18 @@ evaluate_capital_posture() result) and merges them with this module's
 own LedgerEpisodeState output. This is glue, not a new source of
 truth for either field.
 
-Scope of this iteration, stated plainly rather than silently
-shipped partial: `drawdown_pp_since_last_deployment` is NOT computed
-here. Doing so correctly requires looking up the market drawdown at
-the exact historical month of the last tranche against the full
-prepared Shiller series (not just the terminal CurrentEpisode
-snapshot RE-041.2 exposes) -- a real feature, deferred to its own
-iteration rather than bolted on here. Its absence is safe: RE-041.1's
-cadence check is days OR drawdown-points, so leaving this field None
-never blocks or wrongly authorizes anything -- cadence can still be
-satisfied on days alone.
+RE-041.7 closes the gap RE-041.4 deliberately left open:
+`drawdown_pp_since_last_deployment` is now computed, given a prepared
+Shiller series (engine.live_episode.load_prepared_shiller_df()),
+by looking up the market drawdown at the last tranche's month via
+engine.live_episode.drawdown_at_month() and comparing it to today's.
+The comparison is signed and clamped at zero, not an absolute
+difference -- a partial market recovery since the last tranche must
+never count as "additional drawdown" (see the comment at the
+computation itself). Still optional: compute_ledger_episode_state()
+accepts shiller_df=None (its previous behaviour) and simply leaves the
+field unset with an explanation, which stays safe because RE-041.1's
+cadence check is days OR drawdown-points.
 
 Two fail-closed judgment calls made explicit here rather than buried
 in code:
@@ -53,7 +55,11 @@ from typing import Optional
 
 from engine.dry_powder_protocol import DryPowderProtocolInputs
 from engine.gate_combination import CONSERVE, POSTURE_ORDER
-from engine.live_episode import run_live_episode_detector
+from engine.live_episode import (
+    detect_current_episode,
+    drawdown_at_month,
+    load_prepared_shiller_df,
+)
 from loaders.dry_powder_ledger_loader import (
     EPISODE_START_LABEL,
     INITIAL_DRY_POWDER_LABEL,
@@ -128,13 +134,24 @@ def compute_ledger_episode_state(
     current_episode,
     raw_patrimonio,
     as_of_calendar_date: Optional[date] = None,
+    shiller_df=None,
 ) -> LedgerEpisodeState:
     """
-    Pure logic, no I/O -- current_episode is
+    Pure logic, no I/O of its own -- current_episode is
     engine.live_episode.CurrentEpisode or None, raw_patrimonio is one
     entry of loaders.dry_powder_ledger_loader.load_dry_powder_ledger_raw()'s
     return value. Kept separate from build_local_dry_powder_ledger_state()
     so this can be exercised directly with synthetic inputs.
+
+    shiller_df (RE-041.7): the full prepared Shiller series (as
+    returned by engine.live_episode.load_prepared_shiller_df()), used
+    only to look up the market drawdown at the last tranche's month
+    for drawdown_pp_since_last_deployment. Optional and caller-supplied
+    rather than loaded internally, to keep this function testable with
+    synthetic data and to avoid this module owning Shiller I/O -- when
+    None, that one field is left unset (RE-041.4's original behaviour),
+    which is always safe since RE-041.1's cadence check is days OR
+    drawdown-points.
     """
 
     if as_of_calendar_date is None:
@@ -220,6 +237,7 @@ def compute_ledger_episode_state(
     cum_deployed_in_episode = 0.0
     highest_posture_in_episode = CONSERVE
     days_since_last_deployment = None
+    drawdown_pp_since_last_deployment = None
 
     for tranche_date, tranche in episode_tranches:
 
@@ -242,19 +260,48 @@ def compute_ledger_episode_state(
             highest_posture_in_episode = postura
 
     if episode_tranches:
+
         last_tranche_date = max(d for d, _ in episode_tranches)
+
         days_since_last_deployment = (
             as_of_calendar_date - last_tranche_date
         ).days
 
+        if shiller_df is None:
+            explanations.append(
+                "drawdown_pp_since_last_deployment not computed -- no "
+                "Shiller series supplied; cadence can still be satisfied "
+                "on days_since_last_deployment alone"
+            )
+        else:
+            last_tranche_month = _calendar_date_to_shiller_month(
+                last_tranche_date
+            )
+            drawdown_then = drawdown_at_month(shiller_df, last_tranche_month)
+
+            if drawdown_then is None or current_episode.as_of_drawdown is None:
+                explanations.append(
+                    "drawdown_pp_since_last_deployment not computed -- "
+                    "could not look up market drawdown at the last "
+                    "tranche's month"
+                )
+            else:
+                # Both Drawdown values are negative (or zero). A market
+                # that has fallen FURTHER since the last tranche has
+                # as_of_drawdown more negative than drawdown_then, so
+                # (drawdown_then - as_of_drawdown) is positive -- "N
+                # points of additional drawdown." A partial recovery
+                # since the last tranche makes this negative; clamped
+                # to 0.0 rather than reported as a negative number of
+                # points, because a recovery is not "additional
+                # drawdown" and must never satisfy this cadence leg.
+                drawdown_pp_since_last_deployment = max(
+                    0.0,
+                    (drawdown_then - current_episode.as_of_drawdown) * 100,
+                )
+
     remaining_dry_powder = max(
         0.0, initial_dry_powder - cum_deployed_in_episode
-    )
-
-    explanations.append(
-        "drawdown_pp_since_last_deployment not computed this iteration "
-        "-- requires a month-level Shiller lookup not yet built; cadence "
-        "can still be satisfied on days_since_last_deployment alone"
     )
 
     return LedgerEpisodeState(
@@ -263,7 +310,7 @@ def compute_ledger_episode_state(
         remaining_dry_powder=remaining_dry_powder,
         cum_deployed_in_episode=cum_deployed_in_episode,
         days_since_last_deployment=days_since_last_deployment,
-        drawdown_pp_since_last_deployment=None,
+        drawdown_pp_since_last_deployment=drawdown_pp_since_last_deployment,
         highest_posture_in_episode=highest_posture_in_episode,
         explanations=explanations,
     )
@@ -315,11 +362,13 @@ def to_dry_powder_protocol_inputs(
 
 def build_local_dry_powder_ledger_state(file_path=None):
     """
-    I/O + adaptation: loads data/raw/dry_powder_ledger.xlsx, runs the
-    live episode detector once, and evaluates
-    compute_ledger_episode_state() per patrimonio tab. Returns None if
-    the ledger file is missing (same fail-closed convention as every
-    other loader in this project).
+    I/O + adaptation: loads data/raw/dry_powder_ledger.xlsx, loads and
+    prepares the Shiller series once (RE-041.7 -- shared for both the
+    live episode detection and the drawdown_pp_since_last_deployment
+    lookup, so this only reads shiller.xlsx a single time per call),
+    and evaluates compute_ledger_episode_state() per patrimonio tab.
+    Returns None if the ledger file is missing (same fail-closed
+    convention as every other loader in this project).
     """
 
     raw = load_dry_powder_ledger_raw(file_path)
@@ -327,11 +376,15 @@ def build_local_dry_powder_ledger_state(file_path=None):
     if raw is None:
         return None
 
-    current_episode = run_live_episode_detector()
+    shiller_df = load_prepared_shiller_df()
+
+    current_episode = (
+        detect_current_episode(shiller_df) if shiller_df is not None else None
+    )
 
     return {
         patrimonio_name: compute_ledger_episode_state(
-            current_episode, raw_patrimonio
+            current_episode, raw_patrimonio, shiller_df=shiller_df
         )
         for patrimonio_name, raw_patrimonio in raw.items()
     }

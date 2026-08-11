@@ -137,13 +137,17 @@ def detect_current_episode(df) -> Optional[CurrentEpisode]:
     )
 
 
-def run_live_episode_detector() -> Optional[CurrentEpisode]:
+def load_prepared_shiller_df():
     """
-    Loads Shiller data fresh and runs detect_current_episode() on it.
-    No caching, no persisted state -- every call re-derives the answer
-    from data/raw/shiller.xlsx as it stands today. Returns None if the
-    file is missing (same fail-closed convention as every other loader
-    in this project) or if no episode is currently active.
+    RE-041.7 -- extracted from run_live_episode_detector() (no logic
+    change) so a caller that needs the full prepared series -- not
+    just the terminal CurrentEpisode snapshot -- can get it without
+    reloading Shiller data a second time. drawdown_at_month() below is
+    the first such caller (engine/dry_powder_ledger_state.py's
+    drawdown_pp_since_last_deployment lookup).
+
+    Returns None if data/raw/shiller.xlsx is missing, same fail-closed
+    convention as every other loader in this project.
     """
 
     df = load_shiller_data()
@@ -154,4 +158,40 @@ def run_live_episode_detector() -> Optional[CurrentEpisode]:
     df = calculate_running_peak(df)
     df = calculate_drawdown(df)
 
+    return df
+
+
+def run_live_episode_detector() -> Optional[CurrentEpisode]:
+    """
+    Loads Shiller data fresh and runs detect_current_episode() on it.
+    No caching, no persisted state -- every call re-derives the answer
+    from data/raw/shiller.xlsx as it stands today. Returns None if the
+    file is missing (same fail-closed convention as every other loader
+    in this project) or if no episode is currently active.
+    """
+
+    df = load_prepared_shiller_df()
+
+    if df is None:
+        return None
+
     return detect_current_episode(df)
+
+
+def drawdown_at_month(df, target_month: float) -> Optional[float]:
+    """
+    RE-041.7 -- market Drawdown at the most recent Shiller row on or
+    before target_month (df must already carry RunningPeak/Drawdown,
+    same precondition as detect_current_episode()). target_month uses
+    Shiller's own AAAA.MM float convention.
+
+    Returns None if target_month is before the earliest row in the
+    series -- no lookup possible, not a zero.
+    """
+
+    candidates = df[df["Date"] <= target_month]
+
+    if len(candidates) == 0:
+        return None
+
+    return candidates.iloc[-1]["Drawdown"]

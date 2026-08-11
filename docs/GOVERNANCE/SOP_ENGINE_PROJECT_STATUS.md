@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.80\
+**Version:** 1.81\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.6 (2026-08-10):
+As of RE-041.7 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -29,7 +29,7 @@ As of RE-041.6 (2026-08-10):
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
 | Dry Powder Protocol | 75-80% aislado / no wired |
-| Dry Powder -- rastreo de episodio en vivo | 70-75% (cadena completa demostrada en audit_posture.py; falta drawdown_pp_since_last_deployment y wiring a run.py/DecisionEngine) |
+| Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 0-5% |
@@ -8377,6 +8377,73 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-041.7 — drawdown_pp_since_last_deployment closed
+
+Closes the gap RE-041.4 explicitly deferred. `engine/live_episode.py`
+gains two small additions: `load_prepared_shiller_df()` (extracted
+from `run_live_episode_detector()`, no logic change, so a caller can
+get the full prepared series rather than just the terminal
+`CurrentEpisode` snapshot) and `drawdown_at_month(df, target_month)`
+(the market `Drawdown` at the most recent Shiller row on or before a
+given `AAAA.MM` month, `None` if before the series' start).
+
+`engine/dry_powder_ledger_state.py::compute_ledger_episode_state()`
+gains an optional `shiller_df` parameter. When supplied, it looks up
+the market drawdown at the last tranche's month and computes
+`drawdown_pp_since_last_deployment` as `(drawdown_then -
+as_of_drawdown) * 100`, clamped at `0.0`. The clamp is the real
+substance of this iteration, not a formality: a partial market
+recovery since the last tranche makes this difference negative, and a
+negative number of "additional drawdown points" would be nonsensical
+-- worse, if left unclamped it would silently work anyway inside
+`dry_powder_protocol.py`'s `>=` cadence check (a negative number never
+clears a positive threshold), which is exactly the kind of
+accidentally-correct-but-unprincipled result this project's discipline
+exists to catch before it ships, not tolerate because it happens not
+to bite today. `build_local_dry_powder_ledger_state()` now loads the
+Shiller series once per call and reuses it for both live episode
+detection and this lookup -- no double read.
+
+Backward compatible: `shiller_df` defaults to `None`, in which case
+behaviour is exactly RE-041.4's (field left unset, explanation
+recorded) -- no existing caller breaks.
+
+What this does not authorize:
+
+-   No wiring into `run.py`, `DecisionEngine`, `audit_posture.py`'s
+    call site needed no changes (it already calls
+    `build_local_dry_powder_ledger_state()`, which now supplies the
+    Shiller series internally).
+-   No change to the cadence rule itself (days OR drawdown-points) --
+    this iteration only makes the second leg computable, doesn't
+    change how it's used.
+
+Boundary:
+
+-   Two files extended: `engine/live_episode.py`,
+    `engine/dry_powder_ledger_state.py`.
+-   One test file extended: `tests/verify_dry_powder_ledger_state.py`
+    (new synthetic Shiller-series cases, both the deepening and
+    clamped-recovery sign cases). Also fixed a latent bug in that same
+    test file unrelated to this iteration's logic: an assertion
+    hardcoded `date(2026, 8, 10)` as "today" while separately relying
+    on `date.today()` -- broke the moment a real day passed (caught
+    while running this iteration's tests, one day after RE-041.6
+    shipped). Fixed by passing a fixed `as_of_calendar_date` explicitly
+    instead of depending on the real clock.
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. One unrelated environment issue hit during this
+    session's verification and noted, not fixed here:
+    `data/raw/personal_capacity_facts.xlsx` was locked by the sandbox's
+    iCloud mount (`OSError: Resource deadlock avoided` /
+    `BadZipFile`) -- same class of issue as the `.git/index.lock`
+    problem documented earlier in this project's history, unrelated to
+    any file this iteration touched, expected to clear on Armando's
+    own machine.
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -8814,6 +8881,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.81
+
+-   Added RE-041.7: `engine/live_episode.py` gains
+    `load_prepared_shiller_df()` (extracted, no logic change) and
+    `drawdown_at_month()`. `dry_powder_ledger_state.py::compute_ledger_episode_state()`
+    gains an optional `shiller_df` param and now computes
+    `drawdown_pp_since_last_deployment` as `(drawdown_then -
+    as_of_drawdown) * 100`, clamped at 0.0 -- a partial market recovery
+    since the last tranche must never count as additional drawdown.
+    `build_local_dry_powder_ledger_state()` loads Shiller once, reuses
+    it for both episode detection and this lookup.
+-   Backward compatible: `shiller_df=None` preserves RE-041.4's exact
+    prior behaviour.
+-   Fixed a latent test bug unrelated to this iteration's logic:
+    `tests/verify_dry_powder_ledger_state.py` hardcoded "today" as a
+    literal date while also depending on the real clock -- broke one
+    day after RE-041.6 shipped, caught while verifying this iteration.
+    Fixed with an explicit fixed `as_of_calendar_date`.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones. Noted, not fixed: `data/raw/personal_capacity_facts.xlsx`
+    hit a transient iCloud filesystem lock in the sandbox during this
+    session's verification (`OSError: Resource deadlock avoided`),
+    unrelated to any file this iteration touched.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder --
+    rastreo de episodio en vivo 70-75% -> 85-90%.
 
 ## Version 1.80
 

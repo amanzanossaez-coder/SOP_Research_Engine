@@ -10,11 +10,19 @@ data/raw/dry_powder_ledger.xlsx and today's live market state.
 
 RE-041.5 -- synthetic checks on to_dry_powder_protocol_inputs(), the
 final assembly step.
+
+RE-041.7 -- synthetic checks on drawdown_pp_since_last_deployment now
+being computed when a Shiller series is supplied, including the sign
+convention (a partial market recovery since the last tranche must
+clamp to 0.0 points of "additional" drawdown, never a negative
+number).
 """
 
 from datetime import date
 from pathlib import Path
 import sys
+
+import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,6 +147,8 @@ def main() -> None:
     # -- within the current episode at Partially then Aggressively --
     # -- (highest must be Aggressively), plus one unparseable row --
 
+    with_tranches_as_of = date(2026, 8, 10)
+
     with_tranches = compute_ledger_episode_state(
         SAMPLE_EPISODE,
         {
@@ -173,6 +183,7 @@ def main() -> None:
                 },
             ],
         },
+        as_of_calendar_date=with_tranches_as_of,
     )
     assert_equal("with_tranches_active", with_tranches.has_active_episode, True)
     assert_close("with_tranches_cum_deployed", with_tranches.cum_deployed_in_episode, 34000.0)
@@ -185,10 +196,10 @@ def main() -> None:
     assert_equal(
         "with_tranches_days_since_last",
         with_tranches.days_since_last_deployment,
-        (date(2026, 8, 10) - date(2026, 6, 15)).days,
+        (with_tranches_as_of - date(2026, 6, 15)).days,
     )
     assert_equal(
-        "with_tranches_drawdown_pp_deferred",
+        "with_tranches_drawdown_pp_no_shiller_df",
         with_tranches.drawdown_pp_since_last_deployment,
         None,
     )
@@ -211,6 +222,58 @@ def main() -> None:
         "with_tranches_fixed_date_days_since_last",
         with_tranches_fixed_date.days_since_last_deployment,
         (as_of - date(2026, 6, 15)).days,
+    )
+
+    # -- drawdown_pp_since_last_deployment, WITH a supplied Shiller --
+    # -- series. Last tranche on 2026-06-15 (-> Shiller month 2026.06). --
+
+    # Case A: market fell FURTHER since the last tranche (-5% then,
+    # -15% now per SAMPLE_EPISODE.as_of_drawdown) -> 10.0 points.
+    deepening_df = pd.DataFrame(
+        {"Date": [2026.01, 2026.06, 2026.07], "Drawdown": [0.0, -0.05, -0.15]}
+    )
+    with_shiller_deepening = compute_ledger_episode_state(
+        SAMPLE_EPISODE,
+        {
+            "episode_marker": {
+                EPISODE_START_LABEL: 2026.03,
+                INITIAL_DRY_POWDER_LABEL: 100000.0,
+            },
+            "tranches": [
+                {"fecha": "2026-06-15", "importe": 22000.0, "postura": DEPLOY_AGGRESSIVELY, "nota": ""},
+            ],
+        },
+        shiller_df=deepening_df,
+    )
+    assert_close(
+        "drawdown_pp_deepening",
+        with_shiller_deepening.drawdown_pp_since_last_deployment,
+        10.0,
+    )
+
+    # Case B: market PARTIALLY RECOVERED since the last tranche (-25%
+    # then, -15% now) -- must clamp to 0.0, never a negative number of
+    # "additional" points.
+    recovering_df = pd.DataFrame(
+        {"Date": [2026.01, 2026.06, 2026.07], "Drawdown": [0.0, -0.25, -0.15]}
+    )
+    with_shiller_recovering = compute_ledger_episode_state(
+        SAMPLE_EPISODE,
+        {
+            "episode_marker": {
+                EPISODE_START_LABEL: 2026.03,
+                INITIAL_DRY_POWDER_LABEL: 100000.0,
+            },
+            "tranches": [
+                {"fecha": "2026-06-15", "importe": 22000.0, "postura": DEPLOY_AGGRESSIVELY, "nota": ""},
+            ],
+        },
+        shiller_df=recovering_df,
+    )
+    assert_close(
+        "drawdown_pp_recovering_clamped_to_zero",
+        with_shiller_recovering.drawdown_pp_since_last_deployment,
+        0.0,
     )
 
     # -- Assembly: no active episode -> nothing to evaluate --
