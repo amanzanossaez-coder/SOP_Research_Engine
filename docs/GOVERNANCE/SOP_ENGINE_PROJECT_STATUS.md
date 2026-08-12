@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.88\
+**Version:** 1.89\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-041.8 (2026-08-11):
+As of RE-032.10 (2026-08-11):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-041.8 (2026-08-11):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; corregido un vacío real de silencio en postura no reconocida encontrado en revisión crítica -- RE-041.8; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 60-65% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; sin datos reales cargados, sin wiring a run.py) |
+| Human Approval operativo real | 60-65% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; iteración A de la autorización extraordinaria del 90% cerrada -- RE-032.10, aislada, todavía sin Excel ni wiring; sin datos reales cargados, sin wiring a run.py) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8803,6 +8803,117 @@ Boundary:
 -   Full test suite re-run: no new failures beyond the same four
     pre-existing ones.
 
+## RE-032.10 — Human Approval: authorizes_dry_powder_ceiling_90 (iteration A, pure logic)
+
+Closes a gap `audit_posture.py` already documented honestly at
+RE-032.8, rather than papering over it: `dry_powder_protocol.py`'s
+`CEILING_REACHED_APPROVED` status has always required "a fresh Human
+Approval attestation" to unlock deployment beyond `Deploy
+Aggressively`'s 80% ceiling (RE-041.1), but neither the xlsx nor
+`Attestation` ever had anywhere to actually record that authorization
+-- `human_approval_above_ceiling` has been hardcoded `False` in
+`audit_posture.py` since RE-041.5, deliberately, rather than inventing
+a mapping that didn't exist. Armando raised this himself while
+reviewing the manual operativo draft for Dry Powder Protocol, and the
+full design was negotiated point by point before any code was written
+-- same discipline as RE-032.4's original contradictions.
+
+Design, agreed in full before writing this iteration:
+
+1.  Authorizes ampliar el techo de `Deploy Aggressively` del 80% al
+    90% de la pólvora seca inicial del episodio -- never 100%, never a
+    fixed euro amount. `dry_powder_protocol.py` computing tranches up
+    to this new 90% is explicitly deferred to a separate iteration (C,
+    below) -- this iteration only produces the boolean that will
+    unlock it.
+2.  Lives on the SAME attestation row as the posture it depends on
+    (`Attestation.authorizes_dry_powder_ceiling_90: bool = False`),
+    not a separate registry -- an extension of that specific Human
+    Approval, not a new protocol. Only meaningful when that row's
+    `approved_posture_ceiling` is `Deploy Aggressively`.
+3.  Always a fixed 30-day cooling-off of its own
+    (`COOLING_OFF_CEILING_90_DAYS`), deliberately independent of the
+    base posture's own 14/30-day cooling-off, even though both equal
+    30 under a crisis today -- exceeding the hardest ceiling in the
+    system gets maximum friction by default, not whatever friction the
+    underlying posture increase happened to need.
+4.  Can be registered pre-emptively -- before the 80% ceiling is
+    reached, even before any episode is active -- confirmed explicitly
+    as the intended use: the 30-day wait should already be paid down
+    in a calm moment, not started reactively exactly when a real
+    crisis is already underway (the worst possible time to have to
+    wait).
+5.  Deliberately does NOT know anything about market episodes.
+    `registered_at >= episode.peak_date` was considered and rejected
+    as a v1 filter: it would have broken point 4 (an attestation made
+    before an episode existed would never satisfy "on or after the
+    episode's peak"), and it would have given Human Approval a market
+    dependency it has never had. "Only usable while an episode is
+    actually active" is already guaranteed for free by
+    `dry_powder_protocol.py`'s own call structure -- it only ever runs
+    when `to_dry_powder_protocol_inputs()` has produced real inputs,
+    which itself requires an active, ledger-resolved episode. If
+    scoping to a *specific* episode is ever needed, that gets an
+    explicit episode field later, not a date inference now -- not
+    built ahead of an observed need.
+6.  Can never be in effect before the base posture it depends on --
+    guaranteed structurally (only ever checked against whichever
+    attestation `evaluate()` has already established as the one
+    actually governing the base posture, never a still-pending one)
+    and arithmetically (30 days can never be less than the 14-or-30
+    the base itself required, since both clocks share the same
+    `registered_at`). Expires with its own attestation -- gone the
+    moment that row falls outside the 90-day validity window, same as
+    everything else on it.
+
+Implementation: `_ceiling_90_active(attestation, as_of_date)` checks
+the flag, the `Deploy Aggressively` posture requirement, and the
+30-day clock in one place; called from every branch of `evaluate()`
+against whichever attestation (`latest` or `fallback`) that branch has
+already established as effective -- never against a pending one, so
+point 6's structural guarantee is enforced by construction, not by
+convention.
+
+Four acceptance checks, agreed with Armando before coding, each with
+its own test case in `tests/verify_human_approval.py`:
+
+-   Doesn't apply if the governing posture isn't `Deploy Aggressively`,
+    even with the flag set on the row (`ceiling_90_wrong_posture`).
+-   Never active while the base posture itself is still pending,
+    governed by a fallback instead (`ceiling_90_while_base_pending`).
+-   Always needs its own 30 days, even once the base posture has
+    cleared a shorter 14-day cooling-off
+    (`ceiling_90_base_cleared_but_not_own` /
+    `ceiling_90_both_cleared`).
+-   Expires with its own attestation, past the 90-day validity window
+    (`ceiling_90_expired`).
+
+What this does not authorize:
+
+-   No change to `dry_powder_protocol.py` -- it still always returns
+    `authorized_amount=None` for `CEILING_REACHED_APPROVED`. Computing
+    up to 90% by formula is iteration C, not this one.
+-   No change to `data/raw/human_approval_attestations.xlsx`, the
+    loader, or `human_approval_state.py` -- no way to actually set this
+    flag from real data yet. That is iteration B.
+-   No change to `audit_posture.py` -- `human_approval_above_ceiling`
+    stays hardcoded `False`, unchanged, until iteration C wires it to
+    this field for real.
+-   No manual operativo update -- explicitly deferred to iteration D,
+    once the capability is real end-to-end, not before.
+
+Boundary:
+
+-   One file changed: `engine/human_approval.py`
+    (`authorizes_dry_powder_ceiling_90` added to `Attestation` and
+    `HumanApprovalResult`; `COOLING_OFF_CEILING_90_DAYS` constant;
+    `_ceiling_90_active()` helper; every `evaluate()` branch updated).
+-   One file extended: `tests/verify_human_approval.py` (four new
+    cases).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones.
+
 ------------------------------------------------------------------------
 
 # Roadmap
@@ -9242,6 +9353,29 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.89
+
+-   Added RE-032.10 (iteration A of D): `authorizes_dry_powder_ceiling_90`
+    added to `Attestation`/`HumanApprovalResult` in
+    `engine/human_approval.py` -- pure logic only, closing a gap
+    `audit_posture.py` already documented honestly at RE-032.8 (Human
+    Approval could never actually record authorizing Dry Powder
+    Protocol beyond its 80% ceiling). Full design negotiated point by
+    point with Armando before coding: ceiling moves 80% -> 90% (never
+    100%, never a euro amount), lives on the same `Deploy Aggressively`
+    row, fixed independent 30-day cooling-off, can be registered
+    pre-emptively, deliberately no market-episode coupling (already
+    covered for free by `dry_powder_protocol.py`'s own call
+    structure), can never take effect before its own base posture.
+-   Four new test cases in `tests/verify_human_approval.py`, one per
+    acceptance check agreed before coding. Full suite re-run: no new
+    failures beyond the same four pre-existing ones.
+-   No change yet to the xlsx, loader, `human_approval_state.py`,
+    `dry_powder_protocol.py`, `audit_posture.py`, or the manual
+    operativo -- iterations B/C/D, explicitly deferred.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Human Approval
+    operativo real, noting iteration A closed.
 
 ## Version 1.88
 

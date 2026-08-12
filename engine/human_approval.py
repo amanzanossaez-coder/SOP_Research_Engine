@@ -87,13 +87,82 @@ unwelcome edge case in practice).
 Validity (90 days) is measured from each attestation's own
 registration timestamp, never from when its cooling-off ends -- taken
 literally from RE-032.4 rule 4.
+
+RE-032.10 -- adds `authorizes_dry_powder_ceiling_90`, designed and
+confirmed with Armando end-to-end before writing any of it (mirrors
+the RE-032.4 back-and-forth this whole mechanism started from).
+Closes a real gap `audit_posture.py` already documented honestly at
+RE-032.8: `dry_powder_protocol.py`'s `CEILING_REACHED_APPROVED` status
+(going beyond `Deploy Aggressively`'s 80% ceiling) has always required
+"a fresh Human Approval attestation" per RE-041.1's spec, but neither
+the xlsx nor `Attestation` ever had anywhere to actually record that
+authorization -- `human_approval_above_ceiling` has been hardcoded
+`False` in `audit_posture.py` since RE-041.5, deliberately, rather
+than inventing a mapping that didn't exist.
+
+Design, agreed point by point before coding:
+
+1.  Authorizes ampliar el techo de `Deploy Aggressively` del 80% al
+    90% de la pólvora seca inicial del episodio -- nunca el 100%, y
+    nunca un importe fijo en euros. `dry_powder_protocol.py` (RE-C,
+    separate future iteration) will compute tranches up to this new
+    90% the same way it already does up to 80% -- this module only
+    produces the boolean that unlocks it.
+2.  Lives on the SAME attestation row as the posture it depends on,
+    not a separate registry -- it is an extension of that specific
+    Human Approval, not a new protocol. Only meaningful when that
+    row's `approved_posture_ceiling` is `Deploy Aggressively`.
+3.  Always a fixed 30-day cooling-off of its own
+    (`COOLING_OFF_CEILING_90_DAYS`), deliberately NOT the same
+    variable 14/30 the base posture uses -- exceeding the hardest
+    ceiling in the system is treated as maximum friction by default,
+    regardless of whether the underlying posture increase itself
+    needed only 14 days. Kept as its own named constant rather than
+    reusing `COOLING_OFF_CRISIS_DAYS` even though both are 30 today --
+    they are independent knobs that happen to share a value, not the
+    same rule; a future change to crisis cooling-off must not silently
+    change this one.
+4.  Can be registered pre-emptively, before the 80% ceiling is
+    actually reached, or even before any episode is active at all --
+    confirmed explicitly with Armando as the intended use: the 30-day
+    wait should already be paid down in a calm moment, not started
+    reactively exactly when a real crisis is already underway, which
+    would be the worst possible time to have to wait.
+5.  Deliberately does NOT know anything about market episodes.
+    Considered and rejected: gating this on the attestation's
+    registration date falling within the live-detected episode's
+    `peak_date` -- this would have broken point 4's pre-emptive
+    registration (an attestation made before an episode existed would
+    never satisfy "on or after the episode's peak"), and it would have
+    given Human Approval a market-data dependency it has never had
+    (`registered_at` is explicitly a calendar date, not a market
+    signal -- see module docstring above). "Only usable while an
+    episode is actually active" is already guaranteed for free by
+    `dry_powder_protocol.py`'s own call structure: it is only ever
+    evaluated when `to_dry_powder_protocol_inputs()` has produced real
+    inputs, which itself requires an active, ledger-resolved episode.
+    Human Approval does not need to duplicate that check. If a need to
+    scope this to a *specific* episode ever surfaces, that gets an
+    explicit episode field, not a date inference -- not built ahead of
+    an observed need, same discipline `regime_comparability_gate.py`
+    already applies to its own percentile/margin question.
+6.  Can never be in effect before the base posture it depends on:
+    guaranteed both structurally (this flag is only ever checked
+    against whichever attestation `evaluate()` has already established
+    as the one actually governing the base posture -- never against a
+    still-pending one) and arithmetically (30 days can never be less
+    than the 14-or-30 the base itself required, since both clocks
+    start from the same `registered_at`). Expires with its own
+    attestation: if the row it lives on is no longer valid (90-day
+    window, RE-032.4 rule 4), the 90% authorization is gone with it,
+    same as everything else on that row.
 """
 
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
 
-from engine.gate_combination import CONSERVE, POSTURE_ORDER
+from engine.gate_combination import CONSERVE, DEPLOY_AGGRESSIVELY, POSTURE_ORDER
 
 
 MISSING = "missing"
@@ -103,6 +172,7 @@ UNDER_COOLING_OFF = "under_cooling_off"
 
 COOLING_OFF_BASE_DAYS = 14
 COOLING_OFF_CRISIS_DAYS = 30
+COOLING_OFF_CEILING_90_DAYS = 30
 VALIDITY_DAYS = 90
 
 
@@ -123,6 +193,7 @@ class Attestation:
     approved_posture_ceiling: str
     personal_crisis_declared: bool = False
     market_crisis_at_registration: bool = False
+    authorizes_dry_powder_ceiling_90: bool = False
     notes: str = ""
 
 
@@ -155,6 +226,7 @@ class HumanApprovalResult:
     effective_posture_ceiling: Optional[str]
     blocked: bool
     pending_increase: Optional[PendingIncrease] = None
+    authorizes_dry_powder_ceiling_90: bool = False
     explanations: list[str] = field(default_factory=list)
 
 
@@ -167,6 +239,31 @@ def _validate_posture(label: str, posture: str) -> None:
 def _still_valid(attestation: Attestation, as_of_date: date) -> bool:
 
     return (as_of_date - attestation.registered_at).days < VALIDITY_DAYS
+
+
+def _ceiling_90_active(attestation: Attestation, as_of_date: date) -> bool:
+    """
+    RE-032.10. True only if `attestation` -- which the caller must
+    already have established as the one actually governing the base
+    posture right now, never a still-pending one (acceptance check:
+    "el extra nunca vigente antes que la base") -- itself authorizes
+    the 90% Dry Powder ceiling, is a Deploy Aggressively attestation
+    (acceptance check: "no sirve si la postura base no es Deploy
+    Aggressively"), and has cleared its OWN fixed 30-day cooling-off,
+    independent of whatever cooling-off the base posture needed
+    (acceptance check: "siempre 30 días, aunque la base madure en
+    14"). Expiry of the base attestation is the caller's
+    responsibility -- this helper is only ever called on attestations
+    already confirmed valid/effective (acceptance check: "si la base
+    caduca, el extra caduca con ella").
+    """
+
+    return (
+        attestation.authorizes_dry_powder_ceiling_90
+        and attestation.approved_posture_ceiling == DEPLOY_AGGRESSIVELY
+        and (as_of_date - attestation.registered_at).days
+        >= COOLING_OFF_CEILING_90_DAYS
+    )
 
 
 def _resolve_effective(
@@ -294,6 +391,9 @@ class HumanApprovalGate:
                 state=VALID,
                 effective_posture_ceiling=latest.approved_posture_ceiling,
                 blocked=False,
+                authorizes_dry_powder_ceiling_90=_ceiling_90_active(
+                    latest, as_of_date
+                ),
                 explanations=[
                     "latest attestation does not increase tolerance "
                     f"relative to {'what was actually in effect (' + fallback.approved_posture_ceiling + ')' if fallback else 'the implicit Conserve baseline'} "
@@ -312,6 +412,9 @@ class HumanApprovalGate:
                 state=VALID,
                 effective_posture_ceiling=latest.approved_posture_ceiling,
                 blocked=False,
+                authorizes_dry_powder_ceiling_90=_ceiling_90_active(
+                    latest, as_of_date
+                ),
                 explanations=[
                     f"tolerance-increasing revision registered "
                     f"{days_since_latest} days ago has cleared its "
@@ -338,6 +441,9 @@ class HumanApprovalGate:
                 effective_posture_ceiling=fallback.approved_posture_ceiling,
                 blocked=False,
                 pending_increase=pending,
+                authorizes_dry_powder_ceiling_90=_ceiling_90_active(
+                    fallback, as_of_date
+                ),
                 explanations=[
                     f"a tolerance-increasing revision to "
                     f"{latest.approved_posture_ceiling} is under "

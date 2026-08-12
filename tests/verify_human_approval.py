@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 from engine.gate_combination import CONSERVE, DEPLOY_AGGRESSIVELY, DEPLOY_PARTIALLY, PREPARE
 from engine.human_approval import (
     COOLING_OFF_BASE_DAYS,
+    COOLING_OFF_CEILING_90_DAYS,
     COOLING_OFF_CRISIS_DAYS,
     EXPIRED,
     MISSING,
@@ -321,6 +322,121 @@ def main() -> None:
         "bypass_cleared_effective",
         bypass_cleared.effective_posture_ceiling,
         DEPLOY_PARTIALLY,
+    )
+
+    # -- RE-032.10: authorizes_dry_powder_ceiling_90 -- the four --
+    # -- acceptance checks agreed with Armando before writing any of --
+    # -- this, each as its own case. --
+
+    # 1. Doesn't apply if the governing posture isn't Deploy --
+    # -- Aggressively, even if the flag is set on the row --
+
+    ceiling_90_wrong_posture = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(
+                Attestation(
+                    registered_at=today,
+                    approved_posture_ceiling=DEPLOY_PARTIALLY,
+                    authorizes_dry_powder_ceiling_90=True,
+                ),
+            ),
+            as_of_date=today + timedelta(days=COOLING_OFF_BASE_DAYS),
+        )
+    )
+    assert_equal("ceiling_90_wrong_posture_state", ceiling_90_wrong_posture.state, VALID)
+    assert_equal(
+        "ceiling_90_wrong_posture_flag",
+        ceiling_90_wrong_posture.authorizes_dry_powder_ceiling_90,
+        False,
+    )
+
+    # 2. Never active while the base posture itself is still pending --
+    # -- (governed by a fallback instead) --
+
+    ceiling_90_while_base_pending = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(
+                Attestation(registered_at=today, approved_posture_ceiling=CONSERVE),
+                Attestation(
+                    registered_at=today + timedelta(days=1),
+                    approved_posture_ceiling=DEPLOY_AGGRESSIVELY,
+                    authorizes_dry_powder_ceiling_90=True,
+                ),
+            ),
+            as_of_date=today + timedelta(days=1) + timedelta(days=5),
+        )
+    )
+    assert_equal(
+        "ceiling_90_while_base_pending_state", ceiling_90_while_base_pending.state, VALID
+    )
+    assert_equal(
+        "ceiling_90_while_base_pending_effective",
+        ceiling_90_while_base_pending.effective_posture_ceiling,
+        CONSERVE,
+    )
+    assert ceiling_90_while_base_pending.pending_increase is not None
+    assert_equal(
+        "ceiling_90_while_base_pending_flag",
+        ceiling_90_while_base_pending.authorizes_dry_powder_ceiling_90,
+        False,
+    )
+
+    # 3. Always requires its OWN 30 days, even once the base posture --
+    # -- itself has cleared a shorter (14-day) cooling-off --
+
+    aggressive_with_ceiling_90 = Attestation(
+        registered_at=today,
+        approved_posture_ceiling=DEPLOY_AGGRESSIVELY,
+        authorizes_dry_powder_ceiling_90=True,
+    )
+
+    ceiling_90_base_cleared_but_not_own = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(aggressive_with_ceiling_90,),
+            as_of_date=today + timedelta(days=COOLING_OFF_BASE_DAYS + 6),
+        )
+    )
+    assert_equal(
+        "ceiling_90_base_cleared_but_not_own_state",
+        ceiling_90_base_cleared_but_not_own.state,
+        VALID,
+    )
+    assert_equal(
+        "ceiling_90_base_cleared_but_not_own_effective",
+        ceiling_90_base_cleared_but_not_own.effective_posture_ceiling,
+        DEPLOY_AGGRESSIVELY,
+    )
+    assert_equal(
+        "ceiling_90_base_cleared_but_not_own_flag",
+        ceiling_90_base_cleared_but_not_own.authorizes_dry_powder_ceiling_90,
+        False,
+    )
+
+    ceiling_90_both_cleared = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(aggressive_with_ceiling_90,),
+            as_of_date=today + timedelta(days=COOLING_OFF_CEILING_90_DAYS),
+        )
+    )
+    assert_equal("ceiling_90_both_cleared_state", ceiling_90_both_cleared.state, VALID)
+    assert_equal(
+        "ceiling_90_both_cleared_flag",
+        ceiling_90_both_cleared.authorizes_dry_powder_ceiling_90,
+        True,
+    )
+
+    # 4. Expires with its own attestation -- past the 90-day validity --
+    # -- window, gone along with everything else on that row --
+
+    ceiling_90_expired = gate.evaluate(
+        HumanApprovalInputs(
+            attestations=(aggressive_with_ceiling_90,),
+            as_of_date=today + timedelta(days=VALIDITY_DAYS),
+        )
+    )
+    assert_equal("ceiling_90_expired_state", ceiling_90_expired.state, EXPIRED)
+    assert_equal(
+        "ceiling_90_expired_flag", ceiling_90_expired.authorizes_dry_powder_ceiling_90, False
     )
 
     # -- Fail-closed: unknown posture string raises, never silently --

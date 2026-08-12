@@ -13,7 +13,7 @@ Aquí solo se explica:
 - cuándo no hacer nada.
 
 Se escribe bloque a bloque, en el orden en que cada pieza queda cerrada.
-Hoy: Dry Powder Protocol. Human Approval, pendiente.
+Hoy: Dry Powder Protocol y Human Approval.
 
 ------------------------------------------------------------------------
 
@@ -185,4 +185,189 @@ Antes de actuar:
 
 ------------------------------------------------------------------------
 
-*Próxima sección de este manual: Human Approval — pendiente.*
+## 2. Human Approval
+
+### 2.1 Para qué sirve
+
+Human Approval sirve para evitar que cambies tus propias reglas en
+caliente.
+
+En una caída fuerte, o en un momento de euforia, puede ser tentador
+subir tu tolerancia al riesgo justo cuando menos deberías fiarte de
+esa decisión.
+
+Este protocolo no te impide cambiar tu tolerancia. Lo que hace es
+poner una pausa obligatoria antes de que una subida empiece a contar.
+
+La pregunta que responde es:
+
+> ¿Tengo una autorización vigente de mi "yo en frío" para actuar hasta
+> esta postura?
+
+Human Approval no decide si el mercado es atractivo. Tampoco mueve
+dinero. Solo dice si tienes permiso personal vigente para actuar.
+
+Para ejecutar una decisión hacen falta las dos cosas:
+
+- que la postura combinada del SOP lo permita;
+- que Human Approval esté vigente.
+
+Una no compensa la otra.
+
+### 2.2 Reglas principales
+
+#### 1. Subir tolerancia nunca aplica al instante
+
+Si autorizas una postura más agresiva que la vigente, entra en
+cooling-off. Plazos actuales:
+
+- 14 días en condiciones normales;
+- 30 días si hay crisis de mercado o crisis personal.
+
+Mientras dura el cooling-off, esa subida todavía no cuenta.
+
+#### 2. La autorización anterior sigue mandando
+
+Si ya tenías una autorización válida, no quedas bloqueado mientras
+esperas. Durante el cooling-off sigue vigente la autorización
+anterior.
+
+Ejemplo:
+
+- tenías `Prepare`;
+- registras subida a `Deploy Partially`;
+- durante 14 días sigues teniendo `Prepare`;
+- al terminar el plazo, pasa a `Deploy Partially`.
+
+#### 3. Bajar tolerancia aplica inmediatamente
+
+Si reduces tu postura autorizada, el cambio aplica en el momento. No
+hay cooling-off para ser más conservador. También aplica
+inmediatamente si repites la misma postura.
+
+#### 4. Toda autorización caduca
+
+Cada autorización dura 90 días desde su fecha de registro. Si no hay
+ninguna autorización vigente, Human Approval queda bloqueado hasta que
+registres una nueva.
+
+#### 5. Las crisis solo alargan el cooling-off
+
+Hay dos tipos de crisis: crisis de mercado y crisis personal.
+
+La crisis de mercado la calcula el sistema. Tú no la escribes. La
+crisis personal la declaras tú en el Excel.
+
+Ninguna de las dos autoriza ni bloquea por sí sola. Solo hacen una
+cosa: si estás subiendo tolerancia, el cooling-off pasa de 14 a 30
+días. Nunca lo acortan.
+
+#### 6. El sistema mira toda la historia
+
+El sistema no compara solo la última fila contra la anterior.
+Reconstruye qué autorización estaba realmente vigente en cada momento.
+
+Esto evita saltarse el cooling-off encadenando revisiones. Si una
+subida todavía no había entrado en vigor, no cuenta como punto de
+partida para la siguiente.
+
+### 2.3 Cómo revisar el estado
+
+Ejecuta:
+
+```bash
+python3 audit_posture.py
+```
+
+Busca:
+
+```text
+Human Approval state (AMS)
+Human Approval state (AML)
+```
+
+Recomendación práctica:
+
+- revísalo cada vez que ejecutes `audit_posture.py`;
+- como mínimo, una vez al trimestre;
+- no esperes a que caduque.
+
+No hay aviso automático. Si no lo revisas, puede caducar sin que te
+enteres.
+
+### 2.4 Excel de Human Approval
+
+Archivo:
+
+```text
+data/raw/human_approval_attestations.xlsx
+```
+
+Hay una pestaña por patrimonio: `AMS`, `AML`.
+
+Añade una fila nueva cada vez que registres o revises formalmente tu
+autorización. No borres filas antiguas. No sobrescribas filas pasadas.
+
+### 2.5 Qué rellenar
+
+| Columna | Qué escribir |
+|---|---|
+| `Fecha (calendario real, AAAA-MM-DD)` | Fecha real de la autorización. |
+| `Postura aprobada` | Techo máximo que te autorizas. No es la postura del mercado de hoy. |
+| `Crisis personal declarada` | `Sí` o `No`. Sé honesto. Solo afecta al cooling-off si estás subiendo tolerancia. |
+| `Nota` | Contexto para tu futuro yo. |
+
+No hay columna de crisis de mercado. El sistema la calcula solo
+usando la fecha de la atestación y el drawdown de mercado de ese día.
+
+> **Sobre superar el techo del 80% de Dry Powder Protocol:** RE-041.1
+> prevé que Human Approval pueda autorizar excepcionalmente ampliar
+> ese techo hasta el 90% en `Deploy Aggressively`. El diseño de esa
+> pieza ya está cerrado y la lógica interna existe (`engine/human_approval.py`),
+> pero **todavía no es utilizable**: no hay columna en este Excel para
+> registrarla, y `audit_posture.py` sigue sin conectarla a Dry Powder
+> Protocol. Esta sección se actualizará cuando esté construida de
+> punta a punta — hasta entonces, esa vía de excepción no existe en la
+> práctica, aunque el protocolo la contemple.
+
+### 2.6 Qué significa cada estado
+
+| Estado | Significado | Qué hacer |
+|---|---|---|
+| `missing` | Nunca has registrado autorización. | Bloqueado. Registra una primera fila. |
+| `expired` | No queda autorización vigente. | Bloqueado. Registra una nueva. |
+| `under_cooling_off` | Hay una subida esperando y no hay autorización anterior válida que cubra mientras tanto. | Esperar hasta la fecha efectiva. |
+| `valid` | Hay autorización vigente. | Mira `effective_posture_ceiling`. Ese es tu techo personal actual. |
+
+Si el estado es `valid`, puede existir además una subida pendiente. En
+ese caso:
+
+- `effective_posture_ceiling` = lo que manda hoy;
+- `pending_increase` = subida futura que todavía no aplica.
+
+### 2.7 Checklist rápido
+
+Antes de actuar:
+
+- Ejecuta `python3 audit_posture.py`.
+- Revisa el bloque Human Approval.
+- Comprueba que el estado sea `valid`.
+- Mira `effective_posture_ceiling`.
+- Si hay `pending_increase`, no la uses todavía.
+- Si quieres subir tolerancia, registra una fila nueva y espera el
+  cooling-off.
+- Si quieres bajar tolerancia, registra una fila nueva; aplica
+  inmediatamente.
+- Declara crisis personal si existe.
+- No borres ni edites filas anteriores.
+
+Recuerda:
+
+> Human Approval vigente no basta para actuar. También hace falta que
+> la postura combinada del SOP y el Dry Powder Protocol lo permitan.
+
+------------------------------------------------------------------------
+
+*Manual completo por ahora. Superar el techo del 80% de Dry Powder
+(ver nota en 2.5) y Portfolio Reallocation Protocol quedan pendientes
+de que el propio sistema los tenga construidos.*
