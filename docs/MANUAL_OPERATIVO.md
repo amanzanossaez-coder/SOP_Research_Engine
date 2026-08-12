@@ -155,10 +155,24 @@ exactos:
 
 | Mensaje del script | Qué significa | Qué hacer |
 |---|---|---|
-| `posture no deployment` | La postura de hoy (`Conserve`/`Prepare`/`Blocked`) no autoriza desplegar nada. | No desplegar. |
-| `cadence not met` | Aún no toca: no han pasado ni los días mínimos ni los puntos de caída adicional desde el último tramo. | Esperar. |
-| `ceiling reached` | Techo acumulado alcanzado para la postura vigente: 40% en `Partially` (definitivo, sin excepción), u 80% en `Aggressively` — 90% si tu Human Approval tiene la excepción activa (ver 2.5). En ambos casos, alcanzado el techo, se frena — no hay un techo posterior. | Frenar. |
-| `authorized` | Luz verde: el sistema te da una cifra concreta (`authorized_amount`), calculada por fórmula tanto dentro del techo normal como dentro de la ampliación del 90% si aplica. | Recomendación de compra — decides si la ejecutas. |
+| `posture no deployment` | La postura de hoy no autoriza desplegar nada. | No desplegar. |
+| `cadence not met` | Aún no toca otro tramo. | Esperar. |
+| `ceiling reached` | Ya se alcanzó el techo acumulado aplicable: 40%, 80% o 90%, según postura y Human Approval extraordinario. | No desplegar más. |
+| `authorized` | El sistema autoriza un tramo y calcula `authorized_amount`. | Decides si lo ejecutas. |
+
+> **`ceiling reached`, en detalle:** puede significar una de tres
+> cosas: el 40% en `Deploy Partially` (sin excepción posible); el 80%
+> en `Deploy Aggressively` sin autorización extraordinaria vigente; o
+> el 90% en `Deploy Aggressively` con autorización extraordinaria
+> vigente (ver 2.5). En los tres casos, no se despliega más bajo este
+> protocolo. El sistema nunca calcula ni autoriza despliegues por
+> encima del techo que corresponda — nunca el 100%, bajo ninguna
+> circunstancia.
+>
+> El estado `ceiling reached, approved beyond ceiling`
+> (`CEILING_REACHED_APPROVED`) sigue definido en el código por si en
+> el futuro hace falta una tercera excepción, pero hoy no lo produce
+> nunca — no aparecerá en la salida de `audit_posture.py`.
 
 ### 1.4 Qué pasa cuando termina un episodio
 
