@@ -251,6 +251,10 @@ Cada autorización dura 90 días desde su fecha de registro. Si no hay
 ninguna autorización vigente, Human Approval queda bloqueado hasta que
 registres una nueva.
 
+Renovar la misma postura (regla 3) reinicia este plazo de inmediato,
+sin esperar cooling-off — es la forma de evitar quedarte bloqueado si
+se acerca la caducidad y sigues de acuerdo con tu techo actual.
+
 #### 5. Las crisis solo alargan el cooling-off
 
 Hay dos tipos de crisis: crisis de mercado y crisis personal.
@@ -312,10 +316,14 @@ autorización. No borres filas antiguas. No sobrescribas filas pasadas.
 
 | Columna | Qué escribir |
 |---|---|
-| `Fecha (calendario real, AAAA-MM-DD)` | Fecha real de la autorización. |
+| `Fecha (calendario real, AAAA-MM-DD)` | Fecha del día en que haces la atestación — **no** la fecha en la que esperas que termine el cooling-off. Esa la calcula el sistema solo (`effective_date`). |
 | `Postura aprobada` | Techo máximo que te autorizas. No es la postura del mercado de hoy. |
 | `Crisis personal declarada` | `Sí` o `No`. Sé honesto. Solo afecta al cooling-off si estás subiendo tolerancia. |
 | `Nota` | Contexto para tu futuro yo. |
+
+> A diferencia de la Sección 1 de Dry Powder Protocol (que usa el mes
+> Shiller en formato decimal, ej. `2026.07`), aquí la fecha es siempre
+> calendario real. No mezcles los dos formatos.
 
 No hay columna de crisis de mercado. El sistema la calcula solo
 usando la fecha de la atestación y el drawdown de mercado de ese día.
@@ -360,6 +368,9 @@ Antes de actuar:
   inmediatamente.
 - Declara crisis personal si existe.
 - No borres ni edites filas anteriores.
+- No intentes forzar la excepción del techo del 80% en Dry Powder
+  Protocol: el diseño ya existe en el código, pero todavía no es
+  utilizable (ver 2.5). Trátalo como límite absoluto, hoy.
 
 Recuerda:
 
