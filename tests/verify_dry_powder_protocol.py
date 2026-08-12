@@ -20,8 +20,8 @@ sys.path.insert(0, str(ROOT))
 from engine.dry_powder_protocol import (
     AUTHORIZED,
     CADENCE_NOT_MET,
+    CEILING_FRACTION_AGGRESSIVE_EXTENDED,
     CEILING_REACHED,
-    CEILING_REACHED_APPROVED,
     POSTURE_NO_DEPLOYMENT,
     DryPowderProtocol,
     DryPowderProtocolInputs,
@@ -217,25 +217,93 @@ def main() -> None:
     assert_equal("ceiling_no_approval_status", ceiling_no_approval.status, CEILING_REACHED)
     assert_equal("ceiling_no_approval_amount", ceiling_no_approval.authorized_amount, 0.0)
 
-    # -- Ceiling invaded, WITH Human Approval: authorized, amount is --
-    # -- explicitly None (never computed by formula, per RE-041.1) --
+    # -- RE-C: 80% reached, WITH Human Approval's 90% extension -- the --
+    # -- ceiling itself moves to 90%, so 80% is no longer a stop -- a --
+    # -- normal formula tranche continues, capped by headroom to 90% --
 
-    ceiling_approved = protocol.evaluate(
+    assert_close(
+        "ceiling_fraction_extended_is_90pct",
+        CEILING_FRACTION_AGGRESSIVE_EXTENDED,
+        0.90,
+    )
+
+    extended_within_band = protocol.evaluate(
         DryPowderProtocolInputs(
             current_posture=DEPLOY_AGGRESSIVELY,
             initial_dry_powder=100.0,
-            remaining_dry_powder=20.0,
-            cum_deployed_in_episode=80.0,
+            remaining_dry_powder=18.0,
+            cum_deployed_in_episode=82.0,
+            days_since_last_deployment=14,
+            drawdown_pp_since_last_deployment=0.0,
+            highest_posture_in_episode=DEPLOY_AGGRESSIVELY,
+            human_approval_above_ceiling=True,
+        )
+    )
+    assert_equal("extended_within_band_status", extended_within_band.status, AUTHORIZED)
+    # 22% of remaining (18) = 3.96; headroom to 90% ceiling (90 - 82 = 8)
+    # does not bind -- full 3.96 authorized, computed by formula.
+    assert_close(
+        "extended_within_band_amount", extended_within_band.authorized_amount, 3.96
+    )
+
+    # -- RE-C: same scenario but trimmed by the extended headroom --
+
+    extended_trimmed = protocol.evaluate(
+        DryPowderProtocolInputs(
+            current_posture=DEPLOY_AGGRESSIVELY,
+            initial_dry_powder=100.0,
+            remaining_dry_powder=12.0,
+            cum_deployed_in_episode=88.0,
+            days_since_last_deployment=14,
+            drawdown_pp_since_last_deployment=0.0,
+            highest_posture_in_episode=DEPLOY_AGGRESSIVELY,
+            human_approval_above_ceiling=True,
+        )
+    )
+    assert_equal("extended_trimmed_status", extended_trimmed.status, AUTHORIZED)
+    # 22% of remaining (12) = 2.64; headroom to 90% ceiling (90 - 88 = 2)
+    # binds -- trimmed to 2.0.
+    assert_close("extended_trimmed_amount", extended_trimmed.authorized_amount, 2.0)
+
+    # -- RE-C: 90% itself is still a hard stop -- never 100%, no --
+    # -- further exception exists past the extended ceiling --
+
+    extended_hard_stop = protocol.evaluate(
+        DryPowderProtocolInputs(
+            current_posture=DEPLOY_AGGRESSIVELY,
+            initial_dry_powder=100.0,
+            remaining_dry_powder=10.0,
+            cum_deployed_in_episode=90.0,
             days_since_last_deployment=31,
             drawdown_pp_since_last_deployment=0.0,
             highest_posture_in_episode=DEPLOY_AGGRESSIVELY,
             human_approval_above_ceiling=True,
         )
     )
-    assert_equal(
-        "ceiling_approved_status", ceiling_approved.status, CEILING_REACHED_APPROVED
+    assert_equal("extended_hard_stop_status", extended_hard_stop.status, CEILING_REACHED)
+    assert_equal("extended_hard_stop_amount", extended_hard_stop.authorized_amount, 0.0)
+
+    # -- RE-C: the extension never applies to Deploy Partially's 40% --
+    # -- ceiling -- flag set, but ceiling_posture isn't Aggressively --
+
+    partially_flag_ignored = protocol.evaluate(
+        DryPowderProtocolInputs(
+            current_posture=DEPLOY_PARTIALLY,
+            initial_dry_powder=100.0,
+            remaining_dry_powder=60.0,
+            cum_deployed_in_episode=40.0,
+            days_since_last_deployment=31,
+            drawdown_pp_since_last_deployment=0.0,
+            highest_posture_in_episode=DEPLOY_PARTIALLY,
+            human_approval_above_ceiling=True,
+        )
     )
-    assert_equal("ceiling_approved_amount", ceiling_approved.authorized_amount, None)
+    assert_equal(
+        "partially_flag_ignored_status", partially_flag_ignored.status, CEILING_REACHED
+    )
+    assert_equal(
+        "partially_flag_ignored_amount", partially_flag_ignored.authorized_amount, 0.0
+    )
 
     # -- Unknown posture: fail-closed, raises rather than guessing --
 
@@ -262,7 +330,8 @@ def main() -> None:
     print(f"trimmed_amount: {trimmed.authorized_amount}")
     print(f"ratchet_amount: {ratchet.authorized_amount}")
     print(f"fresh_escalation_amount: {fresh_escalation.authorized_amount}")
-    print(f"ceiling_approved_amount: {ceiling_approved.authorized_amount}")
+    print(f"extended_within_band_amount: {extended_within_band.authorized_amount}")
+    print(f"extended_trimmed_amount: {extended_trimmed.authorized_amount}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.89\
+**Version:** 1.90\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.10 (2026-08-11):
+As of RE-032.10 iteration C (2026-08-12):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -28,11 +28,11 @@ As of RE-032.10 (2026-08-11):
 | Personal Capacity definición | 90-95% |
 | Personal Capacity operativo real | 45-50% |
 | Gate Combination / Posture Mapper | 75-80% aislado |
-| Dry Powder Protocol | 75-80% aislado / no wired |
+| Dry Powder Protocol | 85-90% aislado (techo extraordinario del 90% vía Human Approval ya calculado por fórmula, RE-C; sigue sin wiring a run.py/DecisionEngine) |
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; corregido un vacío real de silencio en postura no reconocida encontrado en revisión crítica -- RE-041.8; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 60-65% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; iteración A de la autorización extraordinaria del 90% cerrada -- RE-032.10, aislada, todavía sin Excel ni wiring; sin datos reales cargados, sin wiring a run.py) |
+| Human Approval operativo real | 75-80% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; autorización extraordinaria del 90% ya completa de punta a punta -- Excel con columna real, loader, wiring a Dry Powder Protocol -- RE-032.10 B+C; todavía sin datos reales cargados en ninguna pestaña, todavía sin wiring a run.py, manual operativo todavía sin actualizar para reflejar que ya es usable -- iteración D pendiente) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8916,6 +8916,148 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-032.10 iteration B — Excel + loader/adapter for authorizes_dry_powder_ceiling_90
+
+Closes the gap iteration A left open on purpose ("no way to actually
+set this flag from real data yet"). Mechanical, same shape every other
+manual-entry column in this project already follows.
+
+Changes:
+
+-   `data/raw/human_approval_attestations.xlsx` -- new column E on both
+    `AMS` and `AML` tabs, `"Autoriza techo 90% (solo si Deploy
+    Aggressively)"`, styled identically to the existing headers (same
+    font/fill/alignment as the `Nota` header), `Sí`/`No` dropdown
+    validation on `E5:E19` matching `Crisis personal declarada`'s
+    existing pattern. Explanatory block added to the `Notas` tab,
+    matching that sheet's existing style, spelling out the 80%→90%
+    scope, the 30-day independent cooling-off, and that it applies to
+    no other ceiling.
+-   `loaders/human_approval_loader.py` -- reads column 5 into
+    `"autoriza_techo_90"`. Raw load only, same as every other field
+    this loader returns -- no interpretation.
+-   `engine/human_approval_state.py` -- `_to_bool_crisis_declared`
+    renamed to `_to_bool_si_no` (it never actually cared which field it
+    was parsing) and reused for the new column, rather than writing a
+    second copy of the same Sí/No parsing rule. The parsed boolean is
+    passed into `Attestation.authorizes_dry_powder_ceiling_90`
+    unconditionally -- even for a row whose posture isn't `Deploy
+    Aggressively`. Whether that matters is
+    `engine.human_approval._ceiling_90_active()`'s decision alone (it
+    already checks the posture); duplicating that check in the adapter
+    would be the same rule enforced in two places.
+
+What this does not authorize:
+
+-   No change to `dry_powder_protocol.py` or `audit_posture.py` -- that
+    is iteration C, done together with this one in the same session but
+    recorded as its own decision below.
+-   No real data entered -- both xlsx tabs remain empty (no attestation
+    has ever been registered for either patrimonio).
+
+Boundary:
+
+-   Three files changed: `data/raw/human_approval_attestations.xlsx`,
+    `loaders/human_approval_loader.py`, `engine/human_approval_state.py`.
+-   One file extended: `tests/verify_human_approval_state.py` (new
+    field asserted on two existing synthetic rows, plus a new row
+    proving the flag passes through raw on a non-`Deploy Aggressively`
+    posture).
+-   No Frozen Core component touched.
+
+------------------------------------------------------------------------
+
+## RE-032.10 iteration C — wiring authorizes_dry_powder_ceiling_90 into Dry Powder Protocol
+
+The real behavior change: `human_approval_above_ceiling` stops being
+hardcoded and `dry_powder_protocol.py` starts computing tranches up to
+the extended ceiling by formula, exactly as iteration A's design point
+1 specified in advance ("dry_powder_protocol.py will compute tranches
+up to this new 90% the same way it already does up to 80%").
+
+What changed, and why it's a real design decision, not just wiring:
+
+-   `engine/dry_powder_protocol.py` -- new constant
+    `CEILING_FRACTION_AGGRESSIVE_EXTENDED = 0.90`. In `evaluate()`'s
+    Step 2, when `ceiling_posture` is `Deploy Aggressively` AND
+    `human_approval_above_ceiling` is `True`, `ceiling_fraction`
+    becomes 90% instead of 80% -- nothing else about the tranche
+    formula changes; Step 5 computes the same 22%-of-remaining tranche,
+    capped by headroom under whichever ceiling is active.
+-   This **retires `CEILING_REACHED_APPROVED` as a reachable status**.
+    Before this iteration, reaching 80% with Human Approval set
+    produced that status with `authorized_amount=None` (RE-041.1
+    forbade computing a number by formula because there was no upper
+    bound on "beyond the ceiling"). RE-032.10 supplied that bound (90%,
+    never 100%) -- which is exactly what makes formula-driven
+    computation in that band safe. Once the ceiling itself extends,
+    there is nothing left for a separate "approved beyond ceiling, fix
+    it manually" status to describe. The constant stays defined (status
+    string schema stability, anything already matching on it) but
+    `evaluate()` no longer produces it -- flagged explicitly rather than
+    silently left as dead, misleading documentation.
+-   The extension only ever replaces `Deploy Aggressively`'s own
+    ceiling -- never applies to `Deploy Partially`'s 40% ceiling (which
+    has no exception mechanism at all, per the manual's own callout),
+    and never stacks (90%, not 80%+90%). Both guaranteed structurally:
+    the extension check is gated on `ceiling_posture == DEPLOY_
+    AGGRESSIVELY` before it can touch `ceiling_fraction` at all.
+-   `audit_posture.py` -- `human_approval_above_ceiling` is read
+    directly from `ha_result.authorizes_dry_powder_ceiling_90` when a
+    Human Approval result exists for the patrimonio, `False` if it
+    doesn't (file missing) -- same fail-closed discipline as
+    everywhere else in this project: absence of data is never read as
+    authorization. New print line added
+    (`Human Approval authorizes_dry_powder_ceiling_90 (...)`) for
+    visibility even when the value is `False`.
+
+Acceptance checks, agreed with Armando before this iteration (both B
+and C) started, each verified in `tests/verify_dry_powder_protocol.py`:
+
+-   `human_approval_above_ceiling=False` → unchanged, 80% ceiling, hard
+    stop (`ceiling_no_approval`, pre-existing case, still passes).
+-   `True` → extraordinary 90% ceiling, never 100%
+    (`extended_within_band`, `extended_trimmed`, `extended_hard_stop`).
+-   The tranche stays 22% of remaining, only the ceiling headroom
+    changes (`extended_within_band_amount` = 3.96, formula-computed,
+    not `None`).
+-   No active episode or incomplete ledger → not evaluated at all, flag
+    or no flag -- already guaranteed for free by
+    `to_dry_powder_protocol_inputs()` returning `None` in that case
+    (unchanged code path, no new check needed).
+-   The extension never applies to `Deploy Partially`
+    (`partially_flag_ignored`).
+
+What this does not authorize:
+
+-   No manual operativo update -- iteration D, still deliberately
+    separate, since the manual's 2.5 callout currently tells Armando
+    this is "not usable yet" and that needs to change carefully, not as
+    a side effect of this entry.
+-   No wiring into `run.py`/`DecisionEngine` -- unchanged, still
+    explicitly out of scope for the whole project.
+-   No further ceiling tier beyond 90% -- if one is ever wanted, that
+    is new design work, not a resurrection of `CEILING_REACHED_APPROVED`.
+
+Boundary:
+
+-   Two files changed: `engine/dry_powder_protocol.py`,
+    `audit_posture.py`.
+-   One file extended: `tests/verify_dry_powder_protocol.py` (import
+    swapped `CEILING_REACHED_APPROVED` for
+    `CEILING_FRACTION_AGGRESSIVE_EXTENDED`; old `ceiling_approved` case
+    replaced by four new cases covering the extended ceiling's full
+    behavior).
+-   No Frozen Core component touched.
+-   Full test suite re-run: no new failures beyond the same four
+    pre-existing ones (`verify_baseline_harness.py`,
+    `verify_secondary_baselines.py`, `verify_validation_metrics.py` --
+    pinned-runtime mismatches; `verify_research_engine.py` -- a
+    pre-existing tie-break ordering difference, unrelated to this
+    change).
+
+------------------------------------------------------------------------
+
 # Roadmap
 
 ## Pre-Phase Gate
@@ -9353,6 +9495,55 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.90
+
+-   Added RE-032.10 iteration B: `data/raw/human_approval_attestations.xlsx`
+    gets a real column E (`Autoriza techo 90%...`, `Sí`/`No` dropdown,
+    styled to match the sheet) on both `AMS` and `AML`, plus an
+    explanatory block on the `Notas` tab. `loaders/human_approval_loader.py`
+    reads it; `engine/human_approval_state.py` parses it into
+    `Attestation.authorizes_dry_powder_ceiling_90` (via
+    `_to_bool_si_no`, renamed from `_to_bool_crisis_declared` and
+    reused rather than duplicated). Passed through unconditionally,
+    even on non-`Deploy Aggressively` rows -- gating on posture stays
+    `engine.human_approval`'s job alone.
+-   Added RE-032.10 iteration C: `dry_powder_protocol.py` now computes
+    tranches by formula up to a 90% extended ceiling
+    (`CEILING_FRACTION_AGGRESSIVE_EXTENDED`) when
+    `human_approval_above_ceiling` is `True` and the ratchet's ceiling
+    posture is `Deploy Aggressively` -- never 100%, never applies to
+    `Deploy Partially`'s 40% ceiling, never stacks with the base 80%.
+    This retires `CEILING_REACHED_APPROVED` as a reachable status
+    (kept defined for schema stability, no longer produced) -- flagged
+    explicitly as a real behavior change, not a silent one.
+    `audit_posture.py` reads `human_approval_above_ceiling` from
+    `ha_result.authorizes_dry_powder_ceiling_90` for real now, `False`
+    if no Human Approval result exists for the patrimonio (fail-closed
+    unchanged). Verified end-to-end via `audit_posture.py` on the real
+    (still-empty) pipeline.
+-   `tests/verify_human_approval_state.py` extended (new field on
+    existing synthetic rows, plus a non-`Deploy Aggressively` pass-
+    through case). `tests/verify_dry_powder_protocol.py`'s old
+    `ceiling_approved` case (asserted `CEILING_REACHED_APPROVED`)
+    replaced by four new cases covering the extended ceiling's full
+    behavior (within-band, trimmed, hard stop at 90%, ignored on
+    `Deploy Partially`). Full suite re-run: no new failures beyond the
+    same four pre-existing ones.
+-   Manual operativo (`docs/MANUAL_OPERATIVO.md`/`.docx`) Section 2
+    precision pass, from Armando's own critical review of the
+    just-shipped rewrite: explicit contrast between Human Approval's
+    calendar-date format and Dry Powder's Shiller-decimal format (2.5);
+    clarified the `Fecha` column means the day of the attestation, not
+    the day cooling-off ends (2.5); noted that renewing the same
+    posture resets the 90-day validity clock immediately (2.2, rule
+    4); added an explicit "don't try to force the >80% exception"
+    bullet to the quick checklist (2.7). No iteration D yet -- the
+    "not usable yet" callout in 2.5 is now factually stale as of this
+    same version (B+C closed it) but is deliberately left untouched
+    until iteration D updates it properly, not as a side effect here.
+-   Updated Honest Progress Snapshot (RE-DOC-005): Dry Powder Protocol
+    and Human Approval operativo real, both reflecting B+C closed.
 
 ## Version 1.89
 

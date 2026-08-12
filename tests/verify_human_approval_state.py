@@ -51,33 +51,44 @@ def main() -> None:
             "postura": DEPLOY_AGGRESSIVELY,
             "crisis_personal": "Sí",
             "nota": "durante la caída",
+            "autoriza_techo_90": "Sí",
         },
         {
             "fecha": "2026-07-20",
             "postura": DEPLOY_PARTIALLY,
             "crisis_personal": "No",
             "nota": "mercado ya recuperado",
+            "autoriza_techo_90": "No",
         },
         {
             "fecha": "fecha invalida",
             "postura": DEPLOY_PARTIALLY,
             "crisis_personal": "No",
             "nota": "fila corrupta, fecha",
+            "autoriza_techo_90": "No",
         },
         {
             "fecha": "2026-05-01",
             "postura": "Not A Real Posture",
             "crisis_personal": "No",
             "nota": "fila corrupta, postura",
+            "autoriza_techo_90": "No",
+        },
+        {
+            "fecha": "2026-08-01",
+            "postura": DEPLOY_PARTIALLY,
+            "crisis_personal": "No",
+            "nota": "flag marcado pero postura no es Deploy Aggressively -- pasa igual, sin efecto (RE-032.10 point 2 lo decide human_approval.py, no aquí)",
+            "autoriza_techo_90": "Sí",
         },
     ]
 
     attestations, explanations = _build_patrimonio_attestations(events, shiller_df)
 
-    assert_equal("attestations_count", len(attestations), 2)
+    assert_equal("attestations_count", len(attestations), 3)
     assert_equal("explanations_count", len(explanations), 2)
 
-    first, second = attestations
+    first, second, third = attestations
 
     assert_equal("first_posture", first.approved_posture_ceiling, DEPLOY_AGGRESSIVELY)
     assert_equal("first_personal_crisis", first.personal_crisis_declared, True)
@@ -86,6 +97,9 @@ def main() -> None:
         first.market_crisis_at_registration,
         True,
     )
+    assert_equal(
+        "first_authorizes_ceiling_90", first.authorizes_dry_powder_ceiling_90, True
+    )
 
     assert_equal("second_posture", second.approved_posture_ceiling, DEPLOY_PARTIALLY)
     assert_equal("second_personal_crisis", second.personal_crisis_declared, False)
@@ -93,6 +107,19 @@ def main() -> None:
         "second_market_crisis_at_registration",
         second.market_crisis_at_registration,
         False,
+    )
+    assert_equal(
+        "second_authorizes_ceiling_90", second.authorizes_dry_powder_ceiling_90, False
+    )
+
+    # -- Flag marked Sí on a row whose posture is NOT Deploy --
+    # -- Aggressively: passed through raw, unconditionally -- whether --
+    # -- it does anything is human_approval.py's decision, not this --
+    # -- adapter's (RE-B design note) --
+
+    assert_equal("third_posture", third.approved_posture_ceiling, DEPLOY_PARTIALLY)
+    assert_equal(
+        "third_authorizes_ceiling_90", third.authorizes_dry_powder_ceiling_90, True
     )
 
     # -- No Shiller series supplied -- market_crisis_at_registration --

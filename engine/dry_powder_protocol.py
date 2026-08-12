@@ -46,6 +46,40 @@ episode" would itself be exactly the kind of magic number this
 project's fail-closed discipline rejects. Both cadence fields None
 means "first tranche of the episode" and bypasses the cadence check
 explicitly (see evaluate()), rather than silently failing it.
+
+RE-C (RE-032.10 iteration C) -- wires `human_approval_above_ceiling`
+for real. Closes the gap this module's own docstrings already flagged
+honestly since RE-041.5/RE-032.8: the field existed, but nothing ever
+set it to True.
+
+Design point 1 of RE-032.10 (engine/human_approval.py's module
+docstring) specified the shape this had to take: "dry_powder_protocol.py
+will compute tranches up to this new 90% the same way it already does
+up to 80% -- this module only produces the boolean that unlocks it."
+Concretely: when `ceiling_posture` (the ratchet's active ceiling
+posture, correction 1 above) is Deploy Aggressively AND
+`human_approval_above_ceiling` is True, `ceiling_fraction` for Step 2's
+ceiling computation becomes `CEILING_FRACTION_AGGRESSIVE_EXTENDED`
+(90%) instead of the normal 80% -- nothing else about the tranche
+formula changes. Tranches between the old 80% and the new 90% are
+computed exactly like any other tranche (Step 5), capped by headroom
+under the extended ceiling, same as always.
+
+This retires `CEILING_REACHED_APPROVED` as a reachable outcome. Before
+RE-C, reaching the 80% ceiling with Human Approval set produced that
+status, with `authorized_amount=None` -- RE-041.1's original text
+forbade computing a number by formula because there was no upper bound
+on how far "beyond the ceiling" could go. RE-032.10 supplied that upper
+bound (90%, explicitly never 100%), which is exactly what made
+formula-driven computation safe in that band. Once the ceiling itself
+extends, there is nothing left for a separate "approved beyond ceiling,
+fix it manually" status to describe -- the ceiling check in Step 3 is
+now always a hard stop, extended or not. The constant stays defined
+(status-string schema stability for any caller already matching on it,
+e.g. `audit_posture.py`'s printed output) but `evaluate()` no longer
+produces it. If a future policy ever wants a further manual-override
+tier beyond 90%, that is new, explicit design work -- not a
+resurrection of this one, which was scoped to the 80/90 gap only.
 """
 
 from dataclasses import dataclass
@@ -72,8 +106,19 @@ _KNOWN_POSTURES = set(POSTURE_ORDER) | {BLOCKED}
 POSTURE_NO_DEPLOYMENT = "posture no deployment"
 CADENCE_NOT_MET = "cadence not met"
 CEILING_REACHED = "ceiling reached"
+# RE-C -- kept for status-string schema stability (see module
+# docstring); evaluate() no longer produces this. Reaching the ceiling
+# with Human Approval's 90% extension active now returns CEILING_REACHED
+# like any other ceiling hit, because the extension already widened
+# ceiling_fraction itself in Step 2, not this separate status.
 CEILING_REACHED_APPROVED = "ceiling reached, approved beyond ceiling"
 AUTHORIZED = "authorized"
+
+# RE-032.10 / RE-C -- the extraordinary ceiling Human Approval can
+# unlock for Deploy Aggressively only, replacing its normal 80%. Never
+# 100% -- RE-032.10's design explicitly stops at 90%, no further
+# exception exists in v1.
+CEILING_FRACTION_AGGRESSIVE_EXTENDED = 0.90
 
 
 # RE-041.1 -- v1 parameters. A priori, not calibrated against
@@ -127,15 +172,14 @@ class DryPowderProtocolInputs:
 @dataclass(frozen=True)
 class DryPowderProtocolResult:
     """
-    authorized_amount is None only for CEILING_REACHED_APPROVED --
-    Human Approval unlocks the possibility of deploying beyond the
-    ceiling, but RE-041.1 explicitly forbids computing that amount by
-    formula ("v1 never authorizes 100% deployment by formula alone").
-    None here means "requires a manually fixed amount per the
-    attestation", never "zero" -- every other non-authorizing status
-    uses 0.0 explicitly. Same discipline this project already applies
-    to every Optional[bool] fact: absence is never silently read as a
-    number.
+    authorized_amount is None only for CEILING_REACHED_APPROVED, a
+    status evaluate() no longer produces as of RE-C (see module
+    docstring) -- kept Optional rather than tightened to float because
+    the schema itself should not assume that will always be true.
+    Every status evaluate() actually returns today uses 0.0 for "not
+    authorized", never None -- same discipline this project already
+    applies to every Optional[bool] fact: absence is never silently
+    read as a number.
     """
 
     status: str
@@ -208,28 +252,42 @@ class DryPowderProtocol:
 
         ceiling_params = TRANCHE_PARAMETERS.get(ceiling_posture, params)
         ceiling_fraction = ceiling_params["ceiling_fraction"]
+
+        # RE-C -- Human Approval's extension only ever applies to
+        # Deploy Aggressively's own ceiling, and only replaces it
+        # (never stacks with it): 90% instead of 80%, not 80% + 90%.
+        ceiling_extended = (
+            ceiling_posture == DEPLOY_AGGRESSIVELY
+            and inputs.human_approval_above_ceiling
+        )
+        if ceiling_extended:
+            ceiling_fraction = CEILING_FRACTION_AGGRESSIVE_EXTENDED
+
         ceiling_limit_amount = inputs.initial_dry_powder * ceiling_fraction
 
-        # Step 3 -- ceiling / Human Approval.
+        # Step 3 -- ceiling. Always a hard stop once reached -- the
+        # Human Approval extension, if any, has already been folded
+        # into ceiling_fraction above (RE-C, see module docstring).
+        # There is no further "approved beyond ceiling" tier past this
+        # point in v1.
         if inputs.cum_deployed_in_episode >= ceiling_limit_amount:
 
-            if (
-                ceiling_posture == DEPLOY_AGGRESSIVELY
-                and inputs.human_approval_above_ceiling
-            ):
-                return DryPowderProtocolResult(
-                    status=CEILING_REACHED_APPROVED,
-                    authorized_amount=None,
-                    reason=(
-                        "cumulative deployed "
-                        f"{inputs.cum_deployed_in_episode:.2f} has reached "
-                        f"the {ceiling_fraction:.0%} ceiling "
-                        f"({ceiling_limit_amount:.2f}) for {ceiling_posture} "
-                        "-- Human Approval authorizes going beyond it, but "
-                        "the amount is not computed by formula (RE-041.1) "
-                        "-- fix it manually per the attestation"
-                    ),
+            if ceiling_extended:
+                extension_note = (
+                    " -- this already includes Human Approval's "
+                    "extraordinary 90% ceiling (RE-032.10); hard stop, "
+                    "never 100%"
                 )
+            elif ceiling_posture == DEPLOY_AGGRESSIVELY:
+                extension_note = (
+                    " -- blocked without a fresh Human Approval "
+                    "attestation authorizing the extended 90% ceiling "
+                    "(RE-032.10)"
+                )
+            else:
+                # Deploy Partially's 40% ceiling has no exception
+                # mechanism at all -- nothing to point to here.
+                extension_note = " -- blocked, no exception exists for this ceiling"
 
             return DryPowderProtocolResult(
                 status=CEILING_REACHED,
@@ -238,8 +296,8 @@ class DryPowderProtocol:
                     "cumulative deployed "
                     f"{inputs.cum_deployed_in_episode:.2f} has reached the "
                     f"{ceiling_fraction:.0%} cumulative ceiling "
-                    f"({ceiling_limit_amount:.2f}) for {ceiling_posture} -- "
-                    "blocked without a fresh Human Approval attestation"
+                    f"({ceiling_limit_amount:.2f}) for {ceiling_posture}"
+                    f"{extension_note}"
                 ),
             )
 

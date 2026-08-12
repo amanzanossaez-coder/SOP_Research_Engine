@@ -32,13 +32,20 @@ rule 1 es explicito -- Human Approval no es un gate puntuado y nunca
 participa en evaluate_capital_posture()'s min() combination. Los dos
 son prerrequisitos independientes: la postura combinada dice hasta
 donde permiten los datos; Human Approval dice, por separado, si hay
-consentimiento humano vigente para actuar en absoluto. Tampoco se
-conecta a to_dry_powder_protocol_inputs()'s human_approval_above_ceiling
--- ese parametro es una autorizacion mas estrecha y especifica (superar
-el techo del 80%, RE-041.1), no lo mismo que "hay una atestacion
-valida", y mapear uno al otro sin una regla explicita seria inventar
-una regla que no existe. human_approval_above_ceiling sigue en False,
-sin cambios respecto a RE-041.5.
+consentimiento humano vigente para actuar en absoluto. Que "hay una
+atestacion valida" y "esa atestacion autoriza superar el techo del
+80%" son cosas distintas fue, desde RE-032.8, la razon explicita para
+NO mapear una a la otra sin una regla propia -- human_approval_above_
+ceiling se quedo hardcodeado en False hasta que esa regla existiera.
+
+RE-C (RE-032.10 iteracion C) -- esa regla ya existe:
+HumanApprovalResult.authorizes_dry_powder_ceiling_90, calculado por
+HumanApprovalGate.evaluate() (nunca por este script). human_approval_
+above_ceiling ya no esta hardcodeado -- se lee directamente de ese
+campo cuando hay una atestacion registrada para el patrimonio, False
+si no la hay (mismo fail-closed de siempre, nunca se asume autorizacion
+por ausencia de dato). Ver engine/dry_powder_protocol.py (RE-C) para
+como se usa ese booleano una vez dentro.
 
 Esto NO es el Capital Posture Engine -- no existe tal componente.
 Esto NO es una herramienta de decision -- es un dry-run de lectura, no
@@ -154,6 +161,9 @@ def main() -> None:
             if human_approval_inputs
             else None
         )
+        # RE-C -- default fail-closed, same as before: absence of a
+        # Human Approval result never becomes an assumed authorization.
+        ha_result = None
         if ha_inputs is None:
             print(
                 f"Human Approval ({patrimonio_name}): "
@@ -172,6 +182,10 @@ def main() -> None:
                     f"Human Approval pending_increase ({patrimonio_name}): "
                     f"{ha_result.pending_increase}"
                 )
+            print(
+                f"Human Approval authorizes_dry_powder_ceiling_90 "
+                f"({patrimonio_name}): {ha_result.authorizes_dry_powder_ceiling_90}"
+            )
             print(f"Human Approval explanations ({patrimonio_name}): {ha_result.explanations}")
             print()
             print(
@@ -196,10 +210,19 @@ def main() -> None:
 
         print(f"Dry Powder Ledger state ({patrimonio_name}): {ledger_state}")
 
+        # RE-C -- wired for real: fail-closed default False if there is
+        # no Human Approval result at all for this patrimonio (file
+        # missing), never assumed True by absence of data.
+        human_approval_above_ceiling = (
+            ha_result.authorizes_dry_powder_ceiling_90
+            if ha_result is not None
+            else False
+        )
+
         dp_inputs = to_dry_powder_protocol_inputs(
             ledger_state,
             combined.posture_ceiling,
-            human_approval_above_ceiling=False,
+            human_approval_above_ceiling=human_approval_above_ceiling,
         )
 
         if dp_inputs is None:

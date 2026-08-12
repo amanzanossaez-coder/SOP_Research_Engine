@@ -51,8 +51,9 @@ Hoy: Dry Powder Protocol y Human Approval.
     Basta con que se cumpla una de las dos, no las dos a la vez.
 3.  **Techo de seguridad por episodio, cortafuegos, no control diario.**
     No puedes desplegar en total más del 40% de la pólvora inicial en
-    `Partially` ni más del 80% en `Aggressively`. Si lo alcanzas, se
-    frena. El techo del 40% y el del 80% no funcionan igual — ver el
+    `Partially` ni más del 80% en `Aggressively` (90% si Human Approval
+    lo ha ampliado, ver aviso debajo). Alcanzado ese techo, se frena.
+    El techo del 40% y el del 80%/90% no funcionan igual — ver el
     aviso justo debajo de esta lista.
 4.  **Ratchet: el techo no retrocede dentro del mismo episodio.** Si el
     mercado empeora y subes a `Aggressively`, ese techo se mantiene
@@ -64,10 +65,12 @@ Hoy: Dry Powder Protocol y Human Approval.
 > **El matiz que más se pierde: el 40% y el 80% no son la misma regla.**
 > El techo del 40% en `Deploy Partially` **no tiene excepción.** Si se
 > alcanza, no se despliega más bajo esa postura — punto. El techo del
-> 80% en `Deploy Aggressively` **sí puede superarse**, pero solo con
-> una atestación de Human Approval vigente y explícita. El sistema no
-> calcula automáticamente cuánto desplegar más allá de ese techo —
-> esa cifra la fijas tú a mano, según lo atestiguado.
+> 80% en `Deploy Aggressively` **puede ampliarse al 90%**, pero solo
+> con una atestación de Human Approval vigente y explícita que lo
+> autorice (ver Sección 2, Human Approval). Con esa autorización
+> activa, el sistema sigue calculando el tramo por fórmula, igual que
+> siempre — no hace falta fijar nada a mano. Alcanzado el 90%, se
+> frena sin excepción posterior — nunca el 100%.
 
 Ninguno de estos números (12%, 22%, 30 días, 14 días, 5 pp, 40%, 80%)
 está ajustado contra el histórico de mercado — son parámetros de
@@ -147,16 +150,15 @@ nunca se borran ni se sobrescriben filas pasadas:**
 
 ### 1.3 Guía de respuestas del script
 
-`audit_posture.py` te da, por patrimonio, uno de estos cinco estados
+`audit_posture.py` te da, por patrimonio, uno de estos cuatro estados
 exactos:
 
 | Mensaje del script | Qué significa | Qué hacer |
 |---|---|---|
 | `posture no deployment` | La postura de hoy (`Conserve`/`Prepare`/`Blocked`) no autoriza desplegar nada. | No desplegar. |
 | `cadence not met` | Aún no toca: no han pasado ni los días mínimos ni los puntos de caída adicional desde el último tramo. | Esperar. |
-| `ceiling reached` | Techo acumulado alcanzado para la postura vigente. En `Partially` (40%) es definitivo hasta cierre o escalada. En `Aggressively` (80%) admite excepción vía Human Approval. | Frenar, salvo excepción en `Aggressively`. |
-| `ceiling reached, approved beyond ceiling` | Solo puede pasar en `Deploy Aggressively`, con una atestación de Human Approval vigente que lo autorice. El sistema **no calcula** el importe por fórmula aquí. | Fijar tú a mano la cifra, según lo atestiguado. |
-| `authorized` | Luz verde: el sistema te da una cifra concreta (`authorized_amount`). | Recomendación de compra — decides si la ejecutas. |
+| `ceiling reached` | Techo acumulado alcanzado para la postura vigente: 40% en `Partially` (definitivo, sin excepción), u 80% en `Aggressively` — 90% si tu Human Approval tiene la excepción activa (ver 2.5). En ambos casos, alcanzado el techo, se frena — no hay un techo posterior. | Frenar. |
+| `authorized` | Luz verde: el sistema te da una cifra concreta (`authorized_amount`), calculada por fórmula tanto dentro del techo normal como dentro de la ampliación del 90% si aplica. | Recomendación de compra — decides si la ejecutas. |
 
 ### 1.4 Qué pasa cuando termina un episodio
 
@@ -328,15 +330,18 @@ autorización. No borres filas antiguas. No sobrescribas filas pasadas.
 No hay columna de crisis de mercado. El sistema la calcula solo
 usando la fecha de la atestación y el drawdown de mercado de ese día.
 
-> **Sobre superar el techo del 80% de Dry Powder Protocol:** RE-041.1
-> prevé que Human Approval pueda autorizar excepcionalmente ampliar
-> ese techo hasta el 90% en `Deploy Aggressively`. El diseño de esa
-> pieza ya está cerrado y la lógica interna existe (`engine/human_approval.py`),
-> pero **todavía no es utilizable**: no hay columna en este Excel para
-> registrarla, y `audit_posture.py` sigue sin conectarla a Dry Powder
-> Protocol. Esta sección se actualizará cuando esté construida de
-> punta a punta — hasta entonces, esa vía de excepción no existe en la
-> práctica, aunque el protocolo la contemple.
+> **Sobre superar el techo del 80% de Dry Powder Protocol:** ya es
+> real y usable de punta a punta. Marca `Sí` en la columna **Autoriza
+> techo 90%** de esa misma fila (solo tiene efecto si `Postura
+> aprobada` es `Deploy Aggressively`). Tiene su propio cooling-off fijo
+> de 30 días, independiente del de la postura — cuenta desde la fecha
+> de esta fila, no desde cuándo se alcance el 80%. Con la autorización
+> vigente, `dry_powder_protocol.py` calcula los tramos por fórmula
+> igual que siempre, solo que con techo en 90% en vez de 80% — nunca
+> hace falta fijar nada a mano, y nunca llega al 100%. Revisa
+> `Human Approval authorizes_dry_powder_ceiling_90` en la salida de
+> `audit_posture.py` para confirmar que está activa antes de contar
+> con ella.
 
 ### 2.6 Qué significa cada estado
 
@@ -353,6 +358,12 @@ ese caso:
 - `effective_posture_ceiling` = lo que manda hoy;
 - `pending_increase` = subida futura que todavía no aplica.
 
+Además, si estás en `Deploy Aggressively`, revisa
+`authorizes_dry_powder_ceiling_90` en la salida de `audit_posture.py`:
+`True` significa que tu techo de Dry Powder Protocol para este episodio
+es 90% en vez de 80% (ver 2.5). `False` es el caso normal — techo en
+80%, sin nada que hacer.
+
 ### 2.7 Checklist rápido
 
 Antes de actuar:
@@ -368,9 +379,10 @@ Antes de actuar:
   inmediatamente.
 - Declara crisis personal si existe.
 - No borres ni edites filas anteriores.
-- No intentes forzar la excepción del techo del 80% en Dry Powder
-  Protocol: el diseño ya existe en el código, pero todavía no es
-  utilizable (ver 2.5). Trátalo como límite absoluto, hoy.
+- Si quieres ampliar el techo del 80% de Dry Powder Protocol a 90%,
+  marca `Sí` en **Autoriza techo 90%** de esa misma fila (solo con
+  postura `Deploy Aggressively`) y espera su propio cooling-off de 30
+  días — ver 2.5.
 
 Recuerda:
 
@@ -379,6 +391,5 @@ Recuerda:
 
 ------------------------------------------------------------------------
 
-*Manual completo por ahora. Superar el techo del 80% de Dry Powder
-(ver nota en 2.5) y Portfolio Reallocation Protocol quedan pendientes
-de que el propio sistema los tenga construidos.*
+*Manual completo por ahora. Portfolio Reallocation Protocol queda
+pendiente de que el propio sistema lo tenga construido.*

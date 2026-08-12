@@ -14,12 +14,16 @@ SECTION_MARKER = "REGISTRO DE ATESTACIONES"
 def load_human_approval_raw(file_path=None):
     """
     RE-032.7 -- raw load of data/raw/human_approval_attestations.xlsx.
+    RE-B (RE-032.10 iteration B) -- extended with column E,
+    "autoriza_techo_90".
 
     Returns {patrimonio_name: [{"fecha", "postura", "crisis_personal",
-    "nota"}, ...]}, one attestation-event dict per non-blank row, or
-    None if the file is missing. Does not interpret dates, does not
-    validate postures, does not compute market_crisis_at_registration
-    -- that translation is
+    "nota", "autoriza_techo_90"}, ...]}, one attestation-event dict per
+    non-blank row, or None if the file is missing. Does not interpret
+    dates, does not validate postures, does not decide whether
+    autoriza_techo_90 actually applies (that depends on the row's own
+    postura being Deploy Aggressively, RE-032.10 point 2) -- that
+    translation is
     engine.human_approval_state.build_local_human_approval_inputs()'s
     job, kept separate the same way every other loader in this project
     stays apart from the engine module that interprets it.
@@ -72,6 +76,7 @@ def _read_attestation_rows(worksheet):
         postura = worksheet.cell(row=r, column=2).value
         crisis_personal = worksheet.cell(row=r, column=3).value
         nota = worksheet.cell(row=r, column=4).value
+        autoriza_techo_90 = worksheet.cell(row=r, column=5).value
 
         if fecha is None and postura is None:
             continue
@@ -82,6 +87,7 @@ def _read_attestation_rows(worksheet):
                 "postura": postura,
                 "crisis_personal": crisis_personal,
                 "nota": nota,
+                "autoriza_techo_90": autoriza_techo_90,
             }
         )
 

@@ -24,6 +24,15 @@ unrecognized posture is skipped, not guessed, with an explanation
 recorded -- the same discipline
 engine.dry_powder_ledger_state.compute_ledger_episode_state() already
 applies to malformed tranche rows.
+
+RE-B (RE-032.10 iteration B) -- reads the xlsx's new column E
+("autoriza_techo_90") and passes it straight into
+Attestation.authorizes_dry_powder_ceiling_90, unconditionally, even for
+a row whose posture isn't Deploy Aggressively. Whether that actually
+does anything is engine.human_approval._ceiling_90_active()'s decision
+alone (it already checks the posture) -- duplicating that check here
+would be the same logic in two places for no reason. No wiring into
+Dry Powder Protocol yet -- that is iteration C.
 """
 
 from datetime import date
@@ -44,7 +53,12 @@ from loaders.human_approval_loader import load_human_approval_raw
 _YES_TOKENS = {"sí", "si", "yes", "true"}
 
 
-def _to_bool_crisis_declared(value) -> bool:
+def _to_bool_si_no(value) -> bool:
+    """
+    Generic Sí/No -> bool parser, shared by every boolean column this
+    loader's rows carry (crisis_personal, autoriza_techo_90 as of RE-B)
+    -- one parsing rule, not one copy per column.
+    """
 
     if value is None:
         return False
@@ -93,10 +107,18 @@ def _build_patrimonio_attestations(
             Attestation(
                 registered_at=registered_at,
                 approved_posture_ceiling=posture,
-                personal_crisis_declared=_to_bool_crisis_declared(
+                personal_crisis_declared=_to_bool_si_no(
                     event.get("crisis_personal")
                 ),
                 market_crisis_at_registration=market_crisis_at_registration,
+                # RE-B -- passed through unconditionally, even if this
+                # row's posture isn't Deploy Aggressively: whether it
+                # actually matters is engine.human_approval's job
+                # (_ceiling_90_active already gates on posture), not
+                # duplicated here.
+                authorizes_dry_powder_ceiling_90=_to_bool_si_no(
+                    event.get("autoriza_techo_90")
+                ),
                 notes=str(event.get("nota") or ""),
             )
         )
