@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.2\
+**Versión:** 1.3\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -75,7 +75,7 @@ Patrimonio Total
    ├── Patrimonio Financiero
    │      Gobernado por reglas verificables, gates y protocolos del SOP.
    │
-   │      Objetivo cuantificado:
+   │      Objetivo cuantificado de Caja Motor:
    │      X€ a 5 años / Y€ a 10 años / Z€ a 15 años
    │      (pendiente: cifras concretas)
    │
@@ -95,9 +95,10 @@ Patrimonio Total
 ### Nivel 2 — Patrimonio Financiero, Patrimonio de Uso y Patrimonio de Consumo
 
 **Patrimonio Financiero.** Es la parte del patrimonio que el SOP
-gobierna directamente. Su misión es preservar capital real, sostener
-la libertad futura y avanzar hacia los objetivos cuantificados a 5, 10
-y 15 años.
+gobierna directamente. Su misión es preservar capital real y sostener
+la libertad futura. Los objetivos cuantificados a 5, 10 y 15 años se
+fijan sobre Caja Motor, no sobre el Patrimonio Financiero completo —
+ver más abajo.
 
 **Patrimonio de Uso.** Su propósito es la utilidad vital y la calidad
 de vida. No se mide por rentabilidad financiera y el SOP no impone
@@ -129,6 +130,33 @@ El cálculo usará una hipótesis de rentabilidad explícita y revisable.
 Puede tomar como referencia información del Research Engine, pero no
 queda gobernado automáticamente por la expectativa del Assessment
 Engine.
+
+### Objetivo de Caja Motor e hipótesis de rentabilidad
+
+Los objetivos cuantificados X/Y/Z se fijan por necesidad patrimonial:
+cuánto capital exige sostener la vida elegida y la libertad futura.
+
+No se fijan proyectando el mercado hacia delante. La proyección solo
+sirve para evaluar si la trayectoria actual va camino de cumplir esos
+objetivos.
+
+En esta versión, X/Y/Z se definen como objetivos de Caja Motor, no como
+objetivos del Patrimonio Financiero completo. Caja Seguridad y Caja
+Rentas Pasivas cumplen funciones distintas y se gobiernan por sus
+propias reglas.
+
+**Hipótesis base v1 de rentabilidad:** 7% real anualizado, equivalente
+aproximado a 9,4% nominal, usando como referencia la serie total return
+real de Shiller (`data/raw/shiller.xlsx`), con dividendos reinvertidos.
+
+También se calculó un escenario condicionado al CAPE de partida. Con
+CAPE elevado, los retornos históricos posteriores fueron mucho menores.
+Ese escenario se descarta como base por tamaño muestral insuficiente,
+no por ignorarlo.
+
+Esta hipótesis no se ajusta automáticamente por CAPE ni por el Research
+Engine. Solo puede cambiar mediante actualización explícita de esta
+Constitución.
 
 ### Nivel 3 — Arquitectura del Patrimonio Financiero: las tres cajas
 
@@ -254,11 +282,11 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
 
 **Arquitectura patrimonial (Sección 2):**
 
-- Definir los objetivos cuantificados X/Y/Z a 5, 10 y 15 años.
+- Definir los objetivos cuantificados X/Y/Z de Caja Motor a 5, 10 y 15
+  años, por necesidad patrimonial.
 - Construir el calculador de impacto temporal para extracciones desde
-  Patrimonio Financiero hacia Patrimonio de Uso.
-- Definir la hipótesis de rentabilidad usada por ese calculador, sin
-  asumir automáticamente la expectativa del Assessment Engine.
+  Caja Motor hacia Patrimonio de Uso, usando la hipótesis base v1
+  fijada en esta Constitución.
 - Si `personal_capacity_facts.xlsx` ya considera la vivienda habitual
   en algún cálculo existente — sin verificar todavía, para no dar por
   hecho una respuesta.
