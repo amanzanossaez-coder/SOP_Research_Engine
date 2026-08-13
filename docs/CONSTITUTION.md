@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.3\
+**Versión:** 1.4\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -258,7 +258,7 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 
 | Archivo | Estado |
 |---|---|
-| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). |
+| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula (con control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` aplica la hipótesis base v1 (7% real / 9,4% nominal) al saldo actual de Caja Motor a 5/10/15 años — ilustrativo, no sustituye a los objetivos X/Y/Z todavía pendientes. |
 | `dry_powder_ledger.xlsx` | Vacío. Sin episodios de caída registrados todavía. |
 | `human_approval_attestations.xlsx` | Vacío. Sin atestaciones registradas todavía. |
 | `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
