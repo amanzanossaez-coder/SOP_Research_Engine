@@ -1,220 +1,324 @@
 # SOP — Sistema Operativo Patrimonial
 
-> Un sistema de decisión patrimonial basado en evidencia, no en predicciones.
+**Versión:** 1.2\
+**Última actualización:** 2026-08-13
 
----
+> Este documento es la autoridad máxima del SOP. Sustituye a las
+> versiones anteriores de `CONSTITUTION.md`, `PROJECT_STATE.md`,
+> `ROADMAP.md` y `MODEL_ARCHITECTURE.md`, que quedaban marcadas como
+> "no autoritativas, pendientes de consolidación" desde RE-DOC-001
+> (governance doc v1.2) sin que esa consolidación llegara a hacerse.
+> Este documento la cierra.
 
-# ¿Qué es el SOP?
+Para el detalle técnico del Research Engine (motores, gates, tests,
+cada iteración con su justificación) sigue rigiendo
+`docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` como fuente única de
+verdad de ese subsistema. Este documento no lo duplica — lo resume y
+enlaza.
 
-El Sistema Operativo Patrimonial (SOP) es un framework diseñado para ayudar a tomar decisiones patrimoniales de forma objetiva, consistente y reproducible.
+------------------------------------------------------------------------
 
-Su objetivo no es predecir el futuro de los mercados.
+## 1. Qué es el SOP
 
-Su objetivo es construir un proceso de decisión robusto apoyado en datos, principios y evidencia histórica.
+El SOP es el producto. No el Research Engine, no un protocolo
+individual — el sistema completo de gobierno patrimonial que debe
+funcionar durante décadas mediante reglas objetivas, no mediante
+juicio ad-hoc en el momento de decidir.
 
-El Research Engine constituye el núcleo analítico del sistema.
+El Research Engine es un subsistema. Su única función es transformar
+datos históricos en evidencia objetiva y explicable. No decide la
+asignación patrimonial por sí mismo — produce información; la
+Constitución y los protocolos del SOP determinan cómo se utiliza esa
+información.
 
----
-
-# Filosofía
-
-El SOP se fundamenta en cinco principios:
+### Filosofía
 
 - Pensar en décadas, no en meses.
 - Separar evidencia de opinión.
 - Mantener una arquitectura patrimonial estable.
-- Utilizar reglas objetivas.
+- Utilizar reglas verificables — cada restricción real acaba siendo un
+  número, un estado discreto, un veto o una atestación explícita, no
+  una intención bien redactada.
 - Minimizar la influencia emocional en la toma de decisiones.
+- Robustez antes que sofisticación: preferimos un sistema
+  comprensible, reproducible y mantenible a uno más complejo pero
+  difícil de gobernar.
+- Generar evidencia explicable, nunca una caja negra.
 
----
+### Jerarquía de objetivos primaria
 
-# Arquitectura del proyecto
+1. Evitar el error irreversible.
+2. Preservar el capital en términos reales.
+3. Maximizar el retorno a largo plazo, solo una vez respetadas las dos
+   restricciones anteriores.
+
+Esta jerarquía es una decisión de gobierno, no un resultado del
+modelo. Si el orden cambia, cambia el resto del SOP con él.
+
+------------------------------------------------------------------------
+
+## 2. Arquitectura patrimonial
+
+Concepto cerrado el 2026-08-13, todavía sin traducción a código ni a
+Excel — ver Sección 6, Pendiente.
+
+### Nivel 1 — Propósito y estructura macro
+
+El Patrimonio Financiero existe para sostener la vida elegida y
+financiar la libertad futura.
+
+El Patrimonio de Uso es la materialización de esa libertad.
 
 ```
-SOP_RESEARCH_ENGINE/
-
-├── core/
-├── data/
-│   ├── raw/
-│   ├── processed/
-│   └── outputs/
-│
-├── docs/
-│   ├── CONSTITUTION.md
-│   ├── PROJECT_STATE.md
-│   └── ROADMAP.md
-│
-├── engine/
-├── loaders/
-├── models/
-├── notebooks/
-├── reports/
-├── tests/
-│
-├── README.md
-├── requirements.txt
-└── run.py
+Patrimonio Total
+   │
+   ├── Patrimonio Financiero
+   │      Gobernado por reglas verificables, gates y protocolos del SOP.
+   │
+   │      Objetivo cuantificado:
+   │      X€ a 5 años / Y€ a 10 años / Z€ a 15 años
+   │      (pendiente: cifras concretas)
+   │
+   │      Arquitectura interna:
+   │      Caja Seguridad · Caja Motor · Caja Rentas Pasivas
+   │
+   │      Protocolos:
+   │      Dry Powder Protocol · Human Approval · Portfolio Reallocation Protocol
+   │
+   └── Patrimonio de Uso
+          Decisión personal orientada a calidad de vida.
+          Ejemplos: vivienda habitual, Santoña.
+          Sin gates cuantitativos, sin cooling-off y sin protocolos
+          de despliegue del SOP.
 ```
 
----
+### Nivel 2 — Patrimonio Financiero, Patrimonio de Uso y Patrimonio de Consumo
 
-# Módulos
+**Patrimonio Financiero.** Es la parte del patrimonio que el SOP
+gobierna directamente. Su misión es preservar capital real, sostener
+la libertad futura y avanzar hacia los objetivos cuantificados a 5, 10
+y 15 años.
 
-## core
+**Patrimonio de Uso.** Su propósito es la utilidad vital y la calidad
+de vida. No se mide por rentabilidad financiera y el SOP no impone
+puertas automáticas sobre él.
 
-Infraestructura común del sistema.
+**Patrimonio de Consumo — eliminado como categoría.** Coches, relojes,
+vacaciones u otros gastos de disfrute son consumo. No son asignación
+patrimonial y quedan fuera del balance gobernado por el SOP.
 
-Contiene constantes, contratos, excepciones y componentes compartidos.
+### El puente: extracción de Patrimonio Financiero hacia Patrimonio de Uso
 
----
+El SOP no bloquea automáticamente una extracción de capital desde
+Patrimonio Financiero hacia Patrimonio de Uso.
 
-## data
+Lo que sí exige es transparencia sobre el coste de oportunidad.
 
-Datos utilizados por el motor.
+Antes de extraer capital, el sistema debe estimar el impacto temporal
+de esa decisión:
 
-raw
-: datos originales
+> ¿Cuántos meses o años retrasa esta extracción la consecución de los
+> objetivos financieros a 5, 10 y 15 años?
 
-processed
-: datos transformados
+Este cálculo es un **warning informativo**, no una puerta de bloqueo.
 
-outputs
-: resultados generados
+La decisión final pertenece a Armando. El SOP informa del coste
+financiero; no decide si la utilidad vital compensa ese coste.
 
----
+El cálculo usará una hipótesis de rentabilidad explícita y revisable.
+Puede tomar como referencia información del Research Engine, pero no
+queda gobernado automáticamente por la expectativa del Assessment
+Engine.
 
-## engine
+### Nivel 3 — Arquitectura del Patrimonio Financiero: las tres cajas
 
-Implementación de todos los motores de análisis.
+Las tres cajas dejan de ser "la cartera" y pasan a ser la arquitectura
+interna del Patrimonio Financiero — un nivel, no el sistema entero.
 
-Ejemplos:
+| Caja | Objetivo estratégico | Se construye con |
+|---|---|---|
+| **Seguridad** | Fondo de seguridad + pólvora seca para oportunidades | Liquidez, depósitos, cuentas remuneradas, fondos monetarios |
+| **Motor** | Crecimiento compuesto a largo plazo | Fondo indexado Vanguard S&P 500 y otras inversiones a largo plazo |
+| **Rentas Pasivas** | Nutrir de liquidez recurrente, reducir la dependencia psicológica de vender patrimonio | ETF JGPI (~5k€/año), inversiones inmobiliarias (~7,5k€/año), oro |
 
-- Drawdown Engine
-- Snapshot Engine
-- Similarity Engine
-- Probability Engine
-- Inference Engine
-- Assessment Engine
-- Decision Engine
+Cada caja tiene un objetivo distinto — no se miden con la misma vara.
+Un monetario de rentabilidad mediocre puede ser excelente si cumple
+perfectamente su función de liquidez.
 
----
+### Nivel 4 — Estrategias de inversión dentro de cada caja
 
-## models
+P. ej., dentro de Caja Motor: concentración actual en S&P 500 frente a
+diversificación gradual hacia un índice mundial. Sin reglas todavía —
+es exactamente el terreno de Portfolio Reallocation Protocol (Sección
+3).
 
-Modelos de datos utilizados por el sistema.
+### Nivel 5 — Productos concretos
 
----
+Vanguard S&P 500, fondos monetarios, JGPI, etc.
 
-## loaders
+### Por qué esta jerarquía importa
 
-Carga y preparación de datasets.
+Puedes cambiar cualquier elemento de un nivel inferior sin reescribir
+los superiores — cambiar un producto en el Nivel 5 no debería obligar
+a tocar el Nivel 1. Es la misma disciplina de responsabilidad única y
+estabilidad arquitectónica que ya rige el código del Research Engine,
+aplicada al patrimonio completo.
 
----
+------------------------------------------------------------------------
 
-## docs
+## 3. Protocolos del SOP
 
-Documentación funcional del proyecto.
+| Protocolo | Gobierna | Estado |
+|---|---|---|
+| **Dry Powder Protocol** | Convertir liquidez ociosa (Caja Seguridad) en capital invertido durante un episodio de caída | 85-90% aislado. Cuatro reglas completas, techo extraordinario del 90% vía Human Approval ya calculado por fórmula (RE-032.10). Sin wiring a `run.py`/`DecisionEngine`, deliberado. |
+| **Human Approval** | Consentimiento humano vigente, independiente de si los datos permiten actuar | 75-80% operativo real. Chain-resolution completa, cooling-off 14/30 días, validez 90 días, extensión propia de 30 días para el techo del 90%. Demostrado end-to-end en `audit_posture.py`. Sin atestaciones reales cargadas todavía. |
+| **Portfolio Reallocation Protocol** | Vender un activo de riesgo del Patrimonio Financiero para comprar otro (rotación **dentro** del Patrimonio Financiero, nunca hacia Patrimonio de Uso) | 0-5%. Sin reglas, sin código, sin Excel. Ver Sección 6. |
 
-### CONSTITUTION
+Los protocolos son prerrequisitos independientes entre sí — ninguno
+compensa a otro. Para actuar hacen falta todos los que apliquen a la
+vez: la postura combinada de evidencia, Human Approval vigente, y las
+reglas propias del protocolo en cuestión (Dry Powder o Reallocation).
 
-Principios del SOP.
+Frontera importante fijada el 2026-08-13: mover capital de Patrimonio
+Financiero hacia Patrimonio de Uso (p. ej., vender S&P 500 para
+financiar Santoña) **no es** una decisión de Portfolio Reallocation
+Protocol — es una decisión personal, informada por "El puente"
+(Sección 2), no gobernada por ningún protocolo del SOP.
 
-### PROJECT_STATE
+------------------------------------------------------------------------
 
-Estado actual del desarrollo.
+## 4. Research Engine (resumen)
 
-### ROADMAP
-
-Hoja de ruta del proyecto.
-
----
-
-# Estado actual
-
-El proyecto se encuentra en desarrollo activo.
-
-El núcleo funcional del Research Engine ya está operativo y continúa evolucionando mediante iteraciones incrementales.
-
----
-
-# Forma de trabajo
-
-Durante el desarrollo seguimos las siguientes reglas:
-
-- Una modificación por iteración.
-- Un único archivo por paso.
-- Siempre archivos completos.
-- Evitar refactorizaciones innecesarias.
-- Mantener compatibilidad con el resto del sistema.
-- Priorizar claridad y estabilidad.
-
----
-
-# Objetivo del Research Engine
-
-El Research Engine analiza el contexto histórico del mercado para producir evidencia objetiva.
-
-Actualmente incorpora motores para:
-
-- detección de drawdowns;
-- comparación con episodios históricos;
-- estimación probabilística;
-- inferencia;
-- evaluación del contexto;
-- generación de decisiones.
-
-No ejecuta operaciones de inversión.
-
-Produce evidencia para que el SOP pueda tomar decisiones consistentes.
-
----
-
-# Visión a largo plazo
-
-El Research Engine será uno de los módulos del Sistema Operativo Patrimonial.
-
-En el futuro el SOP incorporará, entre otros:
-
-- simulaciones;
-- reporting;
-- dashboard;
-- gestión de triggers;
-- gobierno del sistema;
-- protocolos patrimoniales.
-
----
-
-# Cómo ejecutar
-
-Instalar dependencias:
-
-```bash
-pip install -r requirements.txt
-```
-
-Ejecutar:
-
-```bash
-python3 run.py
-```
-
----
-
-# Inicio de una nueva conversación con ChatGPT
-
-Para retomar el proyecto en un nuevo chat:
-
-1. Adjuntar el repositorio completo (preferiblemente en formato ZIP).
-2. Indicar que primero se revisen:
-   - `docs/CONSTITUTION.md`
-   - `docs/PROJECT_STATE.md`
-   - `docs/ROADMAP.md`
-3. Continuar desde el estado descrito en `PROJECT_STATE.md`.
-
-Esto permite mantener el contexto técnico y funcional del proyecto sin depender del historial de conversaciones.
-
----
-
-# Estado del proyecto
-
-En evolución continua.
+Núcleo estable: Drawdown Engine, Snapshot Engine, Similarity Engine
+(v1), Probability Engine, Inference Engine, Assessment Engine —
+producen evidencia objetiva sobre episodios históricos de mercado. Esa
+evidencia alimenta Evidence Quality Gate y Regime Comparability Gate,
+que junto con Personal Capacity Facts Gate determinan la postura
+combinada de capital (`Conserve`/`Prepare`/`Deploy Partially`/`Deploy
+Aggressively`/`Blocked`). Probability Engine existe y alimenta la
+tubería original del Research Engine (`evidence_engine.py`,
+`decision_engine.py`), pero no gobierna la postura actual — no
+aparece en ningún gate de la cadena de arriba.
+
+La capa de gates, postura y protocolos no ejecuta operaciones ni
+decide asignación por sí misma. No está conectada a `run.py` ni a
+`DecisionEngine` — esa integración sigue deliberadamente fuera de
+alcance en todo el proyecto.
+
+Estado técnico completo, motor a motor, con cada iteración justificada
+y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
+(v1.90 a fecha de este documento).
+
+------------------------------------------------------------------------
+
+## 5. Entregables existentes
+
+Lo que hoy existe de verdad en el repositorio, no lo que está previsto:
+
+**Motores y gates** (`engine/`) — módulos principales, incluyendo el
+núcleo del Research Engine, `evidence_quality_gate.py`,
+`regime_comparability_gate.py`, `personal_capacity_facts_gate.py`,
+`gate_combination.py`, `posture_mapper.py`, `dry_powder_protocol.py`,
+`dry_powder_ledger_state.py`, `human_approval.py`,
+`human_approval_state.py`.
+
+**Loaders** (`loaders/`) — un loader por fuente de datos real:
+`dry_powder_ledger_loader.py`, `human_approval_loader.py`,
+`personal_capacity_facts_loader.py`, `shiller_loader.py`.
+
+**Datos reales** (`data/raw/`):
+
+| Archivo | Estado |
+|---|---|
+| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). |
+| `dry_powder_ledger.xlsx` | Vacío. Sin episodios de caída registrados todavía. |
+| `human_approval_attestations.xlsx` | Vacío. Sin atestaciones registradas todavía. |
+| `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
+
+**Scripts operativos:** `audit_posture.py` (dry-run de lectura,
+combina todos los gates y protocolos por patrimonio, no ejecuta nada).
+
+**Tests:** suite `tests/verify_*.py`, re-ejecutada en cada iteración.
+
+**Documentación:**
+
+- `docs/CONSTITUTION.md` — este documento.
+- `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
+  Research Engine, v1.90.
+- `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
+  Powder Protocol y Human Approval); Word e idéntico en contenido.
+
+------------------------------------------------------------------------
+
+## 6. Pendiente
+
+**Arquitectura patrimonial (Sección 2):**
+
+- Definir los objetivos cuantificados X/Y/Z a 5, 10 y 15 años.
+- Construir el calculador de impacto temporal para extracciones desde
+  Patrimonio Financiero hacia Patrimonio de Uso.
+- Definir la hipótesis de rentabilidad usada por ese calculador, sin
+  asumir automáticamente la expectativa del Assessment Engine.
+- Si `personal_capacity_facts.xlsx` ya considera la vivienda habitual
+  en algún cálculo existente — sin verificar todavía, para no dar por
+  hecho una respuesta.
+
+**Portfolio Reallocation Protocol — todo, ver preguntas abiertas
+detalladas en la conversación del 2026-08-13:**
+
+- Disparador (¿episodio de drawdown como Dry Powder, o revisión
+  periódica/estructural?).
+- Universo de activos (¿solo rotación dentro de Caja Motor, o más
+  amplio?).
+- Los tres invalidators nombrados en el governance doc necesitan
+  definición operativa: liquidez/riesgo del activo vendido,
+  correlación entre vendido y comprado, coste de materializar la
+  pérdida **o la ganancia** (el caso Motor→índice mundial es
+  materializar ganancia, no pérdida — matiz encontrado el 2026-08-13,
+  el texto original solo contemplaba pérdida).
+- Escala de agresividad propia, o reutilizar las cuatro posturas ya
+  existentes.
+- Mecanismo: ¿redirigir aportaciones nuevas (sin coste fiscal) y
+  vender posición existente (con coste fiscal) son la misma regla o
+  dos mecanismos distintos?
+
+**Fuera de alcance, deliberado, en todo el proyecto:**
+
+- Wiring a `run.py` / `DecisionEngine`.
+- Ejecución automática de cualquier operación.
+
+**Investigación futura del Research Engine** (menor prioridad que lo
+anterior): Similarity Engine v2 (duración, velocidad, tendencia
+previa, volatilidad, similitud multidimensional) — siguiente hito
+técnico según `SOP_ENGINE_PROJECT_STATUS.md`.
+
+------------------------------------------------------------------------
+
+## 7. Forma de trabajo
+
+- Una modificación conceptual por iteración. En documentación, un
+  único archivo completo. En código, el cambio mínimo necesario:
+  módulo, test y registro — nunca fragmentos sueltos.
+- Proponer el diseño y sus acceptance checks antes de escribir código;
+  confirmar con Armando antes de construir.
+- Toda decisión de diseño no trivial queda registrada en
+  `SOP_ENGINE_PROJECT_STATUS.md` (para el Research Engine) o en este
+  documento (para el SOP) — nunca solo en el chat.
+- Evitar refactorizaciones innecesarias; mantener compatibilidad con
+  el resto del sistema.
+- Fail-closed: la ausencia o incertidumbre de un dato nunca se lee
+  como favorable. Un dato malformado se descarta con una explicación
+  registrada, nunca se adivina.
+- Priorizar claridad y estabilidad sobre velocidad.
+
+------------------------------------------------------------------------
+
+## 8. Cómo retomar el proyecto
+
+1. Leer este documento completo — es la autoridad.
+2. Para el detalle técnico del Research Engine, leer
+   `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`, empezando por su
+   "Honest Progress Snapshot".
+3. Para operar el día a día (Dry Powder Protocol, Human Approval),
+   usar `docs/MANUAL_OPERATIVO.md`.
+4. Continuar desde la Sección 6 de este documento (Pendiente).
