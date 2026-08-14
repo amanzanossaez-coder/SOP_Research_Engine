@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.6\
+**Versión:** 1.7\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -118,8 +118,13 @@ Lo que sí exige es transparencia sobre el coste de oportunidad.
 Antes de extraer capital, el sistema debe estimar el impacto temporal
 de esa decisión:
 
-> ¿Cuántos meses o años retrasa esta extracción la consecución de los
-> objetivos financieros a 5, 10 y 15 años?
+> Comparando el saldo de Caja Motor justo antes y justo después de la
+> extracción, ¿a cuántos meses o años atrás en su propia trayectoria
+> de crecimiento retrocede ese saldo?
+
+No compara contra ningún objetivo externo — Caja Motor no tiene uno
+(Sección 2, "Caja Motor: sin objetivo numérico fijo"). Compara el
+saldo contra sí mismo, en el tiempo.
 
 Este cálculo es un **warning informativo**, no una puerta de bloqueo.
 
