@@ -1,4 +1,7 @@
+from datetime import date
+
 from core.constants import DEFAULT_MATCH_COUNT
+from core.version import ENGINE_NAME, ENGINE_VERSION
 from engine.evidence_engine import EvidenceEngine
 from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
@@ -44,4 +47,13 @@ def build_research_result(
         snapshot=snapshot,
         matches=matches,
         evidence=evidence,
+        # RE-044.4 -- Articulo 5 (Trazabilidad). engine_name/
+        # engine_version vienen de core/version.py, no se reinventan
+        # aqui. matches_count/horizon_years son los parametros reales
+        # que esta llamada recibio, no un valor asumido.
+        engine_name=ENGINE_NAME,
+        engine_version=ENGINE_VERSION,
+        matches_count=matches_count,
+        horizon_years=horizon_years,
+        generated_at=date.today(),
     )

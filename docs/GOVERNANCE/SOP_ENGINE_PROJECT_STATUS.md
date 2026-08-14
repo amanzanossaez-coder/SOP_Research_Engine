@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.96\
+**Version:** 1.97\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,9 +17,8 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-044.3 (2026-08-14). Nota RE-044.3: retirada deliberada de
-arquitectura muerta y rota (`DatasetBuilder` + la lógica estadística
-antigua de `models/dataset.py`, Artículo 3) -- tercera corrección de
+As of RE-044.4 (2026-08-14). Nota RE-044.4: `ResearchResult` ahora
+lleva metadatos de trazabilidad (Artículo 5) -- cuarta corrección de
 la auditoría contra la constitución de 12 artículos. No altera
 ninguna cifra de esta tabla:
 
@@ -7989,6 +7988,77 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-044.4 — Research Engine: traceability metadata on ResearchResult (Articulo 5)
+
+Fourth fix of the audit against the Research Engine's 12-article
+founding constitution. Articulo 5: "toda respuesta producida por el
+motor debera poder reconstruirse... datos utilizados, funciones
+ejecutadas, parametros empleados, version del motor, fuentes
+consultadas." `core/version.py` already defined `ENGINE_NAME`/
+`ENGINE_VERSION` specifically for this purpose (its own docstring:
+"toda respuesta generada debera incluir esta informacion") -- nothing
+ever attached them to an actual result. `ResearchResult` carried only
+`snapshot`, `matches`, `evidence`; no version, no parameters, no
+execution timestamp.
+
+Added four fields, populated at the single construction site
+(`engine/research_pipeline.py::build_research_result()` -- confirmed
+via repo-wide search this is the only place `ResearchResult(...)` is
+called, so no other call site needed updating): `engine_name`/
+`engine_version` (read from `core/version.py`, not reinvented),
+`matches_count`/`horizon_years` (the actual parameters that
+invocation received), `generated_at` (wall-clock date of execution,
+distinct from `snapshot.date`, which is the market date under
+analysis, not when the code ran).
+
+Two things deliberately left out, documented in the class docstring
+rather than silently absent: "fuentes consultadas" (which data file
+fed the `Dataset`) is not included -- `ResearchResult` only knows the
+`Dataset` object it was handed, not its origin, and asserting
+`data/raw/shiller.xlsx` here would be an unverified claim at this
+point in the code (Articulo 12 -- do not substitute absence of
+verification with a plausible-sounding guess). "Funciones ejecutadas"
+is not added as a per-instance field either -- the pipeline sequence
+is fixed and identical for every instance (already documented in the
+class docstring), so a runtime field would be redundant, not new
+information.
+
+Separately noted, not fixed this iteration: `core/version.py` also
+defines `CONSTITUTION_VERSION = "1.1"`, referring to the Research
+Engine's own 12-article founding constitution -- which still does not
+exist as a file in this repo (see RE-044.1's opening note). A version
+constant pointing at a document that isn't there is itself a minor
+traceability gap; deferred, since saving that document is Armando's
+call, not something to do as a side effect of this fix.
+
+What this does not authorize:
+
+-   No "fuentes consultadas" field added (see above -- would require
+    the loader layer to pass provenance through, out of scope here).
+-   No change to how `ResearchResult` is consumed --
+    `DecisionEngine`/`AssessmentEngine`/`audit_posture.py` all read
+    only `.snapshot`/`.matches`/`.evidence` today and are unaffected
+    by the new fields.
+-   Does not save the missing 12-article constitution document or
+    reconcile `CONSTITUTION_VERSION`.
+
+Boundary:
+
+-   Two files modified: `models/research_result.py` (four new
+    required fields + docstring explaining what was added and what
+    was deliberately left out), `engine/research_pipeline.py` (two
+    new imports, four new keyword arguments at the single construction
+    site).
+-   No Frozen Core component touched.
+-   Verified directly: constructed a real `ResearchResult` via
+    `DecisionEngine` and printed all four new fields (`SOP Research
+    Engine`, `1.0.0`, `10`, `5`, `2026-08-14`) before considering this
+    done. Full `tests/verify_*.py` suite re-run: same four
+    pre-existing failures, nothing new; `run.py` unchanged
+    (`Confianza: ALTA`).
+
+------------------------------------------------------------------------
+
 ## RE-044.3 — Research Engine: deliberate removal of dead, broken architecture (Articulo 3)
 
 Third fix of the audit against the Research Engine's 12-article
@@ -9768,6 +9838,21 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.97
+
+-   RE-044.4: added traceability metadata to `ResearchResult`
+    (Articulo 5) -- `engine_name`, `engine_version`, `matches_count`,
+    `horizon_years`, `generated_at`, populated at the single
+    construction site in `engine/research_pipeline.py`. Version/name
+    read from `core/version.py`, never reinvented. "Fuentes
+    consultadas" and a per-instance "funciones ejecutadas" field
+    deliberately left out -- reasons documented in the class
+    docstring, not silently skipped. Noted, not fixed: `core/version.py`'s
+    `CONSTITUTION_VERSION` still points at a 12-article document that
+    doesn't exist as a file yet. Full details in the Design Decision
+    entry above (RE-044.4). Full `tests/verify_*.py` suite re-run:
+    same four pre-existing failures, nothing new; `run.py` unchanged.
 
 ## Version 1.96
 
