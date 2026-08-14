@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.92\
+**Version:** 1.94\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,10 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-043.3 (2026-08-13):
+As of RE-044.1 (2026-08-14). Nota RE-044.1: unificada la confianza
+categórica del Research Engine (Artículo 7) -- primera corrección de
+la auditoría contra la constitución de 12 artículos, iniciada esta
+tarde. No altera ninguna cifra de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7985,6 +7988,138 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-044.1 — Research Engine: unified categorical Confidence (Articulo 7)
+
+First fix of the audit against the Research Engine's own 12-article
+founding constitution (never saved as a repo file until today, see
+docs/CONSTITUTION.md's Research Engine section / RESUMEN notes).
+Articulo 7 requires categorical Alta/Media/Baja confidence with
+thresholds as named global constants -- `core/confidence.py` existed
+but was empty.
+
+Investigation found the gap was worse than "file not filled in": two
+independent, disconnected confidence computations existed.
+`ValidationEngine.confidence()` -> `Confidence` dataclass (coverage +
+consistency + diversity + stability, averaged) was consumed only by
+`AssessmentEngine`, which is not wired into `run.py` and carries its
+own explicit warning that the score "must not be used as a
+capital-allocation gate until the placeholder is replaced or
+explicitly governed" (`stability` is hardcoded to 1.0, unimplemented).
+Separately, `DecisionEngine.confidence()` -- the one `run.py` actually
+prints -- computed its own ad-hoc Alta/Media/Baja from a match-count
+threshold (score >= 0.75, count >= 8/4), hardcoded inline,
+contradicting its own module's documented claim of carrying no
+statistical logic of its own (RE-024.2).
+
+Presented two options to Armando: (A) unify into one confidence
+system, or (B) keep both but name, centralize and document them as
+answering genuinely different questions. Armando chose A.
+
+Implementation: `core/confidence.py` now defines `categorize(score)`,
+the single translation from `Confidence.score` to Alta/Media/Baja.
+Thresholds added to `core/constants.py`
+(`CONFIDENCE_SCORE_ALTA_THRESHOLD = 0.75`,
+`CONFIDENCE_SCORE_MEDIA_THRESHOLD = 0.50`), calibrated against the
+achievable range of the score given `stability`'s current placeholder
+(always +0.25, so the floor is 0.25, not 0.0) -- divides [0.25, 1.0]
+into equal thirds. `DecisionEngine.confidence()` now delegates to
+`ValidationEngine.confidence(self._matches).score` + `categorize()`
+instead of its own logic.
+
+This is a real, visible behavior change, not a pure refactor: for
+today's actual snapshot, the old logic read `BAJA`
+(few matches scored >= 0.75 individually) and the new one reads `ALTA`
+(unified score 0.884 -- coverage 1.0, consistency 0.937, diversity
+0.6, stability 1.0 placeholder). Confirmed by running both before
+committing to the change, not assumed.
+
+What this does not authorize:
+
+-   Does not implement `stability` for real -- still hardcoded 1.0 in
+    `ValidationEngine.stability()`. The caveat AssessmentEngine
+    already carried ("must not be used as a capital-allocation gate
+    until the placeholder is replaced or explicitly governed") is
+    inherited by `DecisionEngine.confidence()` now too, not resolved.
+    Documented explicitly in `core/confidence.py` and
+    `core/constants.py`, not hidden.
+-   Does not change `AssessmentEngine` -- still exposes only the raw
+    `Confidence` object, not run through `categorize()`. Left
+    untouched deliberately to keep this iteration to the path that is
+    actually user-facing (`run.py` via `DecisionEngine`).
+-   Does not touch `models/confidence.py`'s dataclass, `coverage()`,
+    `consistency()`, or `diversity()` -- computation unchanged, only
+    the categorical reading on top of it.
+-   No wiring into `run.py`'s call sites beyond what already existed
+    -- `run.py` still just calls `decision.confidence()`, unaware its
+    internals changed.
+
+Boundary:
+
+-   Three files modified: `core/constants.py` (two new named
+    constants + rationale comment), `core/confidence.py` (was empty,
+    now `categorize()` + module docstring explaining the prior
+    duplication), `engine/decision_engine.py` (`confidence()` method
+    replaced, class docstring updated, two new imports, `self.validation`
+    added to `__init__`).
+-   No Frozen Core component touched.
+-   Full `tests/verify_*.py` suite re-run: same four pre-existing
+    failures as before this change (pandas/numpy pin mismatches on
+    `verify_baseline_harness.py` / `verify_secondary_baselines.py` /
+    `verify_validation_metrics.py`, and `verify_research_engine.py`'s
+    known tie-break ordering difference) -- nothing new. No test
+    asserted a specific `DecisionEngine.confidence()` value, so the
+    BAJA -> ALTA change did not require any test update, but was
+    verified by direct execution before and after.
+
+------------------------------------------------------------------------
+
+## RE-043.4 — Personal Capacity Facts: stale wiring claim corrected in module docstring
+
+Armando asked what the "Personal Capacity operativo real: 45-50%"
+snapshot figure originally meant, which led to reading
+`engine/personal_capacity_facts_gate.py` in full. Its header docstring
+still said "Still not wired into run.py, DecisionEngine or
+gate_combination.py" -- true when written under RE-032.5 (the gate's
+first isolated version, before any integration existed), but stale
+since RE-040.1: `engine/posture_mapper.py`'s
+`personal_capacity_facts_to_gate_input()` and `evaluate_capital_posture()`
+translate a `PersonalCapacityFactsGateResult` into a
+`GateCombinationInput` and feed it into `gate_combination.py`'s
+`combine_gate_outputs()` -- the same `min()` combination Evidence
+Quality and Regime Comparability go through. RE-043.1 then wired real
+data into that path, and `audit_posture.py` exercises it end-to-end on
+every run. Two changelog entries later (RE-040.1, RE-043.1) never
+updated the original module docstring that said otherwise.
+
+Fix: the docstring now states the gate is wired into
+`gate_combination.py` (via `posture_mapper.py`, since RE-040.1) and
+names the exact functions. The only claim that remains true and
+unchanged is "not wired into run.py or DecisionEngine" -- still
+accurate, still deliberate.
+
+What this does not authorize:
+
+-   No change to `PersonalCapacityFactsGate`'s logic, `FIELD_INPUT_TYPES`,
+    or any threshold -- documentation only.
+-   No change to `posture_mapper.py` or `gate_combination.py`.
+-   No wiring into `run.py` or `DecisionEngine` -- that claim was, and
+    remains, correct.
+
+Boundary:
+
+-   One file modified: `engine/personal_capacity_facts_gate.py`
+    (module docstring only).
+-   `tests/verify_personal_capacity_facts_gate.py` re-run unchanged:
+    `PERSONAL CAPACITY FACTS GATE : STABLE`, same AMS `adequate` /
+    AML `constrained` (`liquidity_adequate`) results as before.
+-   No Frozen Core component touched.
+-   Does not resolve, and was not intended to resolve, whether the
+    Honest Progress Snapshot's 45-50% figure should change -- that is
+    a separate, still-open decision, deliberately not made in this
+    iteration.
+
+------------------------------------------------------------------------
+
 ## RE-041.1 (code) — Dry Powder Protocol: first isolated module
 
 RE-041.1 had specification but zero code (60-65% especificación / 0%
@@ -9495,6 +9630,40 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.94
+
+-   RE-044.1: unified categorical Confidence (Articulo 7 of the
+    Research Engine's 12-article founding constitution, audited for
+    the first time this session). `core/confidence.py` was empty;
+    found two independent, disconnected confidence computations
+    instead of one gap. Armando chose to unify (Option A) over
+    keeping both separately documented (Option B). `run.py`'s printed
+    "Confianza" reading changed from `BAJA` to `ALTA` for today's real
+    snapshot as a direct, verified consequence -- not a side effect
+    that slipped through. `stability`'s placeholder (hardcoded 1.0,
+    unimplemented) is inherited into the new path, documented, not
+    resolved. Full details in the Design Decision entry above (RE-044.1).
+    Full `tests/verify_*.py` suite re-run: same four pre-existing
+    failures, nothing new.
+
+## Version 1.93
+
+-   RE-043.4: corrected a stale docstring claim in
+    `engine/personal_capacity_facts_gate.py` ("Still not wired into
+    run.py, DecisionEngine or gate_combination.py", left over from
+    RE-032.5). The gate has in fact been wired into
+    `gate_combination.py` since RE-040.1, via
+    `engine/posture_mapper.py`. Confirmed by reading
+    `posture_mapper.py::evaluate_capital_posture()` and
+    `gate_combination.py::combine_gate_outputs()` directly, and by
+    `audit_posture.py`'s observed behavior all session ("COMBINED
+    posture ceiling" includes Personal Capacity Facts explanations
+    per patrimonio). Docstring updated to name the actual wiring path;
+    "not wired into run.py or DecisionEngine" remains true and
+    unchanged. Documentation only -- no logic touched.
+    `tests/verify_personal_capacity_facts_gate.py` re-run: no change
+    in output.
 
 ## Version 1.92
 

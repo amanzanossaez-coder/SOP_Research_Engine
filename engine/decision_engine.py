@@ -1,4 +1,6 @@
+from core.confidence import categorize
 from engine.research_pipeline import build_research_result
+from engine.validation_engine import ValidationEngine
 
 
 class DecisionEngine:
@@ -21,6 +23,18 @@ class DecisionEngine:
     Research. Consume la misma fuente de verdad que ResearchEngine:
     build_research_result(). Asi, Snapshot -> ObservableUniverse ->
     SimilarityEngine.top() -> EvidenceEngine vive en un solo sitio.
+
+    RE-044.1: confidence() dejo de ser la excepcion a la regla de
+    arriba. Hasta esta iteracion calculaba su propio conteo de matches
+    con score >= 0.75 y sus propios umbrales (>=8, >=4) -- logica
+    estadistica propia, contradiciendo directamente el parrafo
+    anterior. Ahora delega en ValidationEngine.confidence() (la misma
+    fuente que ya usaba AssessmentEngine) + core.confidence.categorize()
+    -- una sola forma de leer confianza en todo el motor, no dos que
+    podian discrepar en silencio. A dia de esta iteracion discrepaban:
+    la logica vieja leia BAJA para el snapshot real de hoy: la nueva
+    lee ALTA (score 0.884). Ver core/confidence.py para el porque y el
+    caveat pendiente (stability sigue siendo un placeholder).
     """
 
     def __init__(self, dataset):
@@ -38,6 +52,8 @@ class DecisionEngine:
         self._matches = self.research.matches
 
         self.evidence = self.research.evidence
+
+        self.validation = ValidationEngine()
 
     def market_position(self):
         # RE-003: posición en ciclo — solo depende del drawdown
@@ -92,24 +108,10 @@ class DecisionEngine:
 
     def confidence(self):
 
-        matches = len(
+        # RE-044.1 -- delega en el sistema unico de confianza
+        # (ValidationEngine.confidence() + core.confidence.categorize()),
+        # ya no calcula su propio umbral. Ver docstring de la clase.
 
-            [
-
-                s
-
-                for s in self._matches
-
-                if s.score >= 0.75
-
-            ]
-
+        return categorize(
+            self.validation.confidence(self._matches).score
         )
-
-        if matches >= 8:
-            return "ALTA"
-
-        if matches >= 4:
-            return "MEDIA"
-
-        return "BAJA"
