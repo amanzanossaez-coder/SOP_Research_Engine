@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.4\
+**Versión:** 1.5\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -258,7 +258,7 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 
 | Archivo | Estado |
 |---|---|
-| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula (con control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` aplica la hipótesis base v1 (7% real / 9,4% nominal) al saldo actual de Caja Motor a 5/10/15 años — ilustrativo, no sustituye a los objetivos X/Y/Z todavía pendientes. |
+| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula, con % de cada caja sobre el total (control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` congela una fecha e importe de referencia de Caja Motor (no enlazados por fórmula a `Cajas` — solo cambian con actualización explícita), calcula la trayectoria esperada a 5/10/15 años desde ese punto fijo bajo la hipótesis base v1, y añade una tabla de Seguimiento donde se registra el saldo real observado en fechas de control futuras frente a lo que la trayectoria esperaba — así se puede ver si se va por delante o por detrás, en vez de comparar el escenario contra sí mismo cada vez. Ilustrativo; no sustituye a los objetivos X/Y/Z todavía pendientes. |
 | `dry_powder_ledger.xlsx` | Vacío. Sin episodios de caída registrados todavía. |
 | `human_approval_attestations.xlsx` | Vacío. Sin atestaciones registradas todavía. |
 | `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
@@ -290,6 +290,10 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
 - Si `personal_capacity_facts.xlsx` ya considera la vivienda habitual
   en algún cálculo existente — sin verificar todavía, para no dar por
   hecho una respuesta.
+- El congelado de `Proyecciones` (fecha de referencia + importes de
+  Caja Motor) está fijado provisionalmente a 2026-08-13. Sustituirlo
+  por el cierre a 31/12/2026 cuando esté disponible, para anclar la
+  trayectoria en año natural.
 
 **Portfolio Reallocation Protocol — todo, ver preguntas abiertas
 detalladas en la conversación del 2026-08-13:**
