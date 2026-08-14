@@ -1,5 +1,6 @@
 from typing import List
 
+from core.constants import DEFAULT_MATCH_COUNT
 from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
 from engine.evidence_engine import EvidenceEngine
@@ -49,7 +50,7 @@ def dimension_forecast(
     episode,
     score_field: str,
     years: int = 5,
-    n: int = 10,
+    n: int = DEFAULT_MATCH_COUNT,
     exclude_recent_months: int = 24,
 ):
     """

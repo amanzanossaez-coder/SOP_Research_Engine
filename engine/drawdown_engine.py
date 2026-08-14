@@ -5,8 +5,12 @@ from models.episode import Episode
 from loaders.shiller_loader import load_shiller_data
 from engine.date_utils import months_between
 
-
-MIN_DRAWDOWN = -0.10
+# RE-044.2 -- MIN_DRAWDOWN se define ahora en core/constants.py
+# (Articulo 7: umbrales como constantes globales, no numeros magicos
+# sueltos). Se re-exporta aqui sin cambiar de valor para no romper a
+# quien ya hace `from engine.drawdown_engine import MIN_DRAWDOWN`
+# (engine/live_episode.py, engine/human_approval_state.py).
+from core.constants import MIN_DRAWDOWN
 
 
 def calculate_running_peak(df):

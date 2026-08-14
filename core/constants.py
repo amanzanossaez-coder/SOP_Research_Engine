@@ -64,3 +64,28 @@ OUTCOME_HORIZONS_YEARS = (1, 3, 5, 10)
 # umbrales deberan revisarse -- no ocurre automaticamente.
 CONFIDENCE_SCORE_ALTA_THRESHOLD = 0.75
 CONFIDENCE_SCORE_MEDIA_THRESHOLD = 0.50
+
+# RE-044.2 -- Articulo 7, segunda mitad: "los umbrales se definiran
+# como constantes globales del sistema. Nunca existiran numeros
+# magicos distribuidos por el codigo." Estas dos constantes existian
+# ya como literales sueltos, repetidos de forma independiente en
+# varios archivos sin relacion declarada entre si.
+
+# Umbral que separa "hay drawdown" (episodio candidato) de ruido de
+# mercado normal. Unica fuente de verdad; antes vivia como
+# `MIN_DRAWDOWN = -0.10` dentro de engine/drawdown_engine.py, que hoy
+# re-exporta este mismo valor (`from core.constants import
+# MIN_DRAWDOWN`) para no romper a quien ya hacia
+# `from engine.drawdown_engine import MIN_DRAWDOWN`
+# (engine/live_episode.py, engine/human_approval_state.py).
+MIN_DRAWDOWN = -0.10
+
+# Numero de comparables historicos que el pipeline trata como "muestra
+# completa" -- usado como valor por defecto en cuatro sitios
+# independientes (engine/research_pipeline.py's matches_count,
+# engine/validation_harness.py's n_matches,
+# engine/dimension_diagnostic.py's n, y como denominador de
+# ValidationEngine.coverage()) que hasta ahora repetian el literal 10
+# cada uno por su cuenta, sin relacion declarada -- coincidian por
+# convencion, no por diseno explicito.
+DEFAULT_MATCH_COUNT = 10

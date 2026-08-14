@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+from core.constants import DEFAULT_MATCH_COUNT
 from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
 from engine.evidence_engine import EvidenceEngine
@@ -108,7 +109,7 @@ class ValidationHarness:
        suficientes en su propio instante.
     """
 
-    def __init__(self, dataset, n_matches: int = 10):
+    def __init__(self, dataset, n_matches: int = DEFAULT_MATCH_COUNT):
 
         self.dataset = dataset
         self.n_matches = n_matches

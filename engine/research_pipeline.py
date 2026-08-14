@@ -1,3 +1,4 @@
+from core.constants import DEFAULT_MATCH_COUNT
 from engine.evidence_engine import EvidenceEngine
 from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
@@ -7,7 +8,7 @@ from models.research_result import ResearchResult
 
 def build_research_result(
     dataset,
-    matches_count: int = 10,
+    matches_count: int = DEFAULT_MATCH_COUNT,
     horizon_years: int = 5,
 ) -> ResearchResult:
     """

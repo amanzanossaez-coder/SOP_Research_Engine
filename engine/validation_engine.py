@@ -1,5 +1,6 @@
 from statistics import pstdev
 
+from core.constants import DEFAULT_MATCH_COUNT
 from models.confidence import Confidence
 from models.similarity import Similarity
 
@@ -8,7 +9,7 @@ class ValidationEngine:
 
     def coverage(self, matches: list[Similarity]) -> float:
 
-        return min(len(matches) / 10.0, 1.0)
+        return min(len(matches) / DEFAULT_MATCH_COUNT, 1.0)
 
     def consistency(
         self,

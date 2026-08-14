@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.94\
+**Version:** 1.95\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,10 +17,11 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-044.1 (2026-08-14). Nota RE-044.1: unificada la confianza
-categórica del Research Engine (Artículo 7) -- primera corrección de
-la auditoría contra la constitución de 12 artículos, iniciada esta
-tarde. No altera ninguna cifra de esta tabla:
+As of RE-044.2 (2026-08-14). Nota RE-044.2: centralizados los números
+mágicos sueltos del Research Engine (segunda mitad del Artículo 7:
+`MIN_DRAWDOWN` y el conteo por defecto de matches, antes repetidos de
+forma independiente en cinco sitios). No altera ninguna cifra de esta
+tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7988,6 +7989,73 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-044.2 — Research Engine: centralized scattered magic numbers (Articulo 7)
+
+Second fix of the audit against the Research Engine's 12-article
+founding constitution. Articulo 7's second clause: "los umbrales se
+definiran como constantes globales del sistema. Nunca existiran
+numeros magicos distribuidos por el codigo." Two numbers were found
+violating this, independently repeated rather than centralized:
+
+`MIN_DRAWDOWN = -0.10` lived in `engine/drawdown_engine.py`, and --
+found only by checking who else imports it before touching it -- is
+also imported directly from there by `engine/live_episode.py` and
+`engine/human_approval_state.py` (RE-032.4's own definition of market
+crisis depends on this exact constant). This is a load-bearing shared
+value across the Research Engine AND the SOP gates layer, not an
+internal detail.
+
+The default sample size of 10 historical matches was repeated as a
+bare literal, independently, in four places with no declared relation
+to each other: `engine/research_pipeline.py::build_research_result`'s
+`matches_count` default, `engine/validation_harness.py`'s `n_matches`
+default, `engine/dimension_diagnostic.py::dimension_forecast`'s `n`
+default, and `engine/validation_engine.py::coverage()`'s denominator
+(`len(matches) / 10.0`). They agreed by convention, not by design --
+nothing forced them to.
+
+Fix: both now live once in `core/constants.py` --
+`MIN_DRAWDOWN = -0.10` and `DEFAULT_MATCH_COUNT = 10` -- and every
+site above references the constant instead of a literal.
+`engine/drawdown_engine.py` re-exports `MIN_DRAWDOWN` unchanged
+(`from core.constants import MIN_DRAWDOWN`) specifically so
+`engine/live_episode.py` and `engine/human_approval_state.py`'s
+existing `from engine.drawdown_engine import MIN_DRAWDOWN` keeps
+working untouched -- backward compatibility over a wider, unnecessary
+refactor (Constitución del SOP, Artículo 14).
+
+What this does not authorize:
+
+-   No value changed -- `MIN_DRAWDOWN` is still -0.10,
+    `DEFAULT_MATCH_COUNT` is still 10. Pure centralization, zero
+    behavior change (confirmed: `run.py`'s printed Confianza reading
+    stayed `ALTA`, unchanged from RE-044.1).
+-   No other magic numbers addressed in this iteration (e.g.
+    `snapshot_engine.py`'s hardcoded `36` months / 3 years, noted in
+    the original audit but out of scope here -- not blocking, not
+    forgotten, just not this iteration's cut).
+-   `engine/live_episode.py` and `engine/human_approval_state.py` not
+    touched at all -- their existing import keeps resolving through
+    the re-export, by design.
+
+Boundary:
+
+-   Six files modified: `core/constants.py` (two new constants +
+    rationale), `engine/drawdown_engine.py` (definition replaced by
+    re-export), `engine/research_pipeline.py`,
+    `engine/validation_harness.py`, `engine/dimension_diagnostic.py`,
+    `engine/validation_engine.py` (literal replaced by import in
+    each).
+-   No Frozen Core component touched.
+-   Full `tests/verify_*.py` suite re-run, including specifically
+    `verify_live_episode.py` and `verify_human_approval_state.py`
+    (the two real consumers of the re-exported `MIN_DRAWDOWN`): both
+    pass unchanged. Same four pre-existing failures as always
+    (pandas/numpy pin mismatches, `verify_research_engine.py`'s known
+    tie-break ordering), nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-044.1 — Research Engine: unified categorical Confidence (Articulo 7)
 
 First fix of the audit against the Research Engine's own 12-article
@@ -9630,6 +9698,19 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.95
+
+-   RE-044.2: centralized scattered magic numbers (Articulo 7, second
+    clause). `MIN_DRAWDOWN` and the default 10-match sample size were
+    each repeated independently across up to five files. Both now
+    live once in `core/constants.py`; `engine/drawdown_engine.py`
+    re-exports `MIN_DRAWDOWN` unchanged so `engine/live_episode.py`
+    and `engine/human_approval_state.py` (which import it directly,
+    and which RE-032.4's market-crisis definition depends on) needed
+    no changes. Zero behavior change, confirmed by full test re-run
+    including both of those consumers specifically. Full details in
+    the Design Decision entry above (RE-044.2).
 
 ## Version 1.94
 
