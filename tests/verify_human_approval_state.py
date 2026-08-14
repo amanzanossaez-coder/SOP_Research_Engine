@@ -6,7 +6,13 @@ Human Approval State Verification
 RE-032.7 -- synthetic checks on _build_patrimonio_attestations() (row
 parsing, market_crisis_at_registration lookup), plus a real-pipeline
 check on build_local_human_approval_inputs() against the actual
-data/raw/human_approval_attestations.xlsx (empty today).
+data/raw/human_approval_attestations.xlsx.
+
+AMS carries one real attestation as of 2026-08-13 (Deploy Aggressively,
+first ever registered -> 14-day cooling-off, effective 2026-08-27).
+The state assertion below accepts either UNDER_COOLING_OFF or VALID so
+this test keeps passing once that date passes, without needing a
+revisit just because time moved on. AML remains empty.
 """
 
 from pathlib import Path
@@ -20,7 +26,12 @@ sys.path.insert(0, str(ROOT))
 
 
 from engine.gate_combination import DEPLOY_AGGRESSIVELY, DEPLOY_PARTIALLY, CONSERVE
-from engine.human_approval import HumanApprovalGate, MISSING
+from engine.human_approval import (
+    HumanApprovalGate,
+    MISSING,
+    UNDER_COOLING_OFF,
+    VALID,
+)
 from engine.human_approval_state import (
     _build_patrimonio_attestations,
     build_local_human_approval_inputs,
@@ -134,26 +145,39 @@ def main() -> None:
         False,
     )
 
-    # -- Loader: real file, both patrimonio tabs present, empty today --
+    # -- Loader: real file, both patrimonio tabs present. AML still --
+    # -- empty; AMS carries its first real attestation (2026-08-13). --
 
     raw = load_human_approval_raw()
     assert raw is not None, "real ledger file should load"
     assert_equal("raw_patrimonios", set(raw.keys()), {"AMS", "AML"})
-    for name, rows in raw.items():
-        assert_equal(f"raw_{name}_empty", rows, [])
+    assert_equal("raw_AML_empty", raw["AML"], [])
+    assert_equal("raw_AMS_count", len(raw["AMS"]), 1)
+    assert_equal(
+        "raw_AMS_first_posture", raw["AMS"][0]["postura"], DEPLOY_AGGRESSIVELY
+    )
 
-    # -- Full real pipeline: MISSING for both, since no attestation --
-    # -- has ever been registered --
+    # -- Full real pipeline: AML still MISSING (never registered). --
+    # -- AMS is under cooling-off or, once 2026-08-27 passes, VALID -- --
+    # -- either way it must no longer be MISSING, and must still be --
+    # -- blocked while under cooling-off. --
 
     real_inputs = build_local_human_approval_inputs()
     assert real_inputs is not None
     assert_equal("real_inputs_patrimonios", set(real_inputs.keys()), {"AMS", "AML"})
 
     gate = HumanApprovalGate()
-    for name, inputs in real_inputs.items():
-        result = gate.evaluate(inputs)
-        assert_equal(f"real_{name}_state", result.state, MISSING)
-        assert_equal(f"real_{name}_blocked", result.blocked, True)
+
+    aml_result = gate.evaluate(real_inputs["AML"])
+    assert_equal("real_AML_state", aml_result.state, MISSING)
+    assert_equal("real_AML_blocked", aml_result.blocked, True)
+
+    ams_result = gate.evaluate(real_inputs["AMS"])
+    assert ams_result.state in (UNDER_COOLING_OFF, VALID), (
+        f"real_AMS_state: expected under_cooling_off or valid, got {ams_result.state!r}"
+    )
+    if ams_result.state == UNDER_COOLING_OFF:
+        assert_equal("real_AMS_blocked_during_cooling_off", ams_result.blocked, True)
 
     print("HUMAN APPROVAL STATE : STABLE")
 

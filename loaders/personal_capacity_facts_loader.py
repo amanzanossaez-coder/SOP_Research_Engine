@@ -7,7 +7,11 @@ import openpyxl
 # other sheet is treated as one, automatically, per Armando's
 # requirement that new third-party patrimonios be added by adding a
 # tab, not by touching this file.
-RESERVED_SHEETS = {"Notas"}
+# RE-043.2 -- "Cajas" and "Proyecciones" (added 2026-08-13) are derived
+# views over AMS/AML, not a patrimonio themselves -- reserved for the
+# same reason "Notas" is, so audit_posture.py stops treating them as
+# one.
+RESERVED_SHEETS = {"Notas", "Cajas", "Proyecciones"}
 
 
 def load_personal_capacity_facts_raw(file_path=None):

@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.90\
+**Version:** 1.91\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-032.10 iteration C (2026-08-12):
+As of RE-043.2 (2026-08-13):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-032.10 iteration C (2026-08-12):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; corregido un vacío real de silencio en postura no reconocida encontrado en revisión crítica -- RE-041.8; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 75-80% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; corregido un fallo real de resolución de cadena encontrado en revisión crítica -- RE-032.9; autorización extraordinaria del 90% ya completa de punta a punta -- Excel con columna real, loader, wiring a Dry Powder Protocol -- RE-032.10 B+C; todavía sin datos reales cargados en ninguna pestaña, todavía sin wiring a run.py, manual operativo todavía sin actualizar para reflejar que ya es usable -- iteración D pendiente) |
+| Human Approval operativo real | 80-85% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en AMS 2026-08-13 -- Deploy Aggressively, bajo cooling-off de 14 días, efectiva 2026-08-27; AML todavía sin ninguna; todavía sin wiring a run.py, deliberado) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -9495,6 +9495,43 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.91
+
+-   RE-043.2: `loaders/personal_capacity_facts_loader.py`'s
+    `RESERVED_SHEETS` extended from `{"Notas"}` to
+    `{"Notas", "Cajas", "Proyecciones"}`. Found running
+    `audit_posture.py` for real for the first time since those two
+    tabs were added (2026-08-13, SOP-level work, not previously
+    exercised end-to-end): both were being auto-treated as
+    patrimonios, per the RE-043.1 convention that any non-reserved
+    sheet in `personal_capacity_facts.xlsx` is one. `Cajas` and
+    `Proyecciones` are derived views over AMS/AML, not a patrimonio --
+    reserved for the same reason `Notas` is. One-line fix; verified
+    `audit_posture.py` now lists only `AMS`/`AML` again, and
+    `tests/verify_personal_capacity_facts_gate.py` still passes
+    unchanged.
+-   First real Human Approval attestation loaded:
+    `data/raw/human_approval_attestations.xlsx`, `AMS`, 2026-08-13 --
+    `Deploy Aggressively`, no personal crisis declared, techo 90% no
+    autorizado. First-ever attestation for this patrimonio counts as a
+    tolerance increase from nothing, so it entered 14-day cooling-off
+    (not 30 -- no crisis declared), effective 2026-08-27. Verified via
+    `audit_posture.py`: `Human Approval state (AMS): under_cooling_off`,
+    `blocked: True`, `pending_increase` correctly shows the
+    2026-08-27 effective date. `AML` remains empty -- no attestation
+    registered for it yet.
+-   `tests/verify_human_approval_state.py` updated: the "real pipeline"
+    section no longer assumes both patrimonios are empty. `AML` keeps
+    asserting empty/`MISSING`. `AMS` now asserts the loaded row's
+    contents and that its gate state is either `UNDER_COOLING_OFF` or
+    `VALID` (not pinned to one, so the test does not go stale the
+    moment 2026-08-27 passes and the attestation naturally becomes
+    valid). Full `tests/verify_*.py` suite re-run: no new failures
+    beyond the same four pre-existing ones (runtime-pin mismatches on
+    `verify_baseline_harness.py` / `verify_secondary_baselines.py` /
+    `verify_validation_metrics.py`, and `verify_research_engine.py`'s
+    known tie-break ordering difference).
 
 ## Version 1.90
 
