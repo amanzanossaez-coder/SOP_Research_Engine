@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from models.evidence import Evidence
+from models.explanation import Explanation
 from models.similarity import Similarity
 from models.snapshot import Snapshot
 
@@ -22,9 +23,16 @@ class ResearchResult:
     It contains objective historical evidence and the selected
     historical matches that produced it.
 
-    It does not contain recommendations, portfolio decisions or
-    a global explanation object. ExplanationEngine is intentionally
-    excluded until it is rebuilt against the current Similarity model.
+    It does not contain recommendations or portfolio decisions.
+
+    RE-EXP.1 -- the global explanation object RE-027.2 excluded ("until
+    it is rebuilt against the current Similarity model") is back:
+    ExplanationEngine was audited, found broken (read an attribute
+    that never existed on the real Similarity model -- confirmed by
+    running it), fixed, and extended to cover Articulo 8's
+    contradicting-evidence requirement. See
+    engine/explanation_engine.py and models/explanation.py for what
+    changed.
 
     RE-044.4 -- Articulo 5 (Trazabilidad): "toda respuesta producida
     por el motor debera poder reconstruirse... datos utilizados,
@@ -57,6 +65,8 @@ class ResearchResult:
     matches: list[Similarity]
 
     evidence: Evidence
+
+    explanation: Explanation
 
     engine_name: str
 

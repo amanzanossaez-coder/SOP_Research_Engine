@@ -89,3 +89,23 @@ MIN_DRAWDOWN = -0.10
 # cada uno por su cuenta, sin relacion declarada -- coincidian por
 # convencion, no por diseno explicito.
 DEFAULT_MATCH_COUNT = 10
+
+# RE-EXP.1 -- Articulo 8 (Explicabilidad). Umbrales del ExplanationEngine,
+# reconectado y corregido esta iteracion (ver engine/explanation_engine.py).
+
+# Cuantas de las siete dimensiones de similitud (core/constants.py's
+# SIMILARITY_WEIGHTS) se muestran como "sostienen la analogia" y
+# cuantas como "la debilitan" -- top-N / bottom-N sobre el promedio de
+# cada dimension entre todos los matches. Heredado sin cambios del
+# comportamiento original (3 de 7): con menos de 6 dimensiones con
+# datos, los dos grupos pueden solaparse -- caso preexistente, no
+# introducido por esta iteracion.
+EXPLANATION_DIMENSION_SPLIT_COUNT = 3
+
+# Tope de precedentes disidentes a listar unicamente en el caso limite
+# de Evidence.median_return == 0.0 exacto (sin signo claro -- ver
+# ExplanationEngine._contradicting_precedents). En los dos casos con
+# signo claro (mediana positiva o negativa) se listan TODOS los
+# precedentes que contradicen, sin tope -- ese criterio es binario, no
+# un ranking que necesite recortarse.
+EXPLANATION_MAX_CONTRADICTING_PRECEDENTS = 3

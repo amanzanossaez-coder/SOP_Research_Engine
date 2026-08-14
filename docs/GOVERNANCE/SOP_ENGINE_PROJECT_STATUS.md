@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.97\
+**Version:** 1.98\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,10 +17,12 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-044.4 (2026-08-14). Nota RE-044.4: `ResearchResult` ahora
-lleva metadatos de trazabilidad (Artículo 5) -- cuarta corrección de
-la auditoría contra la constitución de 12 artículos. No altera
-ninguna cifra de esta tabla:
+As of RE-EXP.1 (2026-08-14). Nota RE-EXP.1: `ExplanationEngine`
+reconectado y corregido -- estaba roto (`AttributeError` confirmado
+en ejecución real), no solo desconectado -- y extendido para cumplir
+el Artículo 8 (evidencia que sostiene y evidencia que contradice).
+Quinta y última corrección de la auditoría de esta tarde contra la
+constitución de 12 artículos. No altera ninguna cifra de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7988,6 +7990,120 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-EXP.1 — Research Engine: ExplanationEngine fixed, reconnected, extended to contradicting evidence (Articulo 8)
+
+Fifth and final fix of the audit against the Research Engine's
+12-article founding constitution, opened this afternoon. Armando's own
+framing, correct and kept: this is a functional correction of
+explicabilidad, not a refactor -- numbered RE-EXP.1 at his explicit
+request, a separate sequence from RE-044.x because this is a distinct
+functional defect (a crash) plus a constitutional gap (Articulo 8),
+not another instance of the "found a stale reference, centralized a
+constant" pattern the RE-044.x entries share.
+
+`ExplanationEngine.build()` read `first.event.drawdown_similarity`.
+Confirmed by running it against real data before proposing anything:
+`AttributeError: 'SimilarityExplanation' object has no attribute
+'drawdown_similarity'`. The real object flowing through
+`Similarity.event/context/outcome` has always been
+`SimilarityExplanation` (title, score, items) -- `models/similarity.py`
+even had the wrong type hint (`Explanation`) for these three fields,
+corrected in the same pass. It also only ever inspected
+`self.matches[0]`, never the full sample, and had no concept of
+contradicting evidence at all -- only "strongest/weakest similarity
+dimension of the single best match," which is a similarity
+diagnostic, not evidence that agrees or disagrees with a conclusion.
+None of this was caught earlier because `ResearchResult` never wired
+the engine in (RE-027.2's deliberate exclusion).
+
+Presented as a choice: (A) fix the crash only, keep the existing
+narrow scope, or (B) fix the crash and build real Articulo 8
+compliance -- supporting dimensions, weak dimensions, AND genuine
+contradicting precedents. Armando chose B and fixed the exact scope
+himself:
+
+1.  `ExplanationEngine` reads the real flat fields on `Similarity`
+    (`drawdown_score`, `duration_score`, ... `recovery_score`) instead
+    of the broken `.event.drawdown_similarity` path.
+2.  Averaged across every match in the sample, not just the first.
+3.  Renamed `strongest_dimensions`/`weakest_dimensions` to
+    `supporting_similarity_dimensions`/`weak_similarity_dimensions` --
+    honest about what they measure (analogy quality, not evidentiary
+    agreement).
+4.  New: `contradicting_precedents`. If `Evidence.median_return` is
+    positive, lists matches whose actual return at the same horizon
+    was negative; if negative, lists the positive ones; if the median
+    has no clear sign (`== 0.0` exactly -- an edge case, unlikely with
+    continuous real returns, but Articulo 8 requires an explicit rule,
+    not a silent gap), lists the matches furthest from it, capped at
+    `EXPLANATION_MAX_CONTRADICTING_PRECEDENTS`. When no true
+    counter-examples exist, the notes say so explicitly instead of
+    fabricating one -- verified directly (see Boundary).
+5.  Fully isolated: `EvidenceEngine` untouched, match selection
+    untouched, evidence calculation untouched.
+   `ExplanationEngine.__init__` now also takes `evidence` (previously
+    only `matches`) specifically to read
+    `Evidence.median_return`/`horizon_years` already computed by
+    `EvidenceEngine` rather than recomputing an independent median
+    here -- same single-source-of-truth reasoning as RE-044.1's
+    Confidence unification, not scope creep: it does not touch how
+    `Evidence` computes anything, only what `ExplanationEngine`
+    consumes from it.
+
+Reconnected: `ResearchResult` gained an `explanation: Explanation`
+field, populated by `build_research_result()` -- closing RE-027.2's
+"intentionally excluded until it is rebuilt" note for good. Confirmed
+zero other construction sites for `ExplanationEngine` existed anywhere
+in the repo before changing its constructor signature (repo-wide
+grep), so no other caller needed updating.
+
+What this does not authorize:
+
+-   No change to `EvidenceEngine`, `SimilarityEngine`, or how matches
+    are selected -- `ExplanationEngine` only consumes their output.
+-   `run.py`'s printed output unchanged -- the explanation is now
+    available on `ResearchResult.explanation` but not yet displayed
+    anywhere. Deliberately out of scope for this iteration; a later,
+    separate step if wanted.
+-   The dimension supporting/weak split (top-3/bottom-3 of up to 7)
+    inherits a pre-existing edge case unchanged: with fewer than 6
+    dimensions carrying data, the two groups can overlap. Not
+    introduced by this iteration, not fixed by it either.
+
+Boundary:
+
+-   Five files modified: `core/constants.py` (two new named
+    constants), `models/similarity.py` (type hint fix,
+    `Explanation` -> `SimilarityExplanation`), `models/explanation.py`
+    (new `ContradictingPrecedent` dataclass, `Explanation` fields
+    renamed/added), `engine/explanation_engine.py` (rewritten:
+    fixed data access, averages over the full sample, new
+    contradicting-precedent logic), `engine/research_pipeline.py`
+    (reconnects `ExplanationEngine`, adds `explanation` to
+    `ResearchResult`), `models/research_result.py` (new field +
+    updated docstring).
+-   No Frozen Core component touched.
+-   Verified by direct execution before considering this done, not
+    just by reading: (1) real pipeline run -- zero crash, produced
+    `supporting_similarity_dimensions`, `weak_similarity_dimensions`,
+    and one real `contradicting_precedents` entry (the 1998.09
+    episode, actual return -1.09% against a sample median of +10.19%);
+    (2) four synthetic cases exercising every branch of
+    `_contradicting_precedents()` -- negative median, no evidence
+    available, zero counter-examples found, and the median-exactly-zero
+    fallback -- all produced the expected explicit message, none
+    crashed. Full `tests/verify_*.py` suite re-run: same four
+    pre-existing failures, nothing new; `run.py` unchanged
+    (`Confianza: ALTA`).
+
+This closes the full afternoon audit: Articulo 7 (RE-044.1, RE-044.2),
+Articulo 3 (RE-044.3), Articulo 5 (RE-044.4), Articulo 8 (RE-EXP.1).
+Every violation found in the original audit against the Research
+Engine's 12-article founding constitution has a corresponding fix,
+each proposed as a choice and decided by Armando, not assumed.
+
+------------------------------------------------------------------------
+
 ## RE-044.4 — Research Engine: traceability metadata on ResearchResult (Articulo 5)
 
 Fourth fix of the audit against the Research Engine's 12-article
@@ -9838,6 +9954,24 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.98
+
+-   RE-EXP.1: `ExplanationEngine` fixed (was crashing --
+    `AttributeError`, confirmed by running it, not just reading it),
+    reconnected to `ResearchResult` (closing RE-027.2's exclusion),
+    and extended to cover Articulo 8's contradicting-evidence
+    requirement -- new `contradicting_precedents`, real historical
+    matches whose actual return disagreed with `Evidence.median_return`.
+    `models/similarity.py`'s stale type hint
+    (`Explanation` -> `SimilarityExplanation`) fixed in the same pass.
+    Armando's own scope, verified by direct execution: real pipeline
+    run (zero crash, one real dissenting precedent found) plus four
+    synthetic cases covering every branch. Closes the full afternoon
+    audit against the Research Engine's 12-article constitution.
+    Full details in the Design Decision entry above (RE-EXP.1). Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new; `run.py` unchanged.
 
 ## Version 1.97
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from models.observable_episode import ObservableEpisode
-from models.explanation import Explanation
+from models.similarity_explanation import SimilarityExplanation
 
 
 @dataclass
@@ -15,15 +15,23 @@ class Similarity:
     siguiera diciendo Episode, un Episode canonico pasaria el chequeo
     de tipos exactamente igual que un ObservableEpisode, y esa es la
     ambiguedad que se decidio hacer irrepresentable.
+
+    RE-EXP.1 -- event/context/outcome estaban tipados como
+    `Explanation` (models/explanation.py), que nunca fue el objeto que
+    circula en realidad. El runtime siempre entrego
+    `SimilarityExplanation` (title, score, items) -- confirmado
+    ejecutando el pipeline real. El type hint no rompia nada (Python
+    no lo fuerza), pero era una afirmacion de trazabilidad falsa;
+    corregido para que diga lo que de verdad pasa por aqui.
     """
 
     episode: ObservableEpisode
 
     score: float
 
-    event: Explanation
-    context: Explanation
-    outcome: Explanation
+    event: SimilarityExplanation
+    context: SimilarityExplanation
+    outcome: SimilarityExplanation
 
     # Evento
 

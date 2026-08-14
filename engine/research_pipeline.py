@@ -3,6 +3,7 @@ from datetime import date
 from core.constants import DEFAULT_MATCH_COUNT
 from core.version import ENGINE_NAME, ENGINE_VERSION
 from engine.evidence_engine import EvidenceEngine
+from engine.explanation_engine import ExplanationEngine
 from engine.observable_universe import ObservableUniverse
 from engine.similarity_engine import SimilarityEngine
 from engine.snapshot_engine import SnapshotEngine
@@ -43,10 +44,16 @@ def build_research_result(
         years=horizon_years,
     )
 
+    # RE-EXP.1 -- reconecta ExplanationEngine, excluido desde RE-027.2.
+    # Recibe evidence (ademas de matches) para leer median_return/
+    # horizon_years ya calculados, sin recalcularlos por su cuenta.
+    explanation = ExplanationEngine(matches, evidence).build()
+
     return ResearchResult(
         snapshot=snapshot,
         matches=matches,
         evidence=evidence,
+        explanation=explanation,
         # RE-044.4 -- Articulo 5 (Trazabilidad). engine_name/
         # engine_version vienen de core/version.py, no se reinventan
         # aqui. matches_count/horizon_years son los parametros reales
