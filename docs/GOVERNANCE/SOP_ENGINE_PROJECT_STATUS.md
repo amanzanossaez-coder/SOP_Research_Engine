@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.91\
+**Version:** 1.92\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,7 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-043.2 (2026-08-13):
+As of RE-043.3 (2026-08-13):
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -32,7 +32,7 @@ As of RE-043.2 (2026-08-13):
 | Dry Powder -- rastreo de episodio en vivo | 85-90% (los siete campos de DryPowderProtocolInputs computables; corregido un vacío real de silencio en postura no reconocida encontrado en revisión crítica -- RE-041.8; falta solo wiring a run.py/DecisionEngine, deliberadamente no autorizado) |
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
-| Human Approval operativo real | 80-85% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en AMS 2026-08-13 -- Deploy Aggressively, bajo cooling-off de 14 días, efectiva 2026-08-27; AML todavía sin ninguna; todavía sin wiring a run.py, deliberado) |
+| Human Approval operativo real | 85-90% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en ambos patrimonios 2026-08-13 -- AMS Deploy Aggressively bajo cooling-off de 14 días hasta 2026-08-27, AML Conserve vigente de inmediato al no ser subida de tolerancia respecto al suelo implícito; todavía sin wiring a run.py, deliberado) |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -9495,6 +9495,25 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.92
+
+-   First real Human Approval attestation loaded for `AML`:
+    2026-08-13, `Conserve`, no personal crisis declared, techo 90% not
+    applicable (only meaningful for `Deploy Aggressively`). Unlike
+    AMS's `Deploy Aggressively` attestation, `Conserve` is the
+    implicit floor -- not a tolerance increase from nothing, so the
+    cooling-off rule does not apply. Verified via `audit_posture.py`:
+    `Human Approval state (AML): valid`, `blocked: False`,
+    `effective_posture_ceiling: Conserve`, explanation confirms "does
+    not increase tolerance relative to the implicit Conserve baseline
+    -- applies immediately, no cooling-off". Both patrimonios now
+    carry a real, non-empty attestation history for the first time.
+-   `tests/verify_human_approval_state.py` updated again: `AML`'s
+    "real pipeline" assertions moved from asserting `MISSING`/empty to
+    asserting `VALID`/not blocked/`Conserve`, matching the loaded row.
+    Unused `MISSING` import dropped. Full suite re-run: same four
+    pre-existing failures, nothing new.
 
 ## Version 1.91
 

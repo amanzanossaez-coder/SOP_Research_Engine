@@ -28,7 +28,6 @@ sys.path.insert(0, str(ROOT))
 from engine.gate_combination import DEPLOY_AGGRESSIVELY, DEPLOY_PARTIALLY, CONSERVE
 from engine.human_approval import (
     HumanApprovalGate,
-    MISSING,
     UNDER_COOLING_OFF,
     VALID,
 )
@@ -145,22 +144,25 @@ def main() -> None:
         False,
     )
 
-    # -- Loader: real file, both patrimonio tabs present. AML still --
-    # -- empty; AMS carries its first real attestation (2026-08-13). --
+    # -- Loader: real file, both patrimonio tabs present, both carry --
+    # -- their first real attestation (2026-08-13): AMS Deploy --
+    # -- Aggressively, AML Conserve. --
 
     raw = load_human_approval_raw()
     assert raw is not None, "real ledger file should load"
     assert_equal("raw_patrimonios", set(raw.keys()), {"AMS", "AML"})
-    assert_equal("raw_AML_empty", raw["AML"], [])
     assert_equal("raw_AMS_count", len(raw["AMS"]), 1)
     assert_equal(
         "raw_AMS_first_posture", raw["AMS"][0]["postura"], DEPLOY_AGGRESSIVELY
     )
+    assert_equal("raw_AML_count", len(raw["AML"]), 1)
+    assert_equal("raw_AML_first_posture", raw["AML"][0]["postura"], CONSERVE)
 
-    # -- Full real pipeline: AML still MISSING (never registered). --
-    # -- AMS is under cooling-off or, once 2026-08-27 passes, VALID -- --
-    # -- either way it must no longer be MISSING, and must still be --
-    # -- blocked while under cooling-off. --
+    # -- Full real pipeline. AML's first attestation is Conserve, the --
+    # -- implicit floor -- not a tolerance increase, so it applies --
+    # -- immediately: VALID, not blocked. AMS's is Deploy Aggressively, --
+    # -- a real increase from nothing, so it is under_cooling_off or, --
+    # -- once 2026-08-27 passes, VALID -- either way no longer MISSING. --
 
     real_inputs = build_local_human_approval_inputs()
     assert real_inputs is not None
@@ -169,8 +171,11 @@ def main() -> None:
     gate = HumanApprovalGate()
 
     aml_result = gate.evaluate(real_inputs["AML"])
-    assert_equal("real_AML_state", aml_result.state, MISSING)
-    assert_equal("real_AML_blocked", aml_result.blocked, True)
+    assert_equal("real_AML_state", aml_result.state, VALID)
+    assert_equal("real_AML_blocked", aml_result.blocked, False)
+    assert_equal(
+        "real_AML_effective_ceiling", aml_result.effective_posture_ceiling, CONSERVE
+    )
 
     ams_result = gate.evaluate(real_inputs["AMS"])
     assert ams_result.state in (UNDER_COOLING_OFF, VALID), (

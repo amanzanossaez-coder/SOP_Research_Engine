@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.8\
+**Versión:** 1.9\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -215,7 +215,7 @@ aplicada al patrimonio completo.
 | Protocolo | Gobierna | Estado |
 |---|---|---|
 | **Dry Powder Protocol** | Convertir liquidez ociosa (Caja Seguridad) en capital invertido durante un episodio de caída | 85-90% aislado. Cuatro reglas completas, techo extraordinario del 90% vía Human Approval ya calculado por fórmula (RE-032.10). Sin wiring a `run.py`/`DecisionEngine`, deliberado. |
-| **Human Approval** | Consentimiento humano vigente, independiente de si los datos permiten actuar | 80-85% operativo real. Chain-resolution completa, cooling-off 14/30 días, validez 90 días, extensión propia de 30 días para el techo del 90%. Primera atestación real cargada en AMS (2026-08-13, Deploy Aggressively, bajo cooling-off hasta 2026-08-27). AML todavía sin ninguna. |
+| **Human Approval** | Consentimiento humano vigente, independiente de si los datos permiten actuar | 85-90% operativo real. Chain-resolution completa, cooling-off 14/30 días, validez 90 días, extensión propia de 30 días para el techo del 90%. Primera atestación real en ambos patrimonios (2026-08-13): AMS Deploy Aggressively, bajo cooling-off hasta 2026-08-27; AML Conserve, vigente de inmediato (no es subida de tolerancia). |
 | **Portfolio Reallocation Protocol** | Vender un activo de riesgo del Patrimonio Financiero para comprar otro (rotación **dentro** del Patrimonio Financiero, nunca hacia Patrimonio de Uso) | 0-5%. Sin reglas, sin código, sin Excel. Ver Sección 6. |
 
 Los protocolos son prerrequisitos independientes entre sí — ninguno
@@ -276,7 +276,7 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 |---|---|
 | `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula, con % de cada caja sobre el total (control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` congela una fecha e importe de referencia de Caja Motor (no enlazados por fórmula a `Cajas` — solo cambian con actualización explícita), calcula la trayectoria esperada a 5/10/15 años desde ese punto fijo bajo la hipótesis base v1, y añade una tabla de Seguimiento donde se registra el saldo real observado en fechas de control futuras frente a lo que la trayectoria esperaba — así se puede ver si se va por delante o por detrás, en vez de comparar el escenario contra sí mismo cada vez. Caja Motor no tiene objetivo numérico fijo (decisión 2026-08-13, Sección 2) — esta hoja es el mecanismo de seguimiento, no un sustituto de una cifra objetivo. |
 | `dry_powder_ledger.xlsx` | Vacío. Sin episodios de caída registrados todavía. |
-| `human_approval_attestations.xlsx` | AMS con una atestación real (2026-08-13). AML vacío todavía. |
+| `human_approval_attestations.xlsx` | Ambos patrimonios con una atestación real (2026-08-13): AMS Deploy Aggressively (bajo cooling-off), AML Conserve (vigente). |
 | `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
 
 **Scripts operativos:** `audit_posture.py` (dry-run de lectura,
