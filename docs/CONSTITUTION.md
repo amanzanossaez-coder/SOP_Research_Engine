@@ -1,7 +1,7 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.9\
-**Última actualización:** 2026-08-13
+**Versión:** 1.10\
+**Última actualización:** 2026-08-14
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
 > versiones anteriores de `CONSTITUTION.md`, `PROJECT_STATE.md`,
@@ -102,7 +102,11 @@ numérico fijo — ver más abajo.
 
 **Patrimonio de Uso.** Su propósito es la utilidad vital y la calidad
 de vida. No se mide por rentabilidad financiera y el SOP no impone
-puertas automáticas sobre él.
+puertas automáticas sobre él. Por eso mismo, no vive en
+`personal_capacity_facts.xlsx` — ese archivo alimenta el Personal
+Capacity Facts Gate, que solo gobierna Patrimonio Financiero.
+Verificado el 2026-08-14: la vivienda habitual no aparece en ninguna
+hoja de AMS/AML, y esa ausencia es correcta, no un hueco de datos.
 
 **Patrimonio de Consumo — eliminado como categoría.** Coches, relojes,
 vacaciones u otros gastos de disfrute son consumo. No son asignación
@@ -251,7 +255,7 @@ alcance en todo el proyecto.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v1.90 a fecha de este documento).
+(v1.92 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -288,7 +292,7 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
 
 - `docs/CONSTITUTION.md` — este documento.
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v1.90.
+  Research Engine, v1.92.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 
@@ -303,9 +307,6 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
   fijada en esta Constitución. Se usa en el momento de una decisión
   real, no como proyección anticipada — ver "Caja Motor: sin objetivo
   numérico fijo" (decisión 2026-08-13).
-- Si `personal_capacity_facts.xlsx` ya considera la vivienda habitual
-  en algún cálculo existente — sin verificar todavía, para no dar por
-  hecho una respuesta.
 - El congelado de `Proyecciones` (fecha de referencia + importes de
   Caja Motor) está fijado provisionalmente a 2026-08-13. Sustituirlo
   por el cierre a 31/12/2026 cuando esté disponible, para anclar la
