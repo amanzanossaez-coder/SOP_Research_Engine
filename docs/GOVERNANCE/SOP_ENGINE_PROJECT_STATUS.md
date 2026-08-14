@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.95\
+**Version:** 1.96\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,11 +17,11 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-044.2 (2026-08-14). Nota RE-044.2: centralizados los números
-mágicos sueltos del Research Engine (segunda mitad del Artículo 7:
-`MIN_DRAWDOWN` y el conteo por defecto de matches, antes repetidos de
-forma independiente en cinco sitios). No altera ninguna cifra de esta
-tabla:
+As of RE-044.3 (2026-08-14). Nota RE-044.3: retirada deliberada de
+arquitectura muerta y rota (`DatasetBuilder` + la lógica estadística
+antigua de `models/dataset.py`, Artículo 3) -- tercera corrección de
+la auditoría contra la constitución de 12 artículos. No altera
+ninguna cifra de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7989,6 +7989,76 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-044.3 — Research Engine: deliberate removal of dead, broken architecture (Articulo 3)
+
+Third fix of the audit against the Research Engine's 12-article
+founding constitution. Armando's framing, kept verbatim because it is
+the correct one: this is not cosmetic cleanup, it is retirada de
+arquitectura muerta y peligrosa -- not a refactor.
+
+`models/dataset.py`'s `Dataset` carried ten methods (two filters,
+eight statistics: averages and positive-return probabilities at
+1/3/5/10 years) with zero call sites anywhere in the real pipeline --
+confirmed by repo-wide grep before touching anything. Almost
+certainly a leftover from the `ProbabilityEngine` stage, which
+`DecisionEngine`'s own docstring says "desaparece de este flujo por
+completo" (RE-024.2), superseded by `EvidenceEngine`/`Evidence`. A
+model class computing statistics is itself an Articulo 3 violation
+(Modelos represents, Motor calculates) independent of whether the
+methods were ever called.
+
+`core/dataset_builder.py`'s `DatasetBuilder` was worse than unused --
+it was broken two different ways. It built `Episode` objects with
+fields (`date`, `price`, `cape`...) that do not match the real
+`Episode` dataclass (`peak_index`, `bottom_index`, `drawdown`...,
+established since `drawdown_engine.py`'s `filter_episodes()`), and
+separately called `Dataset(episodes)` positionally against a
+dataclass requiring two fields (`data`, `episodes`) -- binding the
+episode list to the `data` parameter and leaving `episodes` unfilled.
+Two independent `TypeError`s waiting for the first caller. Nothing
+calls it; the real pipeline builds `Dataset` directly in
+`drawdown_engine.py:312`. Armando's own words on why this matters more
+than plain dead code: "no solo está muerto: está roto. Eso es peor
+que muerto, porque invita a usar una ruta que parece oficial y falla."
+
+Decision: remove, don't repair, don't relocate. Presented as a choice
+(A: remove / B: fix DatasetBuilder + move the ten methods to a new
+engine) -- Armando chose A with his own explicit acceptance criteria:
+real pipeline keeps passing, `drawdown_engine.py` keeps building
+`Dataset` directly, no broken call sites (there were none to begin
+with), no new `dataset_engine.py` introduced, `DatasetBuilder` not
+repaired. Rebuilding unused logic against an architecture it predates,
+with no real consumer waiting, is the same pattern already rejected
+this project for X/Y/Z and the calculador de impacto temporal
+(Articulo 9, Parsimonia) -- Armando's own reasoning, not just mine.
+
+What this does not authorize:
+
+-   No new `engine/dataset_engine.py` or equivalent -- if this logic
+    is needed later, it gets rebuilt against Episode's current shape
+    with a real consumer from the first commit, not resurrected as-is.
+-   `drawdown_engine.py` untouched -- already built `Dataset` directly,
+    never depended on `DatasetBuilder`.
+-   No change to `Episode`, `Context`, or any other model.
+
+Boundary:
+
+-   `models/dataset.py` rewritten: `Dataset` is now only the
+    dataclass (`data`, `episodes`), with a docstring explaining what
+    was removed and why, and what a future reimplementation would owe
+    (real consumer, current Episode shape).
+-   `core/dataset_builder.py` deleted.
+-   `tests/verify_core.py`: removed the one line that checked
+    `core/dataset_builder.py` existed -- it was a pure file-existence
+    check, never exercised the broken code, so removing it doesn't
+    lower real coverage of anything that worked.
+-   No Frozen Core component touched.
+-   Full `tests/verify_*.py` suite re-run: same four pre-existing
+    failures as always, nothing new. `run.py` re-run directly:
+    unchanged output, `Confianza: ALTA` as after RE-044.1/RE-044.2.
+
+------------------------------------------------------------------------
+
 ## RE-044.2 — Research Engine: centralized scattered magic numbers (Articulo 7)
 
 Second fix of the audit against the Research Engine's 12-article
@@ -9698,6 +9768,21 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 1.96
+
+-   RE-044.3: removed dead, broken architecture (Articulo 3) --
+    `models/dataset.py`'s ten unused statistical/filter methods
+    (leftover from the retired `ProbabilityEngine` stage) and
+    `core/dataset_builder.py`'s `DatasetBuilder`, which was not just
+    unused but broken two independent ways (wrong `Episode` fields,
+    wrong `Dataset` constructor call). Armando's explicit decision:
+    remove, don't repair, don't relocate -- rebuilding logic with no
+    real consumer is the same pattern already rejected for X/Y/Z.
+    `tests/verify_core.py`'s existence-only check for the deleted file
+    removed. Full details in the Design Decision entry above
+    (RE-044.3). Full `tests/verify_*.py` suite re-run: same four
+    pre-existing failures, nothing new; `run.py` unchanged.
 
 ## Version 1.95
 
