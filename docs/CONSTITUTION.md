@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.5\
+**Versión:** 1.6\
 **Última actualización:** 2026-08-13
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -75,9 +75,9 @@ Patrimonio Total
    ├── Patrimonio Financiero
    │      Gobernado por reglas verificables, gates y protocolos del SOP.
    │
-   │      Objetivo cuantificado de Caja Motor:
-   │      X€ a 5 años / Y€ a 10 años / Z€ a 15 años
-   │      (pendiente: cifras concretas)
+   │      Caja Motor: sin objetivo numérico fijo.
+   │      Trayectoria esperada + seguimiento (Proyecciones), impacto
+   │      de extracciones calculado bajo demanda ("El puente").
    │
    │      Arquitectura interna:
    │      Caja Seguridad · Caja Motor · Caja Rentas Pasivas
@@ -96,9 +96,9 @@ Patrimonio Total
 
 **Patrimonio Financiero.** Es la parte del patrimonio que el SOP
 gobierna directamente. Su misión es preservar capital real y sostener
-la libertad futura. Los objetivos cuantificados a 5, 10 y 15 años se
-fijan sobre Caja Motor, no sobre el Patrimonio Financiero completo —
-ver más abajo.
+la libertad futura. Caja Motor, su motor de crecimiento a largo plazo,
+se gobierna por seguimiento de trayectoria, no por un objetivo
+numérico fijo — ver más abajo.
 
 **Patrimonio de Uso.** Su propósito es la utilidad vital y la calidad
 de vida. No se mide por rentabilidad financiera y el SOP no impone
@@ -131,19 +131,30 @@ Puede tomar como referencia información del Research Engine, pero no
 queda gobernado automáticamente por la expectativa del Assessment
 Engine.
 
-### Objetivo de Caja Motor e hipótesis de rentabilidad
+### Caja Motor: sin objetivo numérico fijo, seguimiento de trayectoria
 
-Los objetivos cuantificados X/Y/Z se fijan por necesidad patrimonial:
-cuánto capital exige sostener la vida elegida y la libertad futura.
+Caja Motor no financia el gasto corriente — de eso se encargan Caja
+Seguridad y Caja Rentas Pasivas. Su función es componer a largo plazo,
+disponible para extracciones puntuales hacia Patrimonio de Uso cuando
+Armando decida usarlas.
 
-No se fijan proyectando el mercado hacia delante. La proyección solo
-sirve para evaluar si la trayectoria actual va camino de cumplir esos
-objetivos.
+Se evaluó (2026-08-13) fijar objetivos cuantificados X/Y/Z a 5/10/15
+años por necesidad patrimonial, anclados a posibles extracciones
+futuras conocidas. Se descartó: encadenar precio futuro, momento futuro
+y retorno futuro en una sola cifra a 15 años acumula tres
+incertidumbres independientes y produce una falsa precisión — el mismo
+problema que ya se había evitado al no fijar objetivos por proyección
+de mercado.
 
-En esta versión, X/Y/Z se definen como objetivos de Caja Motor, no como
-objetivos del Patrimonio Financiero completo. Caja Seguridad y Caja
-Rentas Pasivas cumplen funciones distintas y se gobiernan por sus
-propias reglas.
+En su lugar, Caja Motor se gobierna así: la hipótesis base v1 (abajo)
+define la trayectoria esperada y su seguimiento (`Proyecciones`, hojas
+Trayectoria esperada y Seguimiento) — sin objetivo externo, solo
+comprobación de ritmo. Cuando una extracción hacia Patrimonio de Uso
+se convierta en una decisión real, no una posibilidad, su impacto se
+calcula entonces, con el saldo y el precio reales de ese momento — ver
+"El puente" arriba y el calculador de impacto temporal pendiente
+(Sección 6). Caja Seguridad y Caja Rentas Pasivas cumplen funciones
+distintas y se gobiernan por sus propias reglas.
 
 **Hipótesis base v1 de rentabilidad:** 7% real anualizado, equivalente
 aproximado a 9,4% nominal, usando como referencia la serie total return
@@ -258,7 +269,7 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 
 | Archivo | Estado |
 |---|---|
-| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula, con % de cada caja sobre el total (control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` congela una fecha e importe de referencia de Caja Motor (no enlazados por fórmula a `Cajas` — solo cambian con actualización explícita), calcula la trayectoria esperada a 5/10/15 años desde ese punto fijo bajo la hipótesis base v1, y añade una tabla de Seguimiento donde se registra el saldo real observado en fechas de control futuras frente a lo que la trayectoria esperaba — así se puede ver si se va por delante o por detrás, en vez de comparar el escenario contra sí mismo cada vez. Ilustrativo; no sustituye a los objetivos X/Y/Z todavía pendientes. |
+| `personal_capacity_facts.xlsx` | **Con datos reales cargados.** AMS resuelve `adequate` (nueve hechos verificables, cero rupturas); AML resuelve `constrained` (`liquidity_adequate` con ruptura confirmada, hallazgo real). Incluye dos pestañas adicionales, `Cajas` y `Proyecciones` (añadidas 2026-08-13): `Cajas` clasifica cada partida de AMS/AML en Seguridad/Motor/Rentas Pasivas por fórmula, con % de cada caja sobre el total (control de cuadre a 0€ frente al total patrimonial de cada hoja); `Proyecciones` congela una fecha e importe de referencia de Caja Motor (no enlazados por fórmula a `Cajas` — solo cambian con actualización explícita), calcula la trayectoria esperada a 5/10/15 años desde ese punto fijo bajo la hipótesis base v1, y añade una tabla de Seguimiento donde se registra el saldo real observado en fechas de control futuras frente a lo que la trayectoria esperaba — así se puede ver si se va por delante o por detrás, en vez de comparar el escenario contra sí mismo cada vez. Caja Motor no tiene objetivo numérico fijo (decisión 2026-08-13, Sección 2) — esta hoja es el mecanismo de seguimiento, no un sustituto de una cifra objetivo. |
 | `dry_powder_ledger.xlsx` | Vacío. Sin episodios de caída registrados todavía. |
 | `human_approval_attestations.xlsx` | Vacío. Sin atestaciones registradas todavía. |
 | `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
@@ -282,11 +293,11 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
 
 **Arquitectura patrimonial (Sección 2):**
 
-- Definir los objetivos cuantificados X/Y/Z de Caja Motor a 5, 10 y 15
-  años, por necesidad patrimonial.
 - Construir el calculador de impacto temporal para extracciones desde
   Caja Motor hacia Patrimonio de Uso, usando la hipótesis base v1
-  fijada en esta Constitución.
+  fijada en esta Constitución. Se usa en el momento de una decisión
+  real, no como proyección anticipada — ver "Caja Motor: sin objetivo
+  numérico fijo" (decisión 2026-08-13).
 - Si `personal_capacity_facts.xlsx` ya considera la vivienda habitual
   en algún cálculo existente — sin verificar todavía, para no dar por
   hecho una respuesta.
