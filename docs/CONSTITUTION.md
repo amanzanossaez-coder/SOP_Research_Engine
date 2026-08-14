@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 1.10\
+**Versión:** 1.12\
 **Última actualización:** 2026-08-14
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -255,7 +255,7 @@ alcance en todo el proyecto.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v1.92 a fecha de este documento).
+(v1.98 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -291,8 +291,14 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada).
 **Documentación:**
 
 - `docs/CONSTITUTION.md` — este documento.
+- `docs/CONSTITUTION_RESEARCH_ENGINE.md` — los doce artículos que
+  gobiernan el Research Engine (v1.0, guardada como archivo el
+  2026-08-14 tras existir solo en conversación desde el inicio del
+  proyecto). Auditada ese mismo día contra el código real: cinco
+  violaciones encontradas y corregidas (`docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`,
+  RE-044.1 a RE-EXP.1).
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v1.92.
+  Research Engine, v1.98.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 

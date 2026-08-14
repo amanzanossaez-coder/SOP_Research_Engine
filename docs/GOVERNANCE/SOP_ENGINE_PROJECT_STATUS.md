@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 1.98\
+**Version:** 2.00\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,12 +17,10 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-EXP.1 (2026-08-14). Nota RE-EXP.1: `ExplanationEngine`
-reconectado y corregido -- estaba roto (`AttributeError` confirmado
-en ejecución real), no solo desconectado -- y extendido para cumplir
-el Artículo 8 (evidencia que sostiene y evidencia que contradice).
-Quinta y última corrección de la auditoría de esta tarde contra la
-constitución de 12 artículos. No altera ninguna cifra de esta tabla:
+As of RE-044.6 (2026-08-14). Nota RE-044.6: primera revisión real de
+`docs/CONSTITUTION_RESEARCH_ENGINE.md` (v1.0 -> v1.1) tras revisión de
+Armando -- cinco matices de redacción, ningún cambio de espíritu. No
+altera ninguna cifra de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7990,6 +7988,124 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-044.6 — Research Engine: first real revision of the founding constitution (v1.0 -> v1.1)
+
+Armando reviewed `docs/CONSTITUTION_RESEARCH_ENGINE.md` right after it
+was saved (RE-044.5) and marked five things -- his own framing: "no lo
+reescribiría, solo una pasada quirúrgica." None change the spirit of
+any article; all sharpen wording that today's actual practice had
+already tested against.
+
+1.  Relación con `docs/CONSTITUTION.md` added at the top: on conflict,
+    `docs/CONSTITUTION.md` governs the whole SOP, this document
+    governs only the Research Engine. They were never actually
+    competing, but it was not written down.
+2.  Artículo 1: "el motor no intenta predecir el futuro" was too
+    absolute against what the code actually does -- it computes
+    `future_return_5y`, MAE, hit-rate, rank correlation
+    (`engine/validation_harness.py`, `engine/validation_metrics.py`).
+    New wording distinguishes "promete predecir / emite forecasts
+    accionables" (never) from "mide resultados históricos para
+    evaluar precedentes y validar hipótesis" (yes, and already does).
+3.  Artículo 4: look-ahead bias named explicitly, for both market data
+    and episode selection -- the rule was already there in substance
+    (`engine/observable_universe.py`'s point-in-time masking,
+    RE-023.3), just not in the constitution's own words.
+4.  Artículo 7: clarifies Alta/Media/Baja is the required category,
+    not a literal code name -- `NOT_MEASURABLE`, `LOW` and similar
+    already coexist with this today and were never actually in
+    tension with the article, just unstated.
+5.  Artículo 8: "variables que lo contradicen" -> "variables y
+    precedentes... variables o precedentes que lo contradicen" --
+    RE-EXP.1, same day, showed the most useful counter-evidence is
+    often a dissenting historical episode, not a weak similarity
+    dimension.
+
+Also added: a versioning policy this document did not have --
+"cualquier cambio en estos artículos exige incrementar la versión
+constitucional y registrar la razón" -- and a "Historial de
+revisiones" section applying that policy to itself immediately, not
+just stating it abstractly. `core/version.py`'s `CONSTITUTION_VERSION`
+bumped `"1.0"` -> `"1.1"` in the same pass, kept in sync per that same
+new policy.
+
+What this does not authorize:
+
+-   No change to the number or scope of the twelve articles -- five
+    wording edits inside existing articles, one new top-of-document
+    policy note. Armando's explicit boundary: "no lo reescribiría."
+-   Does not reopen RE-044.1 through RE-EXP.1 -- none of the five
+    edits change what those fixes did or require touching them again.
+
+Boundary:
+
+-   Two files modified: `docs/CONSTITUTION_RESEARCH_ENGINE.md`
+    (five wording edits, one new policy note, one new "Historial de
+    revisiones" section), `core/version.py`
+    (`CONSTITUTION_VERSION` "1.0" -> "1.1").
+-   No code logic touched.
+-   No Frozen Core component touched.
+
+------------------------------------------------------------------------
+
+## RE-044.5 — Research Engine: founding constitution saved as a repo file
+
+Closes the gap every entry from RE-044.1 through RE-EXP.1 noted but
+did not fix: the Research Engine's 12-article founding constitution
+existed only in conversation, never as a file, since the project
+began. `core/version.py` referenced a `CONSTITUTION_VERSION` for a
+document that was never in the repository -- confirmed by repo-wide
+search before RE-044.1 (README.md, docs/ARCHITECTURE/, docs/RESEARCH/,
+docs/VALIDATION/ are all empty stub directories from 2026-07-29,
+never populated).
+
+Saved verbatim to `docs/CONSTITUTION_RESEARCH_ENGINE.md`: the twelve
+articles, the Axioma Fundamental, and Armando's own closing addition
+("el valor del Research Engine no reside en acertar el futuro..."),
+unchanged from the text that governed this afternoon's audit -- not a
+new or revised version.
+
+Separately corrected: `core/version.py`'s `CONSTITUTION_VERSION` said
+`"1.1"`. The saved document's own header says `"Versión 1.0"`, in
+Armando's own words, and its text never changed between being written
+and being saved -- there was no real "1.1" revision for the constant
+to refer to. Corrected to `"1.0"` to match the file that now actually
+exists, rather than a revision that never happened.
+
+`docs/CONSTITUTION.md` (the SOP-level document, distinct from this
+one) updated in Section 5 to list the new file as a real deliverable,
+and its two stale cross-references to this governance doc's version
+(`v1.93`, left over from this morning's RE-043.4 work) corrected to
+`v1.98` -- found stale while making this edit, not flagged separately.
+
+What this does not authorize:
+
+-   No revision to the twelve articles themselves -- saved exactly as
+    written, still v1.0.
+-   Does not retroactively edit RE-044.1 through RE-EXP.1's existing
+    entries above, which correctly describe the document as missing
+    at the time each of them was written -- historical entries record
+    state at the time, they are not rewritten when something they
+    noted later gets fixed.
+
+Boundary:
+
+-   Three files modified: `docs/CONSTITUTION_RESEARCH_ENGINE.md`
+    (new), `core/version.py` (`CONSTITUTION_VERSION` corrected),
+    `docs/CONSTITUTION.md` (new deliverable listed, two stale version
+    cross-references corrected).
+-   No code logic touched -- `core/version.py`'s change is a string
+    constant, not behavior.
+-   No Frozen Core component touched.
+
+This closes the full afternoon audit against the Research Engine's
+12-article founding constitution: the document now exists as a file,
+and every violation found against it (Articulo 7: RE-044.1, RE-044.2;
+Articulo 3: RE-044.3; Articulo 5: RE-044.4; Articulo 8: RE-EXP.1) has
+a corresponding, verified fix.
+
+------------------------------------------------------------------------
+
 ## RE-EXP.1 — Research Engine: ExplanationEngine fixed, reconnected, extended to contradicting evidence (Articulo 8)
 
 Fifth and final fix of the audit against the Research Engine's
@@ -9954,6 +10070,32 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.00
+
+-   RE-044.6: first real revision of `docs/CONSTITUTION_RESEARCH_ENGINE.md`
+    (v1.0 -> v1.1) after Armando's review -- five wording edits
+    (Articulo 1 vs. predictive validation, Articulo 4 look-ahead bias
+    named explicitly, Articulo 7 code-name clarification, Articulo 8
+    "variables y precedentes", relación con `docs/CONSTITUTION.md`),
+    none changing any article's spirit. New versioning policy added
+    and applied to itself via a "Historial de revisiones" section.
+    `core/version.py`'s `CONSTITUTION_VERSION` synced to `"1.1"`. Full
+    details in the Design Decision entry above (RE-044.6).
+
+## Version 1.99
+
+-   RE-044.5: saved `docs/CONSTITUTION_RESEARCH_ENGINE.md` -- the
+    12-article founding constitution that governed this afternoon's
+    entire audit, existing only in conversation until now. Corrected
+    `core/version.py`'s `CONSTITUTION_VERSION` from a stale `"1.1"`
+    (no real revision ever happened) to `"1.0"`, matching the saved
+    document's own header. `docs/CONSTITUTION.md` updated to list the
+    new file and to fix two stale version cross-references (`v1.93`
+    -> `v1.98`) found in the same pass. Closes the full afternoon
+    audit: Articulo 7 (RE-044.1, RE-044.2), Articulo 3 (RE-044.3),
+    Articulo 5 (RE-044.4), Articulo 8 (RE-EXP.1), and now the document
+    itself. Full details in the Design Decision entry above (RE-044.5).
 
 ## Version 1.98
 
