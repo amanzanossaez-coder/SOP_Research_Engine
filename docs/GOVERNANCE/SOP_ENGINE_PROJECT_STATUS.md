@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.01\
+**Version:** 2.08\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,10 +17,14 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1 (2026-08-15). Nota RE-DASH.1: primer entregable de
-capa de presentación/auditoría (`generate_dashboard.py`), sin tocar
-ningún gate, protocolo ni motor -- no altera ninguna cifra de progreso
-técnico de esta tabla, solo añade su propia fila:
+As of RE-DASH.1.7 (2026-08-15). Nota RE-DASH.1.7: la fila de régimen en
+"Por qué no se actúa" ahora dice dirección real (alto/bajo) en vez de
+solo "fuera de rango" -- verificado contra los valores reales de los
+episodios comparables, nunca supuesto, con caída segura (fail-closed)
+si la dirección no es determinable. "Retorno mediano posterior"
+acortado para caber en una línea sin perder precisión. Sigue sin tocar
+ningún gate, protocolo ni motor. No altera ninguna cifra de progreso
+técnico de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7989,6 +7993,575 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.7 — Dashboard: directional regime wording + one-line evidence label
+
+Armando, reviewing RE-DASH.1.6's output: "Fuera del rango que tuvieron
+los episodios parecidos" was still not concrete enough -- asked for
+something like "Muy alto frente al histórico comparable". Also flagged
+"Retorno mediano posterior (valor típico, no promedio)" as too long
+to read on one line, asking for something shorter and clearer.
+
+-   "Por qué no se actúa": the regime row now states direction (alto/
+    bajo), not just "outside range". This required real data the gate
+    result itself doesn't expose -- `RegimeComparabilityGateResult`
+    only carries a boolean-equivalent state, not which side of the
+    range today's value fell on. Rather than guess, added
+    `_regime_direction()`, which reuses the exact same comparison
+    `RegimeComparabilityGate._dimension_covered()` already makes
+    (`snapshot.context.<dim>` vs. `[episode.context.<dim> for episode
+    in evidence.matches]`) to determine, from the real matched-episode
+    values, whether today's value sits above the max or below the min.
+    Verified against real data: CAPE=41,4 is above the matched
+    episodes' maximum -- "Muy alto frente al histórico comparable".
+    Restructured `build_porque_rows()` to emit one row per failing
+    regime dimension (was one combined row listing all failing
+    dimensions together) -- necessary because direction can differ per
+    dimension, and cramming two directions into one pill value would
+    have been either wrong or unreadable. Fail-closed: if direction
+    cannot be determined from the real match data (missing values),
+    falls back to the RE-DASH.1.6 generic phrasing rather than
+    guessing "alto"/"bajo".
+-   "Evidencia histórica": shortened "Retorno mediano posterior (valor
+    típico, no promedio)" to "Retorno mediano posterior". No
+    information lost -- "mediano" already precisely means median, not
+    average; the parenthetical was pedagogical, not information-
+    bearing, and "peor caso"/"mejor caso" already establish this is a
+    distribution, not a single figure. Now renders on one line.
+
+What this does not authorize:
+
+-   No change to `RegimeComparabilityGate` or any other gate. The new
+    direction calculation is presentation-layer only, reusing data the
+    dashboard already had access to (`evidence.matches`,
+    `snapshot.context`) -- it does not feed back into `regime_result`
+    or any posture decision.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (new
+    `_regime_direction()` helper; `build_porque_rows()`'s "not
+    comparable" branch restructured to one row per dimension;
+    Evidencia histórica label shortened).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated. Spot-checked: "Régimen (CAPE): Muy alto frente al
+    histórico comparable" (verified 41,4 > max of the matched
+    episodes' CAPE values, not asserted); "Retorno mediano posterior"
+    renders on one line. Full `tests/verify_*.py` suite re-run: same
+    four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.6 — Dashboard: three correctness/density fixes on RE-DASH.1.5's output
+
+Armando reviewed the RE-DASH.1.5 output before committing and flagged
+three issues, one of them a real factual error, not just a clarity
+problem:
+
+-   "Por qué no se actúa": RE-DASH.1.5's wording, "Régimen (CAPE):
+    Fuera del rango de episodios parecidos", still did not say range
+    *of what* -- Armando flagged it as unclear on first read ("no se
+    entiende"). Reworded to "Fuera del rango que tuvieron los
+    episodios parecidos" (and the mirror "Dentro del rango que
+    tuvieron los episodios parecidos" for the comparable case) --
+    naming explicitly that the range belongs to the comparable
+    episodes themselves, not an unstated external threshold.
+    Re-confirmed against `regime.explanations` ("cape: today's value
+    outside the matched episodes' range") that this reading matches
+    the gate's real finding.
+-   "Datos de mercado": the two context-window headers used
+    inconsistent formats -- "serie Shiller 1871-2026" (a hardcoded
+    year range) next to "últimos 50 años, desde 1976-07" (a duration +
+    start month). Unified to the same "AAAA-AAAA" pattern for both,
+    now computed from the real Shiller dates
+    (`dataset.data["Date"].min()/.max()`, never hardcoded): "Serie
+    completa (1871-2026)" / "Últimos 50 años (1976-2026)". Also
+    addressed Armando's density concern: split the header into two
+    rows (`rowspan`/`colspan`, plain HTML table structure, not a new
+    interactive control) so each header cell is short instead of one
+    long compound string per column. Removed the explanatory
+    `<p class="note">` paragraph under the table per Armando's
+    explicit "esto sobra" -- the table headers now carry that meaning
+    on their own.
+-   "Evidencia histórica": the intro sentence said the block "busca
+    caídas históricas parecidas al momento actual del mercado", which
+    is factually wrong today -- the market is at an all-time high
+    (drawdown 0,0%), not falling. Traced the real matching logic
+    before rewording (not assumed): `SimilarityEngine.compare()`
+    scores each historical episode against *today's snapshot* across
+    three groups of dimensions at once -- Event (drawdown, duration,
+    speed), Context (CAPE, 3-year pre-crash trend, volatility), and
+    Outcome (recovery) -- and `top()` returns the 10 highest-scoring
+    episodes. Today's snapshot legitimately has drawdown=0, so the
+    block is not "searching for similar drops" -- it is comparing
+    today's full market condition, including the absence of a drop,
+    against historical drops on several dimensions at once. Reworded
+    the intro to say exactly that, without overclaiming which
+    dimension dominates the ranking (weights are not asserted here,
+    only that multiple dimensions are used).
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic. The two new date
+    fields (`market_full_start`, `market_latest_date`) are read
+    directly from `dataset.data["Date"]`, already loaded for the
+    pipeline -- no new data source.
+-   Does not reopen or second-guess the "Régimen" wording decided in
+    RE-DASH.1.5 -- re-verified, not changed.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`build_dashboard_data()`
+    gains `market_full_start`/`market_latest_date`; `build_porque_rows()`'s
+    two regime-state value strings reworded; `render_html()`'s Datos
+    de mercado table header and Evidencia histórica intro paragraph
+    rewritten; no new helper functions).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated. Spot-checked: market table headers read "Serie
+    completa (1871-2026)" / "Últimos 50 años (1976-2026)" -- same
+    format, both computed, neither hardcoded; explanatory paragraph
+    removed; Evidencia histórica intro no longer implies an active
+    drop. Full `tests/verify_*.py` suite re-run: same four
+    pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.5 — Dashboard: five-point polish pass on RE-DASH.1.4's output
+
+Armando reviewed the RE-DASH.1.4 output and flagged five concrete
+readability issues, all addressed directly against real data, no new
+design conversation needed:
+
+-   "Por qué no se actúa": the CAPE row's value pill said bare
+    "No comparable" with no referent -- unclear what it was being
+    compared against. `build_porque_rows()`'s three regime-state
+    branches reworded to be self-explanatory on their own:
+    "Fuera del rango de episodios parecidos" (was "No comparable"),
+    "Dentro del rango de episodios parecidos" (was "Comparable"),
+    "Sin datos suficientes para comparar" (was "No medible").
+-   "Estado por patrimonio": liquidity table missing the actual
+    exceso/déficit figure. Unified the separate Suelo/Techo columns
+    into one "Rango de liquidez (suelo / techo)" column and added an
+    "Exceso/Déficit" column. Reuses the pre-audited spreadsheet
+    formulas already computed inside `personal_capacity_facts.xlsx`
+    ("Exceso/(Déficit) vs. suelo/techo de liquidez"), read via the
+    same `concepto_map` already used for suelo/techo -- not
+    recalculated in Python, avoiding a second, potentially-drifting
+    source of truth. New `liquidity_gap()` helper selects the figure
+    matching the current status (gap vs. techo if above ceiling, gap
+    vs. suelo otherwise -- the buffer already secured when within
+    range). New `_fmt_signed_amount()` prefixes "+" for positive
+    values so exceso/déficit reads unambiguously at a glance. Verified
+    against real data: AMS +22.330,77 € (above techo), AML
+    -50.625,00 € (below suelo) -- both match the figures independently
+    confirmed via direct execution in RE-DASH.1.3.
+-   All string values/labels across the file now start capitalized
+    ("Muy por encima de su media histórica", not "muy por encima...";
+    "No disponible", not "no disponible") -- confirmed by grep that no
+    lowercase-starting return string remains in the six formatter
+    functions, `context_band()`'s six branches, or the standalone
+    `drawdown_context` fallback.
+-   "Evidencia histórica": table values could drift far to the right
+    on wide viewports, reading as "perdidos" (disconnected from their
+    label). Added a `.kv` table class constraining the table to
+    `max-width:640px` and its first column to `width:55%`, keeping
+    label and value visually close regardless of viewport width.
+-   "Datos de mercado": the single historical-context column (full
+    Shiller series, 1871-2026) is now joined by a second column,
+    "Contexto reciente (últimos 50 años, desde {fecha})" -- z-score
+    context computed over the same series sliced to the trailing 50
+    years (`RECENT_WINDOW_YEARS = 50`, cutoff computed the same way
+    `drawdown_engine.py` already subtracts integer years from an
+    AAAA.MM float date, e.g. `peak_date - 3`). Full-history column is
+    kept, not replaced -- Armando's explicit "dejamos la columna con
+    el histórico y añadimos una columna". Verified: cutoff resolves to
+    1976-07 against a latest date of 2026-07; CAPE reads "muy por
+    encima" in both windows, inflación and tipo de interés read
+    "cerca de" in both.
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic, and no new data
+    source -- the recent-window statistics reuse the same
+    `dataset.data` already loaded for the full-history column, sliced
+    by date; the liquidity gap figures reuse formulas already computed
+    inside the source workbook, not recalculated.
+-   Does not revisit the RE-DASH.1.4 decision to drop "qué haría
+    falta para cambiar el estado" -- not raised again this round.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`build_dashboard_data()`
+    gains `market_context_recent`/`recent_window_start` and per-
+    patrimonio `liquidity_gap_floor`/`liquidity_gap_ceiling`;
+    `render_html()` and `build_porque_rows()` updated to consume them;
+    two new small helpers, `liquidity_gap()` and
+    `_fmt_signed_amount()`; CSS gains `.kv`).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated and spot-checked against the values above. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures
+    (pandas/numpy pin mismatches ×3, known tie-break ordering
+    difference ×1), nothing new -- and `generate_dashboard.py` is not
+    imported by the test suite regardless.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.4 — Dashboard: "lectura rápida" design pass, agreed before coding
+
+Full design conversation with Armando, same day, explicitly before any
+code: "no dispares todavía en ejecutar, vamos a centrarnos antes en
+dejarlo bien perfilado." Every change below was proposed, corrected or
+confirmed in that conversation first; nothing here is a unilateral
+implementation choice.
+
+Adopted as agreed:
+
+-   "Estado hoy": colored dot (semáforo) next to dominant action text
+    -- Armando's own framing, "el color ayuda; la palabra manda."
+-   "Por qué no se actúa": rebuilt from prose bullets to one compact
+    row per variable (label + pill value) -- `build_porque_rows()`
+    replaces the old sentence-based `build_reasons()`.
+-   "Estado por patrimonio": rebuilt as two separate compact tables
+    (Armando's explicit choice, option B) -- Liquidez (cifra real,
+    suelo, techo, estado) and Postura y permisos (postura, Human
+    Approval, Dry Powder), keeping money and permissions visually
+    separate.
+-   "Datos de mercado": added a historical-context column, z-score
+    against the full Shiller series (1871-2026, Armando's explicit
+    choice over a shorter window), banded at the thresholds he
+    confirmed (\|z\|<0.5 / <1.5 / >=1.5). Drawdown reported as plain
+    fact ("en máximo histórico" / "caída del X%"), not a z-score --
+    comparing a series that is usually exactly zero to its own mean
+    would not have read honestly.
+-   "Evidencia histórica": reworded once more, folding horizon and
+    "fondo del episodio" into one intro sentence, directly answering
+    both questions Armando asked in the prior turn instead of leaving
+    them for him to infer from a technical row label.
+-   Title kept, subtitle added: "Lectura de mercado, evidencia y
+    autorización patrimonial. Solo lectura."
+
+One feature discussed at length and explicitly dropped, not built,
+after Armando himself raised doubt about it ("sinceramente no sé si
+de verdad necesitamos esta pregunta"): "Qué haría falta para pasar de
+Conservar a Preparar." Verified by direct execution before answering,
+not assumed: ran `DryPowderProtocol().evaluate()` with
+`current_posture=Prepare` (pólvora seca disponible, episodio
+hipotético activo) -- result: `status=posture no deployment,
+authorized_amount=0.0`, identical to `Conserve`. `TRANCHE_PARAMETERS`
+only defines tranches for `Deploy Partially`/`Deploy Aggressively`.
+Combined with the RE-DASH.1.4-conversation finding that Evidence
+Quality Gate structurally caps the combined ceiling at `Prepare`
+regardless of Regime/Personal Capacity (confirmed the same day,
+`not measurable -> Prepare`; `validated` would map to the MORE
+restrictive `Conserve` -- RE-037.1's own design), a "path to Prepare"
+feature would have described a transition with zero practical
+consequence, added no information beyond "Por qué no se actúa" just
+grammatically inverted, and pushed the dashboard's tone toward
+"roadmap to action" -- against this project's standing discipline (no
+simuladores, no proyecciones, no falsa sensación de progreso).
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic. Two new,
+    independent, read-only statistics
+    (`dataset.data["CAPE"/"InflationRate1Y"/"Rate GS10"].mean()/.std()`)
+    computed directly in `generate_dashboard.py` from data the
+    pipeline already loads -- no new data source, no `Dataset`/
+    `drawdown_engine.py` change.
+-   Does not build, or leave a stub for, "qué haría falta" -- the
+    decision was to drop it, not defer it; if it resurfaces, that is a
+    new proposal against a real need, not a resurrection of this one.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (rewritten
+    presentation layer; `build_dashboard_data()` gains
+    `market_context`, otherwise unchanged).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated. Spot-checked: "Estado hoy" shows a warn-colored dot +
+    "NO ACTUAR" / "No hay caída de mercado activa."; "Por qué no se
+    actúa" shows four one-line rows (Caída de mercado / Régimen (CAPE)
+    / Validez predictiva / AML — Liquidez); Estado por patrimonio's
+    liquidity table shows AMS "por encima del techo" and AML "por
+    debajo del suelo" with real figures; Datos de mercado shows CAPE
+    "muy por encima de su media histórica" (41,4 vs. a Shiller-series
+    mean well below that) and tipo de interés/inflación "cerca de su
+    media histórica". Full `tests/verify_*.py` suite re-run: same four
+    pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.3 — Dashboard: real liquidity ceiling, correcting RE-DASH.1.2's error
+
+Armando caught a real mistake in RE-DASH.1.2 the same day: "revisalo
+bien porque tenemos techo y suelo de liquidez para AMS y AML."
+RE-DASH.1.2's claim that no ceiling existed was checked against the
+wrong source -- `engine.personal_capacity_facts_gate.REQUIRED_LABELS`,
+which lists only the fields `PersonalCapacityFactsGate` itself scores,
+not the full set of columns the workbook actually carries. Reading
+`data/raw/personal_capacity_facts.xlsx` directly (via
+`load_personal_capacity_facts_raw()`, already used since RE-DASH.1.2
+for the floor figure) shows a real "Techo de liquidez total (máximo
+óptimo)" column: 150.000 € for AMS, 300.000 € for AML, alongside
+`Exceso/(Déficit) vs. techo de liquidez` already computed in the
+sheet. The error was checking the gate's consumed-field allowlist
+instead of the raw data actually available -- corrected, not silently
+patched: this entry names it plainly.
+
+`LIQUIDITY_CEILING_LABEL` added as a local constant in
+`generate_dashboard.py` (not in `REQUIRED_LABELS`, deliberately -- no
+gate scores this figure today, so adding it there would misleadingly
+imply one does). `liquidity_line()` now reports a real three-way
+status: below floor / within range / above ceiling, all against real
+numbers.
+
+This surfaced a genuine finding the previous two dashboard iterations
+never showed: AMS's real liquidity (172.330,77 €) is currently ABOVE
+its own defined ceiling (150.000 €) -- idle liquidity beyond the
+optimal range. Reported as informational (amber), explicitly NOT a
+gate failure: `PersonalCapacityFactsGate.liquidity_adequate` only
+tests the floor (`_safe_ge(liquidez_total, suelo_total_liquidez)`,
+RE-032.5's design) -- being above the ceiling does not change the
+gate's `adequate` verdict for AMS, and the dashboard text says so
+explicitly to avoid implying otherwise. AML remains below its floor
+(199.375,00 € vs. 250.000 €), unchanged finding from RE-DASH.1.2.
+
+What this does not authorize:
+
+-   No change to `PersonalCapacityFactsGate` or its `REQUIRED_LABELS`
+    -- the ceiling remains unscored by any gate; this iteration only
+    displays it.
+-   Does not decide whether a ceiling check should ever become part
+    of `PersonalCapacityFactsGate`'s logic (e.g. an "exceso de
+    liquidez ociosa" fact) -- that would be new gate design, out of
+    scope for a display fix, not raised or requested here.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py`.
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated, AMS's panel now reads "172.330,77 € (suelo 100.000,00 €
+    / techo 150.000,00 €) -- por encima del techo definido"; AML reads
+    "199.375,00 € (suelo 250.000,00 € / techo 300.000,00 €) -- por
+    debajo del suelo definido". Full `tests/verify_*.py` suite re-run:
+    same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.2 — Dashboard: restructure and real liquidity figures
+
+Armando's second review of the dashboard, same day, with six concrete
+proposals plus an explicit invitation to add more: he judged RE-DASH.1.1
+readable but still not decisive enough, and gave a target -- "que
+alguien pueda abrirlo y entender en 15 segundos: hoy no se hace nada
+porque no hay caída activa; aunque hubiera caída, el sistema sigue
+limitado por CAPE, evidencia no demostrada y AML bajo liquidez
+mínima." No change to `build_dashboard_data()`'s gate/protocol calls
+except one addition (real liquidity figures, below) -- this remains a
+presentation-only iteration.
+
+Adopted as proposed:
+
+-   Split "Resumen de hoy" into "Estado hoy" (compact: posture + one
+    primary reason) and "Por qué no se actúa" (full reason list).
+    Dropped RE-DASH.1.1's standalone "Tabla resumen" card -- its
+    content is now fully covered by these two cards plus "Estado por
+    patrimonio"; keeping all three would have repeated the same
+    conclusion three times, against the whole point of this pass.
+-   "Estado por patrimonio" rebuilt as a left-aligned "Postura: X /
+    Por qué: <bullets>" panel per patrimonio, replacing the three-row
+    table.
+-   Two phrases rewritten exactly as Armando proposed: the
+    predictive-validity sentence now names what RE-PRED.16 actually
+    found ("no ha demostrado que sus predicciones mejoren a una
+    referencia simple"), and Human Approval's clause now states what
+    the standing authorization permits ("La autorización humana
+    vigente permite hasta X") instead of the bare "Válido para X".
+-   "Nivel del índice" (Shiller Price.1, ~5 million) removed from the
+    main Datos de mercado view -- moved into Detalle técnico, labelled
+    there as the technical series it is, explicitly not the S&P 500
+    level seen in the press (Armando's own point).
+-   Evidencia histórica gained an opening sentence ("qué muestra este
+    bloque"), relabelled rows, and a closing caveat tying the numbers
+    back to predictive validity not being demonstrated.
+-   All numbers in the main view now use Spanish decimal/thousands
+    convention (`_fmt_pct`/`_fmt_rate`/`_fmt_num`/`_fmt_amount`
+    reworked: comma decimal, period thousands) -- matches the exact
+    figures in Armando's own illustrative example ("10,2%", "-1,1%",
+    "13,8%"), confirmed against real data, not just his mock text.
+
+One proposal corrected, not implemented as drafted, flagged to Armando
+directly: he asked for a Patrimonio/Liquidez/Suelo/**Techo**/Estado
+table. `PersonalCapacityFactsGate`'s `REQUIRED_LABELS` (and the
+underlying `personal_capacity_facts.xlsx` columns) define a floor
+(`suelo_total_liquidez`) and an emergency cushion (`colchon`), but no
+ceiling -- there is no "techo" concept anywhere in this gate's data
+model. Inventing one for display, even a purely cosmetic one, would
+have been fabrication -- exactly what this project's fail-closed
+discipline exists to prevent. Implemented instead as a real
+figure-vs-floor line (`liquidity_line()`): "Liquidez actual: X €
+(suelo definido: Y €) -- dentro/por debajo del rango", using the
+patrimonio's real numbers, no invented column.
+
+Getting those real numbers required one new, independent, read-only
+call: `loaders.personal_capacity_facts_loader.load_personal_capacity_facts_raw()`,
+called directly from `generate_dashboard.py` alongside the existing
+`build_local_personal_capacity_facts_inputs()` call (which computes
+booleans from the same file but never exposes the underlying figures).
+This reads `personal_capacity_facts.xlsx` a second time per run --
+accepted as a minor inefficiency rather than refactoring the gate
+adapter to expose raw figures, since this is a read-only static-report
+script, not a hot path, and the alternative would have touched gate
+code for a display-only need.
+
+One ordering fix made after first render: the "por qué" bullet list
+initially placed the predictive-validity caveat after the
+patrimonio-specific extras (e.g. AML's liquidity). Armando's own
+"Mi propuesta de orden final" listed predictive validity third and
+the patrimonio-specific reason fourth -- reordered to match exactly.
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic. The one new call
+    (`load_personal_capacity_facts_raw()`) is a second read of an
+    existing file through its existing public loader function --
+    `PersonalCapacityFactsGate` itself is untouched.
+-   No "techo" figure introduced anywhere, main view or Detalle
+    técnico -- confirmed by inspection, this iteration does not add
+    one even as a placeholder.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py`.
+-   No Frozen Core component touched. No existing engine, gate,
+    protocol, model or loader file touched.
+-   Verified by direct execution against real data: `outputs/dashboard.html`
+    regenerated twice (once after the initial restructure, once after
+    the ordering fix). Spot-checked: "Estado hoy" reads "NO ACTUAR" /
+    "No hay caída de mercado activa"; "Por qué no se actúa" lists, in
+    order, no-episode / CAPE fuera de rango / validez predictiva no
+    demostrada / AML liquidez; AMS shows "172.330,77 € (suelo definido:
+    100.000,00 €) -- dentro del rango definido"; AML shows "199.375,00 €
+    (suelo definido: 250.000,00 €) -- por debajo del suelo definido";
+    Evidencia histórica shows "10,2%" / "-1,1%" / "13,8%", matching
+    Armando's own illustrative numbers exactly against real data. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.1 — Dashboard: clarity pass (readable by a first-time viewer)
+
+Armando's review of RE-DASH.1, same day: "no es comprensible para
+alguien que lo vea por primera vez... funciona como volcado técnico,
+no como panel de mando." Correct -- the six-block layout was
+technically accurate but mixed internal state names (`not_demonstrated`,
+`under_cooling_off`), code identifiers (`min() combination`, `Price.1`,
+`return_count`) and conclusions without translating any of it. No
+underlying computation changes in this iteration -- `build_dashboard_data()`
+is untouched; only what `render_html()` shows, and in what language.
+
+Rewrote the page structure entirely, per Armando's own proposed order:
+Resumen de hoy (single headline conclusion) -> Tabla resumen -> Estado
+por patrimonio (AMS/AML) -> Datos de mercado -> Evidencia histórica ->
+Detalle técnico (collapsed via native `<details>`/`<summary>` -- a
+disclosure widget, not a script or an executable control, so it does
+not violate the read-only/no-interactivity boundary). Added a full
+Spanish translation layer for every internal state, gate result and
+Personal Capacity field name shown in the main view; the old English
+identifiers now only appear inside Detalle técnico, which is
+explicitly the technical section.
+
+Two corrections made to Armando's own draft text, not just implemented
+verbatim -- flagged to him directly, per this project's standing
+practice of checking assumptions rather than silently accepting them:
+
+1.  His example headline attributed today's `Conserve` ceiling partly
+    to "validez predictiva no demostrada". Checked against
+    `engine/posture_mapper.py`'s actual mapping: Evidence Quality's
+    `not measurable` state maps to a `Prepare` ceiling, less
+    restrictive than the `Conserve` Regime Comparability already
+    imposes -- `min()` means Regime Comparability, not predictive
+    validity, is what is actually binding today. The headline's
+    "Motivos principales" are now built only from whichever gate(s)
+    `combined.explanations` already reports as limiting; predictive
+    validity stays a separate, always-shown epistemic caveat under
+    Evidencia histórica, never framed as a cause of the ceiling.
+2.  His first-draft Personal Capacity wording ("Correcto financieramente")
+    was too vague and, for `adequate` states like AMS today,
+    specifically imprecise -- it does not say all nine facts passed,
+    only implies a positive judgement. Personal Capacity summaries are
+    now built directly from the gate's own `failed_fields`/
+    `missing_fields` when `constrained`, and from an explicit "9/9
+    hechos correctos, incluida liquidez" framing when `adequate` --
+    matching Armando's own follow-up correction, which asked for the
+    same precision.
+
+Real bug found and fixed while rebuilding: `Rate GS10` (10-year US
+Treasury yield) in the Shiller data is already expressed in
+percentage points (a raw value of 4.44 means 4.44%), confirmed by
+reading `Snapshot.context.interest_rate` directly (`interest_rate 4.44`)
+before touching any formatting code. RE-DASH.1's formatter multiplied
+by 100 a second time, as if it were a decimal fraction like
+`drawdown`/`inflation` are -- displaying "444.0%". `_fmt_rate()` is now
+a separate formatter from `_fmt_pct()`, used only for this field.
+
+A second, smaller bug caught in self-review before shipping: the
+first draft of the Tabla resumen's per-patrimonio "Lectura humana"
+lowercased the first letter of the Human Approval clause when
+appending it after the capacity clause -- producing "human Approval",
+incorrectly de-capitalizing a proper term. Fixed to never lowercase
+that clause.
+
+Colors reduced to three semantic values (verde/ámbar/rojo) plus one
+muted neutral grey reserved strictly for "no aplica hoy" (e.g. Dry
+Powder with no active episode) -- confirmed this is not a fourth
+severity level, just an explicit "not applicable" marker, per
+Armando's "máximo 3 colores" instruction.
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic, and no change to
+    `build_dashboard_data()` -- confirmed by inspection: only
+    `render_html()` and its new helper functions (translation tables,
+    `build_headline()`, `build_summary_rows()`, the
+    `personal_capacity_long/short()`, `human_approval_long()`,
+    `dry_powder_long()` humanizers) were touched.
+-   Does not add any interactivity beyond the native `<details>`
+    disclosure -- still zero `<script>`, `<button>`, `<form>`,
+    `onclick` in the generated HTML.
+-   Translation coverage is scoped to the vocabulary this pipeline
+    actually produces today (confirmed by execution, not guessed) --
+    `humanize_explanation()` falls back to the untranslated string for
+    anything unmapped rather than inventing a translation, and that
+    fallback only surfaces inside Detalle técnico.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (structure and
+    rendering rewritten; `build_dashboard_data()` unchanged).
+-   No Frozen Core component touched. No existing engine, gate,
+    protocol or model file touched.
+-   Verified by direct execution against real data twice: once after
+    the initial rewrite, once after the Human Approval capitalization
+    fix found in self-review. Spot-checked the generated HTML:
+    headline reads "NO ACTUAR" with two accurate motivos (CAPE fuera
+    de rango; liquidez de AML por debajo del mínimo), GS10 now shows
+    "4.44%", Tabla resumen shows "Human Approval" correctly
+    capitalized, AMS/AML never fused. Full `tests/verify_*.py` suite
+    re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1 — Static SOP/Shiller Audit Dashboard
 
 First presentation/audit-layer deliverable, deliberately numbered
@@ -10183,6 +10756,104 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.08
+
+-   RE-DASH.1.7: regime row in "Por qué no se actúa" now states
+    direction (alto/bajo) instead of just "outside range", e.g.
+    "Régimen (CAPE): Muy alto frente al histórico comparable" --
+    computed via a new `_regime_direction()` helper reusing the exact
+    comparison the gate itself makes, fail-closed if not
+    determinable. Restructured to one row per failing dimension.
+    Shortened "Retorno mediano posterior (valor típico, no promedio)"
+    to "Retorno mediano posterior" so it renders on one line, no
+    information lost. Full details in the Design Decision entry above
+    (RE-DASH.1.7).
+
+## Version 2.07
+
+-   RE-DASH.1.6: three correctness/density fixes on RE-DASH.1.5's
+    dashboard, caught by Armando before committing. Reworded the
+    regime row again ("Fuera del rango que tuvieron los episodios
+    parecidos") to name explicitly whose range it is. Unified the two
+    Datos de mercado context-window headers to the same computed
+    "AAAA-AAAA" format (was a hardcoded year range next to a "desde
+    AAAA-MM" string), split the header into two rows to reduce
+    density, and dropped a now-redundant explanatory paragraph.
+    Corrected a real factual error in Evidencia histórica's intro
+    sentence, which implied the market is currently falling (it is at
+    an all-time high, drawdown 0,0%) -- reworded after tracing
+    `SimilarityEngine.compare()`'s actual multi-dimensional matching
+    logic. Full details in the Design Decision entry above
+    (RE-DASH.1.6).
+
+## Version 2.06
+
+-   RE-DASH.1.5: five-point polish pass on RE-DASH.1.4's dashboard,
+    per Armando's review. Regime rows in "Por qué no se actúa"
+    reworded to be self-explanatory ("Fuera del rango de episodios
+    parecidos" instead of bare "No comparable"). "Estado por
+    patrimonio" liquidity table unified into "Rango de liquidez" +
+    "Exceso/Déficit" columns, reusing real spreadsheet figures (AMS
+    +22.330,77 €, AML -50.625,00 €). All strings capitalized
+    throughout. Evidencia histórica table width-constrained to fix
+    values drifting far right. Datos de mercado gains a second,
+    trailing-50-years context column alongside the existing
+    full-history one. Full details in the Design Decision entry above
+    (RE-DASH.1.5).
+
+## Version 2.05
+
+-   RE-DASH.1.4: full "lectura rápida" design pass, agreed with
+    Armando before writing any code. Semáforo on Estado hoy, compact
+    one-line rows on Por qué no se actúa, two split tables (liquidez /
+    postura y permisos) on Estado por patrimonio, historical z-score
+    context on Datos de mercado (full Shiller series 1871-2026,
+    thresholds confirmed), reworded Evidencia histórica. Explicitly
+    dropped "Qué haría falta para pasar de Conservar a Preparar" after
+    verifying it would describe a transition with zero practical
+    consequence (Prepare authorizes the same 0% Dry Powder deployment
+    as Conserve) and no new information. Full details in the Design
+    Decision entry above (RE-DASH.1.4).
+
+## Version 2.04
+
+-   RE-DASH.1.3: corrects a real error from RE-DASH.1.2 -- Armando
+    caught that a liquidity ceiling ("techo de liquidez") does exist
+    in `personal_capacity_facts.xlsx` for both AMS and AML; the prior
+    claim that none existed was checked against the wrong source
+    (the gate's consumed-field list, not the raw workbook). Fixed:
+    real ceiling figures now shown (150.000 € AMS, 300.000 € AML),
+    correctly labelled as informational, not gate-scored. Surfaced a
+    real finding: AMS's liquidity is currently above its own ceiling.
+    Full details in the Design Decision entry above (RE-DASH.1.3).
+
+## Version 2.03
+
+-   RE-DASH.1.2: dashboard restructure per Armando's second review --
+    "Estado hoy" / "Por qué no se actúa" split (replacing "Resumen de
+    hoy" + "Tabla resumen"), left-aligned per-patrimonio panels, real
+    liquidity figures vs. suelo definido (no invented "techo" --
+    flagged, not fabricated), two phrases rewritten for precision,
+    Spanish decimal/thousands formatting throughout, "Nivel del
+    índice" moved out of the main view. `build_dashboard_data()`
+    unchanged except one new read-only call
+    (`load_personal_capacity_facts_raw()`) for the liquidity figures.
+    Full details in the Design Decision entry above (RE-DASH.1.2).
+
+## Version 2.02
+
+-   RE-DASH.1.1: dashboard clarity pass, per Armando's review. New
+    order (Resumen de hoy -> Tabla resumen -> Estado por patrimonio ->
+    Datos de mercado -> Evidencia histórica -> Detalle técnico
+    colapsado), full Spanish translation layer, single headline
+    conclusion built only from the actually-limiting gates (not
+    predictive validity, corrected from Armando's own draft). Fixed a
+    real formatting bug (`Rate GS10` was being multiplied by 100 a
+    second time, showing 444.0% instead of 4.44%) and a capitalization
+    bug ("human Approval") found in self-review. `build_dashboard_data()`
+    unchanged -- presentation only. Full details in the Design
+    Decision entry above (RE-DASH.1.1).
 
 ## Version 2.01
 
