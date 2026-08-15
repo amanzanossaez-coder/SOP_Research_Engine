@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.00\
+**Version:** 2.01\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,10 +17,10 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-044.6 (2026-08-14). Nota RE-044.6: primera revisión real de
-`docs/CONSTITUTION_RESEARCH_ENGINE.md` (v1.0 -> v1.1) tras revisión de
-Armando -- cinco matices de redacción, ningún cambio de espíritu. No
-altera ninguna cifra de esta tabla:
+As of RE-DASH.1 (2026-08-15). Nota RE-DASH.1: primer entregable de
+capa de presentación/auditoría (`generate_dashboard.py`), sin tocar
+ningún gate, protocolo ni motor -- no altera ninguna cifra de progreso
+técnico de esta tabla, solo añade su propia fila:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -36,6 +36,7 @@ altera ninguna cifra de esta tabla:
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 85-90% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en ambos patrimonios 2026-08-13 -- AMS Deploy Aggressively bajo cooling-off de 14 días hasta 2026-08-27, AML Conserve vigente de inmediato al no ser subida de tolerancia respecto al suelo implícito; todavía sin wiring a run.py, deliberado) |
+| Dashboard (RE-DASH.1) | 100% del alcance v1 (estático, solo lectura, seis bloques + alertas); sin filtros, sin gráficos, sin interactividad -- deliberadamente fuera de alcance salvo que un uso real lo justifique |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -7988,6 +7989,118 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1 — Static SOP/Shiller Audit Dashboard
+
+First presentation/audit-layer deliverable, deliberately numbered
+outside the RE-044.x/RE-EXP.x sequence at Armando's own request
+(2026-08-14): this touches the Research Engine + SOP audit surface,
+but is not a methodological fix to the engine itself.
+
+Spec closed over two rounds with Armando (2026-08-14 initial DASH-001
+draft with 4 corrections; 2026-08-15 second pass reframing it as a
+"panel de mando" with 3 further corrections) before any code was
+written, per this project's standing discipline.
+
+New file: `generate_dashboard.py` (repo root, same pattern as
+`audit_posture.py`). Single command:
+
+```
+python3 generate_dashboard.py
+```
+
+Writes `outputs/dashboard.html` -- static, no server, no JS, no
+buttons, no forms. `outputs/` added to `.gitignore` (RE-DASH.1's own
+scope decision from the first round: a derived artifact must never be
+versioned).
+
+Computes nothing new. Reuses exactly the same calls
+`audit_posture.py` already makes end-to-end (drawdown dataset ->
+`ResearchEngine` -> Evidence Quality / Regime Comparability /
+Personal Capacity Facts gates -> `evaluate_capital_posture()` ->
+Human Approval -> Dry Powder Protocol, all per patrimonio), plus one
+additional read-only call this script adds:
+`engine.live_episode.run_live_episode_detector()`, for the market
+block's own episode detail -- same function `dry_powder_ledger_state.py`
+already calls internally, not a second implementation of episode
+detection.
+
+Six blocks, closing the second-round correction that "Gates" must
+never include Human Approval (CONSTITUTION.md v2.0 Section 5, written
+the same day, is explicit: Human Approval is never part of
+`gate_combination.py`'s `min()`):
+
+1.  Cabecera -- data date, generation timestamp, "Techo de mercado"
+    (Evidence Quality + Regime Comparability only -- market-wide by
+    design, RE-043.1's own reasoning; explicitly NOT a fused
+    per-patrimonio posture).
+2.  Mercado Shiller -- price (labelled "Real Total Return Price
+    (Shiller Price.1)", confirmed against the real field before
+    labelling it), drawdown, CAPE, inflation, GS10, active-episode
+    detail.
+3.  Gates -- Evidence Quality and Regime Comparability (global, one
+    row each), Personal Capacity Facts per patrimonio (one-line
+    semaphore only; full detail lives in block 5, not duplicated
+    here -- second-round correction 3).
+4.  Prerrequisitos y protocolos -- Human Approval and Dry Powder
+    Protocol, per patrimonio, explicitly separate from Gates.
+5.  Patrimonios -- AMS and AML, each with its own combined posture
+    ceiling (Gates including this patrimonio's Personal Capacity
+    Facts) and the Personal Capacity Facts detail (failed/missing
+    fields) that block 3 only summarized.
+6.  Evidencia histórica -- compact only: `return_count`, horizon,
+    median/worst/best return, `NOT_DEMONSTRATED` with its source note.
+    No top-10 matches table -- explicitly retired from the original
+    DASH-001 acceptance criteria in the second round, once "primero
+    decisión, luego causa, luego datos mínimos" became the organizing
+    rule. Supporting/weak similarity dimensions and contradicting
+    precedents exist in `Explanation` but were deliberately left off
+    this block too -- not asked for, and adding them would be exactly
+    the "dato por si acaso" overload the second round's whole
+    reframing existed to prevent.
+
+Alerts block: synthesized, not hand-written -- a fixed list of checks
+against this run's actual results (active episode y/n, gate
+not-measurable/not-comparable states, per-patrimonio Personal Capacity
+blocks/constraints, Human Approval missing/expired/under cooling-off),
+capped at 5, each line only appears if true this run. Never a
+recommendation.
+
+What this does not authorize:
+
+-   No change to any gate, protocol or engine logic -- this script
+    only calls existing functions and renders their output.
+-   No wiring to `run.py` or `DecisionEngine`.
+-   No interactivity of any kind (no buttons, forms, filters,
+    auto-refresh) -- confirmed by direct inspection of the generated
+    HTML (zero `<script>`, `<button>`, `<form>`, `onclick`).
+-   Does not resolve the open governance question from the first
+    round (does a Research Engine script documenting SOP-layer state
+    need its own numbering track outside RE-044.x) beyond using
+    `RE-DASH.1` as Armando's own confirmed choice -- no broader
+    precedent is claimed for future dashboard work.
+
+Boundary:
+
+-   Two files created/modified: `generate_dashboard.py` (new),
+    `.gitignore` (`outputs/` added).
+-   No Frozen Core component touched. No existing engine, gate,
+    protocol or model file touched.
+-   Verified by direct execution, not just reading: ran
+    `python3 generate_dashboard.py` against real data --
+    `outputs/dashboard.html` generated with no exception. Spot-checked
+    the generated HTML against the real state already on record in
+    this document: no active episode (market at its 2026.07 peak, per
+    RE-041.2's own finding), AML Personal Capacity Facts `constrained`
+    on `liquidity_adequate` (RE-043.1's real finding), AMS Human
+    Approval `under_cooling_off` with pending increase effective
+    2026-08-27 (matches the 14-day cooling-off from the first real
+    attestation, RE-032.x) -- all consistent, nothing invented. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures
+    (pandas/numpy pin mismatch x3, one known tie-break ordering
+    difference in `verify_research_engine.py`), nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-044.6 — Research Engine: first real revision of the founding constitution (v1.0 -> v1.1)
 
 Armando reviewed `docs/CONSTITUTION_RESEARCH_ENGINE.md` right after it
@@ -10070,6 +10183,17 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.01
+
+-   RE-DASH.1: `generate_dashboard.py` -- static, read-only
+    `outputs/dashboard.html` audit view (six blocks: cabecera,
+    mercado Shiller, gates, prerrequisitos y protocolos, patrimonios
+    AMS/AML, evidencia histórica, más alertas). No new computation --
+    reuses `audit_posture.py`'s exact pipeline. `outputs/` added to
+    `.gitignore`. Verified by direct execution against real data,
+    spot-checked against known real state. Full details in the Design
+    Decision entry above (RE-DASH.1).
 
 ## Version 2.00
 
