@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.26\
+**Version:** 2.27\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,17 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.4 (2026-08-16). Nota RE-SHILLER-DASH.4: el
+As of RE-SHILLER-DASH.5 (2026-08-16). Nota RE-SHILLER-DASH.5: dos
+bloques nuevos en el panel Shiller, ambos pedidos y acotados por
+Armando ("añadiría solo dos bloques"): retornos reales posteriores
+según CAPE inicial (5/10/15 años, mediana por bucket, con N por
+bucket para que "pocos y no independientes" sea una cifra, no solo una
+frase) y un resumen agregado de las 23 caídas históricas (mediana,
+peor caída, duraciones). Además, ajuste de redacción en "Detalle de
+indicadores": "cerca de la media" ahora aclara si el valor bruto está
+por encima o por debajo cuando eso es cierto, sin tocar el criterio de
+z-score compartido con el dashboard operativo. Cero cambios a
+drawdown_engine.py, gates o al dashboard operativo. Nota RE-SHILLER-DASH.4: el
 resumen ejecutivo del panel Shiller pasa de una frase corrida a
 headline-action/headline-support + stat-strip (mismo patrón ya
 aprobado para "Estado hoy"/"Evidencia histórica" en el dashboard
@@ -8126,6 +8136,100 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.5 — Panorama histórico: retornos por CAPE, resumen
+   de drawdowns, lectura más clara
+
+Armando's structured review of v2: "ya no es solo un conjunto de
+gráficas... como v1 está bien. Añadiría poca cosa, pero hay tres piezas
+que sí me parecen relevantes." He scoped the iteration himself to two
+of the three: "añadiría solo dos bloques: 1. Retornos posteriores según
+CAPE inicial. 2. Resumen de drawdowns históricos." The third (CAPE-style
+percentiles for inflación/tipo) is his own deferral, not dropped by
+omission -- next round, if he wants it.
+
+-   **Retornos reales posteriores según CAPE inicial** (new section,
+    after the CAPE chart). For every month with a valid CAPE reading,
+    the real total-return CAGR at 5/10/15 years forward -- same
+    "Price.1" basis (dividends reinvested) and same nearest-date/CAGR
+    formula `drawdown_engine.py`'s own `future_return_5y/10y` already
+    use, just computed for every month instead of only the 23 episode
+    bottoms (new, local `_forward_real_total_return()` -- does not
+    touch `drawdown_engine.py`). Grouped into Armando's own buckets
+    (todos los meses, CAPE>30/35/40), reduced to the median, with an
+    N-per-bucket column he didn't ask for but that makes his own
+    caveat concrete rather than generic: verified by direct inspection
+    that the "CAPE > 40" bucket (24 months) is almost entirely one
+    historical cluster (1999-2000, plus today's still-too-recent
+    months with no forward return yet), and "CAPE > 35" combines two
+    distinct periods (1998-2001, 2021-2026) -- not dozens of
+    independent trials. Armando's caveat sentence kept verbatim
+    alongside that disclosure.
+-   **Resumen de drawdowns históricos** (new section, after the price
+    chart): median/worst drawdown, median peak->bottom duration, median
+    bottom->recovery duration -- pure aggregation over the same 23
+    `Episode` objects already shaded on the price chart, no new
+    detection logic. All 23 have recovered within the series (none
+    still open), consistent with the market being at an all-time high
+    today.
+-   **Wording fix, "Detalle de indicadores"**: Armando: "inflación
+    aparece como 'Cerca de la media', pero 4,23% vs 2,31% puede
+    chirriar visualmente." The z-score classification is correct and
+    NOT changed (inflación's std is 5.76pp -- a century spanning
+    hyperinflation/deflation makes the "near" band genuinely wide;
+    `Z_THRESHOLD_NEAR` is Armando-confirmed and shared with the
+    operational dashboard's own `_context_words()` -- out of scope to
+    touch for a one-table wording complaint). New, local
+    `_readable_lectura()`: when the band is "Cerca de la media" but the
+    raw value sits above/below the raw mean, the "Lectura" column says
+    so explicitly ("Por encima de la media, dentro del rango histórico
+    habitual") instead of just "Cerca" -- applied consistently to all
+    three z-scored rows (CAPE, Inflación, Tipo), not only the row
+    Armando pointed at. Dot color and headline-driver selection
+    untouched -- both still key off the raw, unmodified short_label.
+
+What this does not authorize:
+
+-   No change to `drawdown_engine.py`, any gate, protocol, model, or
+    loader -- the forward-return calculation is new, local, presentation-
+    layer code in `generate_shiller_dashboard.py` only, deliberately not
+    added to the Frozen Core's `Episode` model.
+-   No change to `generate_dashboard.py`'s `_context_words()` or
+    `Z_THRESHOLD_NEAR` -- shared, Armando-confirmed thresholds used by
+    the operational dashboard too; the wording fix is local to this
+    file's own "Lectura" column text only.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py`
+    (`CAPE_RETURN_BUCKETS`, `FORWARD_RETURN_YEARS` added;
+    `_forward_real_total_return()`, `build_cape_return_stats()`,
+    `build_drawdown_summary()`, `_readable_lectura()`,
+    `build_cape_returns_table()`, `build_drawdown_summary_table()`
+    added; `build_shiller_data()` returns two new keys;
+    `build_indicator_strip()`'s Lectura column now runs through
+    `_readable_lectura()`; two new `<section class="card">` blocks in
+    `render_html()`).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted. Retornos por
+    CAPE: Todos los meses 7,2%/6,6%/6,7% (n=1747); CAPE>30 -1,1%/
+    -1,1%/2,2% (n=135); CAPE>35 -4,1%/-3,0%/2,1% (n=69); CAPE>40
+    -4,5%/-3,4%/2,1% (n=24) -- all computed directly, not estimated.
+    Resumen de drawdowns: 23 episodios, caída mediana -22,5%, peor
+    caída -84,8% (confirmed as the 1929.09->1932.06 episode, sanity-
+    checked against the known Great Depression drawdown), duración
+    mediana 14 meses, recuperación mediana 15 meses. Detalle de
+    indicadores: Inflación now reads "Por encima de la media, dentro
+    del rango histórico habitual", Tipo reads "Por debajo de la media,
+    dentro del rango histórico habitual" (4,44% vs media 4,48%, correct
+    direction), CAPE's "Muy por encima" unchanged (not in the "near"
+    band, function is a no-op there). Full `tests/verify_*.py` suite
+    re-run: same single pre-existing failure (`verify_research_engine.py`,
+    ordering only), nothing new. `generate_dashboard.py` (operational)
+    regenerated separately, unaffected.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.4 — Panorama histórico: headline de verdad, no
    frase corrida, y decimales consistentes
 
@@ -8193,6 +8297,19 @@ Boundary:
     decimals confirmed. Full `tests/verify_*.py` suite re-run: same
     four pre-existing failures, nothing new. `generate_dashboard.py`
     (operational) regenerated separately, unaffected.
+-   **RE-SHILLER-DASH.4b (same day, immediate follow-up)**: first
+    version of this fix still returned a `headline_subtitle` line
+    ("CAPE 41,4 (percentil 99) · Drawdown 0,0% · Inflación 4,23% ·
+    Tipo 10a 4,44%") directly above the new stat-strip, which shows the
+    exact same four numbers again. Armando: "repites los datos, en
+    pequeño y en grande." Correct -- the subtitle was a leftover from
+    before the stat-strip existed. `build_headline()` now returns only
+    the title string; the subtitle and its `.headline-support` CSS rule
+    are removed. Verified: regenerated output's Resumen ejecutivo card
+    now shows the headline sentence once, followed directly by the
+    stat-strip, no duplicate figures. Full test suite re-run: same
+    single pre-existing failure (`verify_research_engine.py`, ordering
+    only), nothing new.
 
 ------------------------------------------------------------------------
 
@@ -11990,6 +12107,18 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.27
+
+-   RE-SHILLER-DASH.5: two new sections in the Shiller panel --
+    "Retornos reales posteriores según CAPE inicial" (median forward
+    real total return at 5/10/15y, bucketed by CAPE level, with sample
+    size per bucket) and "Resumen de drawdowns históricos" (median/
+    worst drawdown, median duration/recovery across the 23 detected
+    episodes). Plus a wording fix in "Detalle de indicadores": "cerca
+    de la media" now states above/below the raw mean when true, without
+    changing the underlying z-score criterion. Full details in the
+    Design Decision entry above (RE-SHILLER-DASH.5).
 
 ## Version 2.26
 

@@ -83,6 +83,55 @@ episode detection -- peak/bottom/recovery dates and % drawdown
 magnitudes are unchanged, computed exactly as before on nominal price;
 only the line plotted underneath the same shaded episodes changed.
 
+RE-SHILLER-DASH.5 (same day) -- Armando's review of v2: "ya no es solo
+un conjunto de gráficas... como v1 está bien. Añadiría poca cosa, pero
+hay tres piezas que sí me parecen relevantes." Of the three, he scoped
+the iteration himself to two: "Para RE-DASH.2.1 [sic -- this file's own
+track is RE-SHILLER-DASH, kept as such below] añadiría solo dos
+bloques: 1. Retornos posteriores según CAPE inicial. 2. Resumen de
+drawdowns históricos." The third (percentiles for inflación/tipo,
+alongside CAPE's existing one) is deliberately deferred, his own call,
+not dropped by omission.
+
+-   **Retornos reales posteriores según CAPE inicial** (new section,
+    after the CAPE chart): for every month with a valid CAPE reading,
+    the real total-return CAGR (dividends reinvested -- same "Price.1"
+    basis and same nearest-date/CAGR formula drawdown_engine.py's own
+    future_return_* fields already use, just computed for every month
+    instead of only episode bottoms) at 5/10/15 years forward, then
+    grouped into buckets (todos los meses, CAPE>30/35/40) and reduced
+    to the median. Armando's own caveat kept verbatim ("muestra
+    descriptiva, no señal operativa... periodos pocos y no
+    independientes"), plus a concrete disclosure his caveat implies but
+    doesn't spell out: verified by direct inspection that the CAPE>40
+    bucket (21 months with 15y-forward data) is almost entirely one
+    historical cluster (1999-2000), and CAPE>35 combines two distinct
+    periods (1998-2001, 2021-2026) -- not dozens of independent trials,
+    a fact worth stating plainly rather than leaving to a generic
+    caveat sentence.
+-   **Resumen de drawdowns históricos** (new section, after the price
+    chart): median/worst drawdown, median peak->bottom duration, median
+    bottom->recovery duration, computed directly from the 23 Episode
+    objects run_drawdown_engine() already detected -- no new detection
+    logic, purely an aggregate reduction of data already shown
+    (shaded) on the price chart above it.
+-   **Wording fix, "Detalle de indicadores"**: Armando: "inflación
+    aparece como 'Cerca de la media', pero 4,23% vs 2,31% puede
+    chirriar visualmente." The z-score classification itself is
+    correct and NOT changed here (inflación's std is 5.76pp -- a
+    century including hyperinflation/deflation makes the "near" band
+    genuinely wide; Z_THRESHOLD_NEAR is Armando-confirmed and shared
+    with the operational dashboard, out of scope to touch for a
+    wording complaint about one row in one table). New
+    `_readable_lectura()` is additive, local to this file's "Lectura"
+    column only: when the band is "Cerca de la media" but the raw
+    value sits above/below the raw mean, it says so explicitly
+    ("Por encima de la media, dentro del rango histórico habitual")
+    instead of just "Cerca". Same fix applied consistently to all three
+    z-scored rows (CAPE, Inflación, Tipo), not only inflación, so the
+    table doesn't end up applying two different reading rules to
+    dimensions in the same "near" band.
+
 Read-only, single command, no server:
 
     python3 generate_shiller_dashboard.py
@@ -90,6 +139,7 @@ Read-only, single command, no server:
 
 import base64
 import io
+import statistics
 from datetime import datetime
 from pathlib import Path
 
@@ -132,6 +182,24 @@ DRIVER_LABEL_ES = {
     "inflation": "la inflación",
     "rate": "el tipo de interés a 10 años",
 }
+
+# RE-SHILLER-DASH.5 -- CAPE buckets for the forward-returns table,
+# Armando's own spec ("Todos los meses", ">30", ">35", ">40").
+# threshold=None means no filter (all months with a valid CAPE).
+CAPE_RETURN_BUCKETS = [
+    (None, "Todos los meses"),
+    (30, "CAPE > 30"),
+    (35, "CAPE > 35"),
+    (40, "CAPE > 40"),
+]
+
+# 5/10/15 years forward, per Armando's table header. Distinct from
+# drawdown_engine.py's Episode.future_return_1y/3y/5y/10y (no 15y
+# there, and those are only computed at episode bottoms, not every
+# month) -- this file needs a wider horizon and a wider population,
+# computed locally, not by extending the Frozen Core's Episode model
+# for a presentation-layer table.
+FORWARD_RETURN_YEARS = (5, 10, 15)
 
 # Same color language as outputs/dashboard.html (.dot.ok/.warn/.bad,
 # .pill.ok/.warn/.bad) -- reused here so a reader who has seen one
@@ -288,6 +356,90 @@ def chart_series(df, episodes, column, ylabel, latest_label: str, as_pct=False) 
     return _fig_to_data_uri(fig)
 
 
+def _forward_real_total_return(df, start_date, years):
+    """
+    RE-SHILLER-DASH.5 -- mirrors drawdown_engine.py's own private
+    _future_return() exactly: same "Price.1" basis (real, inflation-
+    adjusted, dividends reinvested), same "nearest available date >=
+    target" boundary handling, same CAGR formula. The only difference
+    is this is callable for ANY month in the series, not only episode
+    bottoms -- drawdown_engine.py's future_return_* fields only exist
+    at the 23 detected bottoms. Presentation-layer only: does not
+    import from or modify drawdown_engine.py, does not touch episode
+    detection or the Research Engine's own future_return_* fields.
+
+    Uses Price.1 (dividends reinvested), not "Price" (the series
+    plotted in the price chart above, no dividends) -- total real
+    return is the standard, and already-established-in-this-codebase,
+    definition for "what did this investment actually return", so this
+    reuses that definition rather than inventing a second one.
+    """
+    future_date = start_date + years
+    future_rows = df[df["Date"] >= future_date]
+    if len(future_rows) == 0:
+        return None
+    start_rows = df[df["Date"] >= start_date]
+    if len(start_rows) == 0:
+        return None
+    p0 = start_rows.iloc[0]["Price.1"]
+    p1 = future_rows.iloc[0]["Price.1"]
+    if p0 is None or p0 == 0:
+        return None
+    return (p1 / p0) ** (1 / years) - 1
+
+
+def build_cape_return_stats(df) -> list:
+    """
+    RE-SHILLER-DASH.5 -- Armando: "el bloque más valioso que falta...
+    cuando el CAPE estaba en rangos parecidos, ¿qué retornos reales
+    anualizados se observaron después?" Not a prediction: a descriptive
+    reduction (median) of what already happened, computed once per
+    month over the full series, then grouped into CAPE_RETURN_BUCKETS.
+    n_months (bucket size) and n_Xy (months with a valid Xy-forward
+    return, which shrinks for the longer horizons near the end of the
+    series) are kept alongside every median, on purpose -- Armando's
+    own caveat is "periodos pocos y no independientes"; a bare median
+    with no sample size would hide exactly how thin some of these
+    buckets are.
+    """
+    valid = df[df["CAPE"].notna()].copy()
+    for years in FORWARD_RETURN_YEARS:
+        valid[f"fwd_{years}y"] = [
+            _forward_real_total_return(df, d, years) for d in valid["Date"]
+        ]
+
+    rows = []
+    for threshold, label in CAPE_RETURN_BUCKETS:
+        bucket = valid if threshold is None else valid[valid["CAPE"] > threshold]
+        row = {"label": label, "n_months": len(bucket)}
+        for years in FORWARD_RETURN_YEARS:
+            series = bucket[f"fwd_{years}y"].dropna()
+            row[f"median_{years}y"] = series.median() if len(series) else None
+            row[f"n_{years}y"] = len(series)
+        rows.append(row)
+    return rows
+
+
+def build_drawdown_summary(episodes) -> dict:
+    """
+    RE-SHILLER-DASH.5 -- Armando: "ya sombreas las 23 caídas, pero falta
+    una lectura agregada." Pure aggregation over the Episode objects
+    run_drawdown_engine() already produced -- no new detection, no
+    recomputation of any peak/bottom/recovery date.
+    """
+    drawdowns = [e.drawdown for e in episodes if e.drawdown is not None]
+    durations = [e.duration_months for e in episodes if e.duration_months is not None]
+    recoveries = [e.recovery_months for e in episodes if e.recovery_months is not None]
+    return {
+        "n": len(episodes),
+        "median_drawdown": statistics.median(drawdowns) if drawdowns else None,
+        "worst_drawdown": min(drawdowns) if drawdowns else None,
+        "median_duration": statistics.median(durations) if durations else None,
+        "median_recovery": statistics.median(recoveries) if recoveries else None,
+        "n_recovered": len(recoveries),
+    }
+
+
 def build_shiller_data() -> dict:
     dataset = run_drawdown_engine()
     df = dataset.data
@@ -369,6 +521,8 @@ def build_shiller_data() -> dict:
         "driver_magnitude_color": _reading_magnitude_color(driver_short),
         "n_episodes": len(episodes),
         "earliest_date": df["Date"].min(),
+        "cape_return_rows": build_cape_return_stats(df),
+        "drawdown_summary": build_drawdown_summary(episodes),
     }
 
 
@@ -376,7 +530,7 @@ def _lower_first(text: str) -> str:
     return text[0].lower() + text[1:] if text else text
 
 
-def build_headline(data: dict) -> tuple:
+def build_headline(data: dict) -> str:
     """
     RE-SHILLER-DASH.4 -- replaces the RE-SHILLER-DASH.2 single run-on
     sentence. Armando: "el resumen ejecutivo en líneas con texto
@@ -385,12 +539,18 @@ def build_headline(data: dict) -> tuple:
     gave every dimension equal weight regardless of whether anything
     about it was actually notable.
 
-    Returns (title, subtitle): title is one short sentence built around
-    market status + whichever dimension is most anomalous today
-    (driver_key/driver_long, same computation the headline dot and the
-    indicator table's dots already use -- not a second judgment).
-    subtitle is a compact, comma-free list of the four headline figures
-    -- detail kept, but out of the sentence itself.
+    Returns one short title sentence built around market status +
+    whichever dimension is most anomalous today (driver_key/driver_long,
+    same computation the headline dot and the indicator table's dots
+    already use -- not a second judgment).
+
+    RE-SHILLER-DASH.4b -- Armando, same day, on the first version of
+    this fix: "repites los datos, en pequeño y en grande" -- correct,
+    the four-figure subtitle this function used to also return duplicated
+    the stat-strip immediately below it verbatim (same four numbers,
+    same order). Dropped the subtitle entirely: build_stat_strip()
+    already is the detail layer now ("las cifras cada una por su lado"),
+    the headline only needs to say the one sentence that matters.
     """
     drawdown = data["latest_drawdown"]
     if drawdown is not None and drawdown == 0.0:
@@ -401,18 +561,10 @@ def build_headline(data: dict) -> tuple:
         market = "Estado de mercado no disponible"
 
     if data["driver_magnitude_color"] == "near":
-        title = f"{market}. CAPE, inflación y tipos dentro de sus rangos históricos normales."
-    else:
-        driver_label = DRIVER_LABEL_ES[data["driver_key"]]
-        title = f"{market}, con {driver_label} {_lower_first(data['driver_long'])}."
+        return f"{market}. CAPE, inflación y tipos dentro de sus rangos históricos normales."
 
-    subtitle = (
-        f"CAPE {_fmt_num(data['latest_cape'], 1)} (percentil {_fmt_num(data['cape_percentile'], 0)}) · "
-        f"Drawdown {_fmt_pct(data['latest_drawdown'])} · "
-        f"Inflación {_fmt_pct(data['latest_inflation'], 2)} · "
-        f"Tipo 10a {_fmt_rate(data['latest_rate'])}"
-    )
-    return title, subtitle
+    driver_label = DRIVER_LABEL_ES[data["driver_key"]]
+    return f"{market}, con {driver_label} {_lower_first(data['driver_long'])}."
 
 
 def build_stat_strip(data: dict) -> str:
@@ -438,6 +590,34 @@ def build_stat_strip(data: dict) -> str:
     return f'<div class="stat-strip">{body}</div>'
 
 
+def _readable_lectura(short_label: str, value, mean) -> str:
+    """
+    RE-SHILLER-DASH.5 -- Armando: en "Detalle de indicadores", inflación
+    muestra "Cerca de la media" pese a que 4,23% vs 2,31% (casi el
+    doble) "puede chirriar visualmente". The z-score classification is
+    correct and NOT changed here: inflación's std is 5.76pp (a century
+    including hyperinflation and deflation makes the "near" band
+    genuinely wide), Z_THRESHOLD_NEAR is Armando-confirmed and shared
+    with the operational dashboard (generate_dashboard.py's own
+    _context_words()) -- not touched, out of scope for a wording
+    complaint about one column in one table. This is additive and
+    local: when the band is "Cerca de la media" but the raw value sits
+    above/below the raw mean, say so explicitly instead of just "Cerca"
+    -- same fix applied to all three z-scored rows (CAPE, Inflación,
+    Tipo) for consistency, not only the row Armando happened to point
+    at. Does not change the dot color (still "near") or which dimension
+    counts as the headline's driver -- both still key off the untouched
+    short_label from _context_words().
+    """
+    if short_label != "Cerca de la media" or value is None or mean is None:
+        return short_label
+    if value > mean:
+        return "Por encima de la media, dentro del rango histórico habitual"
+    if value < mean:
+        return "Por debajo de la media, dentro del rango histórico habitual"
+    return short_label
+
+
 def build_indicator_strip(data: dict) -> str:
     """
     RE-SHILLER-DASH.2/3/4 -- Armando's requested table, "contexto en 10
@@ -458,12 +638,18 @@ def build_indicator_strip(data: dict) -> str:
     default vs. _fmt_rate's 2dp default) already exists in outputs/
     dashboard.html's own Datos de mercado table -- not changed here,
     flagged to Armando separately since that's a different file.
+
+    RE-SHILLER-DASH.5 -- "Lectura" text now runs through
+    _readable_lectura() so a "cerca de la media" reading also says
+    above/below the raw mean when that's true (see that function's
+    docstring). Dot colors unchanged -- still keyed off the raw
+    short_label, not the readable text.
     """
     rows = [
         ("Drawdown", _fmt_pct(data["latest_drawdown"]), "--", data["drawdown_reading"], "dot", drawdown_dot_color(data["latest_drawdown"])),
-        ("CAPE", _fmt_num(data["latest_cape"], 1), _fmt_num(data["cape_mean"], 1), data["cape_short"], "mag-dot", _reading_magnitude_color(data["cape_short"])),
-        ("Inflación", _fmt_pct(data["latest_inflation"], 2), _fmt_pct(data["inflation_mean"], 2), data["inflation_short"], "mag-dot", _reading_magnitude_color(data["inflation_short"])),
-        ("Tipo (10 años)", _fmt_rate(data["latest_rate"]), _fmt_rate(data["rate_mean"]), data["rate_short"], "mag-dot", _reading_magnitude_color(data["rate_short"])),
+        ("CAPE", _fmt_num(data["latest_cape"], 1), _fmt_num(data["cape_mean"], 1), _readable_lectura(data["cape_short"], data["latest_cape"], data["cape_mean"]), "mag-dot", _reading_magnitude_color(data["cape_short"])),
+        ("Inflación", _fmt_pct(data["latest_inflation"], 2), _fmt_pct(data["inflation_mean"], 2), _readable_lectura(data["inflation_short"], data["latest_inflation"], data["inflation_mean"]), "mag-dot", _reading_magnitude_color(data["inflation_short"])),
+        ("Tipo (10 años)", _fmt_rate(data["latest_rate"]), _fmt_rate(data["rate_mean"]), _readable_lectura(data["rate_short"], data["latest_rate"], data["rate_mean"]), "mag-dot", _reading_magnitude_color(data["rate_short"])),
     ]
     body = "".join(
         f"<tr><td>{_esc(label)}</td><td class=\"num\">{_esc(hoy)}</td>"
@@ -474,6 +660,55 @@ def build_indicator_strip(data: dict) -> str:
     return f"""
     <table>
       <tr><th>Métrica</th><th class="num">Hoy</th><th class="num">Media histórica</th><th>Lectura</th></tr>
+      {body}
+    </table>
+    """
+
+
+def build_cape_returns_table(rows: list) -> str:
+    """
+    RE-SHILLER-DASH.5 -- Armando's requested format: CAPE inicial |
+    retorno real 5a/10a/15a (mediana). "N (meses)" appended per bucket
+    -- not in his original mockup, added because his own caveat
+    ("periodos pocos y no independientes") is much more concrete with
+    the actual count next to each median than as a generic sentence
+    below the table.
+    """
+    body = "".join(
+        "<tr><td>{label}</td>{cells}<td class=\"num\">{n}</td></tr>".format(
+            label=_esc(row["label"]),
+            cells="".join(
+                f'<td class="num">{_esc(_fmt_pct(row[f"median_{y}y"], 1))}</td>'
+                for y in FORWARD_RETURN_YEARS
+            ),
+            n=row["n_months"],
+        )
+        for row in rows
+    )
+    header_cells = "".join(f'<th class="num">Retorno real {y}a</th>' for y in FORWARD_RETURN_YEARS)
+    return f"""
+    <table>
+      <tr><th>CAPE inicial</th>{header_cells}<th class="num">N (meses)</th></tr>
+      {body}
+    </table>
+    """
+
+
+def build_drawdown_summary_table(summary: dict) -> str:
+    rows = [
+        ("Episodios de caída detectados", str(summary["n"])),
+        ("Caída mediana", _fmt_pct(summary["median_drawdown"])),
+        ("Peor caída", _fmt_pct(summary["worst_drawdown"])),
+        ("Duración mediana, pico -> fondo", f"{_fmt_num(summary['median_duration'], 0)} meses" if summary["median_duration"] is not None else "No disponible"),
+        ("Recuperación mediana, fondo -> máximo previo", f"{_fmt_num(summary['median_recovery'], 0)} meses" if summary["median_recovery"] is not None else "No disponible"),
+    ]
+    body = "".join(
+        f"<tr><td>{_esc(label)}</td><td class=\"num\">{_esc(value)}</td></tr>"
+        for label, value in rows
+    )
+    return f"""
+    <table>
+      <tr><th>Métrica</th><th class="num">Valor</th></tr>
       {body}
     </table>
     """
@@ -499,7 +734,14 @@ def render_html(data: dict) -> str:
 
     range_label = f"{_fmt_shiller_date(data['earliest_date'])} - {fecha}"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-    headline_title, headline_subtitle = build_headline(data)
+    headline_title = build_headline(data)
+
+    # RE-SHILLER-DASH.5 -- pulled out of the caveat f-string below for
+    # readability; count of months behind the "CAPE > 40" bucket,
+    # verified by direct inspection (see module docstring) to be almost
+    # entirely one historical cluster (1999-2000), not independent
+    # trials.
+    cape_gt_40_n = next(r["n_months"] for r in data["cape_return_rows"] if r["label"] == "CAPE > 40")
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -520,7 +762,6 @@ def render_html(data: dict) -> str:
      rather than the RE-SHILLER-DASH.2 run-on sentence Armando called
      out ("en líneas con texto seguido"). */
   .headline-action {{ font-size:1.15rem; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; margin:0; }}
-  .headline-support {{ color:#666; margin:0.5rem 0 0; font-size:0.82rem; font-variant-numeric:tabular-nums; }}
   /* Same .stat-strip/.stat-value/.stat-label pattern already approved
      for "Evidencia histórica" (RE-DASH.1.11) -- reused, not a new
      visual language, so headline figures read as grouped tiles instead
@@ -569,7 +810,6 @@ def render_html(data: dict) -> str:
 <section class="card accent-{data['driver_magnitude_color']}">
   <h2>Resumen ejecutivo</h2>
   <p class="headline-action"><span class="mag-dot {data['driver_magnitude_color']}"></span>{_esc(headline_title)}</p>
-  <p class="headline-support">{_esc(headline_subtitle)}</p>
   {build_stat_strip(data)}
 </section>
 
@@ -591,10 +831,23 @@ def render_html(data: dict) -> str:
 </section>
 
 <section class="card">
+  <h2>Resumen de drawdowns históricos</h2>
+  {build_drawdown_summary_table(data['drawdown_summary'])}
+  <p class="note">Lectura agregada de las {data['n_episodes']} caídas sombreadas en la gráfica de arriba -- mismos episodios, sin recalcular nada. Las {data['n_episodes']} han recuperado su máximo previo dentro de la serie (ninguna sigue abierta a día de hoy, coherente con que el mercado está en máximo histórico ahora mismo).</p>
+</section>
+
+<section class="card">
   <h2>CAPE (Cyclically Adjusted P/E)</h2>
   <img src="{cape_img}" alt="CAPE de Shiller, 1871-2026">
   <p class="note">Media de toda la serie: {_fmt_num(data['cape_mean'], 1)} (línea discontinua). Media de los últimos {CAPE_RECENT_YEARS} años: {_fmt_num(data['cape_recent_mean'], 1)}. Desviación típica: {_fmt_num(data['cape_std'], 1)}. Percentil histórico: {_fmt_num(data['cape_percentile'], 0)} -- el CAPE de hoy supera al de aproximadamente ese porcentaje de meses en toda la serie.</p>
   <p class="note">Último dato disponible: {fecha} -- {_fmt_num(data['latest_cape'], 1)}.</p>
+</section>
+
+<section class="card">
+  <h2>Retornos reales posteriores según CAPE inicial</h2>
+  {build_cape_returns_table(data['cape_return_rows'])}
+  <p class="note">Retorno real total anualizado (CAGR, dividendos reinvertidos), medido desde cada mes con el CAPE indicado hasta N años después, mediana por grupo -- mismo cálculo que ya usa el Research Engine para future_return_5y/10y en drawdown_engine.py, aplicado aquí a todos los meses de la serie, no solo a los 23 fondos de episodio.</p>
+  <p class="caveat">Muestra descriptiva, no señal operativa. Los periodos con CAPE extremo son pocos y no independientes: los {cape_gt_40_n} meses de la fila "CAPE &gt; 40" proceden casi en su totalidad de un único episodio histórico (1999-2000, más los últimos meses de hoy, aún sin retorno futuro que medir); "CAPE &gt; 35" combina dos periodos distintos (1998-2001 y 2021-2026), no docenas de casos independientes.</p>
 </section>
 
 <section class="card">
