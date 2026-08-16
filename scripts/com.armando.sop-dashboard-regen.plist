@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.armando.sop-dashboard-regen</string>
+
+    <!-- -l = login shell, so it sources the same profile (.zprofile/.zshrc)
+         that a normal Terminal session uses: same PATH that already
+         works when generate_dashboard.py is run by hand. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>"/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/scripts/regenerate_dashboard.sh"</string>
+    </array>
+
+    <!-- Fires whenever anything under data/raw/ changes: covers
+         personal_capacity_facts.xlsx, shiller.xlsx, dry_powder_ledger.xlsx
+         and human_approval_attestations.xlsx alike, not just one file. -->
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/data/raw</string>
+    </array>
+
+    <!-- Also regenerates once when the agent loads (e.g. at login),
+         so the dashboard is never more stale than "since last login". -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Minimum seconds between runs, in case a single save triggers
+         more than one filesystem event (e.g. Excel's temp-file-then-
+         rename pattern). Regeneration itself is cheap and read-only,
+         so this is a courtesy, not a correctness requirement. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/logs/launchd_stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/logs/launchd_stderr.log</string>
+</dict>
+</plist>

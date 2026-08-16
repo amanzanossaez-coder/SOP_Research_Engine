@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.08\
+**Version:** 2.09\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,12 +17,13 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.7 (2026-08-15). Nota RE-DASH.1.7: la fila de régimen en
-"Por qué no se actúa" ahora dice dirección real (alto/bajo) en vez de
-solo "fuera de rango" -- verificado contra los valores reales de los
-episodios comparables, nunca supuesto, con caída segura (fail-closed)
-si la dirección no es determinable. "Retorno mediano posterior"
-acortado para caber en una línea sin perder precisión. Sigue sin tocar
+As of RE-DASH.1.8 (2026-08-16). Nota RE-DASH.1.8: el dashboard ahora
+puede regenerarse solo, sin pasar por un agente, mediante un job de
+launchd (macOS) que vigila `data/raw/` y llama al
+`generate_dashboard.py` ya existente sin modificarlo. No activo hasta
+que Armando lo instale; su comportamiento de `launchd`/`WatchPaths` no
+se ha podido verificar desde este sandbox (no hay macOS/launchd aquí),
+solo la lógica del script y la validez del plist. Sigue sin tocar
 ningún gate, protocolo ni motor. No altera ninguna cifra de progreso
 técnico de esta tabla:
 
@@ -7993,6 +7994,79 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.8 — Dashboard: reactive auto-regeneration (launchd, not an agent)
+
+Armando noticed `outputs/dashboard.html` did not reflect an edit he
+had just made to `personal_capacity_facts.xlsx` -- correct behaviour
+by RE-DASH.1's own design ("static, read-only", regenerated only when
+`generate_dashboard.py` is run), but not what he wants operationally.
+Asked explicitly for it to become "operativo actualizándose sin tener
+que pasar por ti" -- automatic, and specifically *not* routed through
+an agent each time.
+
+Given that framing, the right answer is a deterministic OS-level job,
+not a scheduled agent invocation: an agent call still means an LLM in
+the loop for a purely mechanical regeneration, which is exactly the
+dependency Armando asked to remove, and is a heavier, less
+inspectable mechanism than the task requires. Added:
+
+-   `scripts/regenerate_dashboard.sh`: a thin wrapper -- `cd` to the
+    repo, run `python3 generate_dashboard.py`, append output to
+    `logs/dashboard_regen.log`. No logic of its own; never
+    duplicates or reimplements anything `generate_dashboard.py`
+    already does.
+-   `scripts/com.armando.sop-dashboard-regen.plist`: a macOS launchd
+    agent definition using `WatchPaths` on `data/raw/` (all four raw
+    source files, not just `personal_capacity_facts.xlsx` --
+    `shiller.xlsx`, `dry_powder_ledger.xlsx` and
+    `human_approval_attestations.xlsx` are equally inputs to the same
+    dashboard). Runs the wrapper via a login shell (`zsh -l -c`) so it
+    inherits the same `PATH` an interactive Terminal session already
+    uses successfully -- not launchd's minimal default `PATH`, which
+    could otherwise resolve a different, dependency-less `python3`.
+    `RunAtLoad` regenerates once on login too, so staleness is capped
+    at "since last login" even with no file edits. `ThrottleInterval`
+    of 10s guards against a single Excel save firing more than one
+    filesystem event.
+-   `.gitignore` gains `logs/` (runtime output, same principle as
+    `outputs/`).
+
+What this does not authorize:
+
+-   No change to `generate_dashboard.py`'s data collection or
+    rendering logic -- the wrapper calls it unmodified.
+-   Nothing is active until Armando runs the install commands himself
+    (`cp` the plist to `~/Library/LaunchAgents/`, `launchctl load`).
+    Writing these files does not turn on the automation.
+
+Boundary and an explicit verification gap, stated plainly rather than
+glossed over:
+
+-   Three new files (`scripts/regenerate_dashboard.sh`,
+    `scripts/com.armando.sop-dashboard-regen.plist`) and one edited
+    (`.gitignore`). No Frozen Core component touched, no gate,
+    protocol, model or loader file touched, `generate_dashboard.py`
+    itself untouched.
+-   Verified: the plist is well-formed XML (parsed successfully). The
+    wrapper script's own logic (cd, mkdir, call
+    `generate_dashboard.py`, append to log) was run end-to-end in this
+    sandbox under `bash` (the sandbox has no `zsh`) with the real Mac
+    path substituted for the sandbox mount path, and produced a
+    correct log entry and a regenerated `outputs/dashboard.html`.
+-   **Not verified, and cannot be from this sandbox**: launchd itself,
+    the `zsh -l -c` invocation, `WatchPaths` actually firing on a real
+    file edit, or whether the executable bit set here survives the
+    iCloud sync to Armando's Mac. This sandbox is a separate Linux
+    environment mounting the same iCloud folder -- it is not
+    Armando's Mac, has no `launchd`, and this design follows standard
+    launchd `WatchPaths`/`RunAtLoad`/`ThrottleInterval` semantics from
+    documentation, not empirical confirmation on his machine. Armando
+    should confirm the first real trigger via
+    `logs/dashboard_regen.log` and `logs/launchd_stderr.log` after
+    installing it.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.7 — Dashboard: directional regime wording + one-line evidence label
 
 Armando, reviewing RE-DASH.1.6's output: "Fuera del rango que tuvieron
@@ -10756,6 +10830,21 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.09
+
+-   RE-DASH.1.8: reactive auto-regeneration for the dashboard via a
+    macOS launchd agent (`scripts/com.armando.sop-dashboard-regen.plist`)
+    watching `data/raw/`, plus a thin wrapper script
+    (`scripts/regenerate_dashboard.sh`). Deliberately not a scheduled
+    agent invocation -- Armando asked for this to work without going
+    through an agent each time, so it is a deterministic OS-level job
+    calling the unmodified `generate_dashboard.py`. Not active until
+    Armando installs it himself. launchd/`WatchPaths` behavior not
+    verified from this sandbox (no macOS/launchd here) -- only the
+    wrapper script's own logic and the plist's XML validity were
+    verified directly. Full details in the Design Decision entry above
+    (RE-DASH.1.8).
 
 ## Version 2.08
 
