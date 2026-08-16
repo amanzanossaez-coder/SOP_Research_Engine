@@ -17,7 +17,15 @@ cd "$REPO_DIR" || exit 1
 
 {
   echo "----- $(date '+%Y-%m-%d %H:%M:%S') -----"
-  python3 generate_dashboard.py
+  # RE-DASH.1.9 -- nested login shell, only for the python3 call: picks
+  # up the same PATH an interactive Terminal already uses (.zprofile),
+  # which launchd's own direct exec of this script does not source.
+  # No long path with spaces to quote here -- unlike wrapping this
+  # whole script in "zsh -l -c '<repo path>/regenerate_dashboard.sh'"
+  # at the plist level (RE-DASH.1.8's approach), which failed in
+  # practice: zsh treated the quoted path as a script to open, not a
+  # command string, per the real stderr Armando reported.
+  zsh -l -c 'python3 generate_dashboard.py'
   echo "outputs/dashboard.html actualizado."
   echo ""
 } >> "$LOG_FILE" 2>&1

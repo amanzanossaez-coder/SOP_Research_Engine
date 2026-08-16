@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.09\
+**Version:** 2.10\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,15 +17,14 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.8 (2026-08-16). Nota RE-DASH.1.8: el dashboard ahora
-puede regenerarse solo, sin pasar por un agente, mediante un job de
-launchd (macOS) que vigila `data/raw/` y llama al
-`generate_dashboard.py` ya existente sin modificarlo. No activo hasta
-que Armando lo instale; su comportamiento de `launchd`/`WatchPaths` no
-se ha podido verificar desde este sandbox (no hay macOS/launchd aquí),
-solo la lógica del script y la validez del plist. Sigue sin tocar
-ningún gate, protocolo ni motor. No altera ninguna cifra de progreso
-técnico de esta tabla:
+As of RE-DASH.1.9 (2026-08-16). Nota RE-DASH.1.9: la primera
+instalación real de RE-DASH.1.8 falló en la máquina de Armando
+(`zsh: can't open input file`) -- exactamente el riesgo que esa misma
+entrada había señalado como no verificable desde este sandbox.
+Corregido eliminando el envoltorio de shell frágil a nivel de launchd;
+pendiente de que Armando confirme que la reinstalación funciona de
+verdad. Sigue sin tocar ningún gate, protocolo ni motor. No altera
+ninguna cifra de progreso técnico de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7994,6 +7993,66 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.9 — Dashboard: fixes RE-DASH.1.8's real launchd failure
+
+Armando installed RE-DASH.1.8's launchd job and it failed on the real
+first run. `logs/launchd_stderr.log` on his machine (read through the
+synced folder, not reproduced in this sandbox) showed:
+
+    /bin/zsh: can't open input file: /Users/armando/.../scripts/regenerate_dashboard.sh
+
+The RE-DASH.1.8 boundary note had explicitly flagged that the
+`zsh -l -c "<quoted path>"` invocation could not be verified from this
+sandbox (no macOS/launchd here) -- that risk materialized. Diagnosis:
+`-c`'s argument is supposed to be parsed by zsh as a command string,
+with the embedded literal double-quotes stripped as shell quoting; in
+practice zsh instead treated the argument as a script *file* to open
+directly (the exact error a bare `zsh <path>` invocation produces),
+not as a `-c` command string. Root cause not fully re-derived from
+first principles here (would require testing directly against zsh on
+a Mac, not assumed) -- fixed by removing the fragile construction
+instead of trying to patch the quoting further:
+
+-   `scripts/com.armando.sop-dashboard-regen.plist`: `ProgramArguments`
+    now directly execs the script by its absolute path (one array
+    element, no shell wrapper at the launchd level at all). launchd
+    execs it via `execve()`, no shell tokenizes the path, so a path
+    containing spaces needs no quoting -- eliminates the entire class
+    of bug RE-DASH.1.8 hit.
+-   `scripts/regenerate_dashboard.sh`: the login-shell PATH pickup
+    (needed so `python3` resolves the same way it does in an
+    interactive Terminal) moved *inside* the script, wrapping only the
+    `python3 generate_dashboard.py` call in a nested
+    `zsh -l -c 'python3 generate_dashboard.py'`. That inner command
+    string has no path, no spaces and no embedded quotes -- nothing
+    left to get wrong the same way.
+
+What this does not authorize:
+
+-   No change to `generate_dashboard.py` or `WatchPaths`/
+    `RunAtLoad`/`ThrottleInterval` -- only the invocation mechanism
+    that failed.
+
+Boundary and the same explicit verification gap as RE-DASH.1.8, still
+open:
+
+-   Two files modified: `scripts/com.armando.sop-dashboard-regen.plist`,
+    `scripts/regenerate_dashboard.sh`.
+-   Verified: plist re-parses as well-formed XML; the script's mkdir/
+    cd/logging logic re-ran successfully in this sandbox (`python3`
+    substituted directly for the nested `zsh -l -c` call, since this
+    sandbox has no `zsh` to test that exact line).
+-   **Still not verified from this sandbox**: the nested
+    `zsh -l -c 'python3 generate_dashboard.py'` line itself, or that
+    launchd's direct exec of a shebang script with a space-containing
+    path behaves as documented. Armando needs to unload the old job,
+    reload the corrected plist, and confirm via
+    `logs/dashboard_regen.log` / `logs/launchd_stderr.log` that this
+    attempt actually succeeds -- this entry records what was fixed and
+    why, not a confirmed-working end state.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.8 — Dashboard: reactive auto-regeneration (launchd, not an agent)
 
 Armando noticed `outputs/dashboard.html` did not reflect an edit he
@@ -10830,6 +10889,19 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.10
+
+-   RE-DASH.1.9: fixes RE-DASH.1.8's real first-run failure on
+    Armando's machine (`zsh: can't open input file`, the
+    `zsh -l -c "<quoted path>"` invocation did not behave as
+    documented). Removed the shell-wrapping at the launchd level
+    entirely -- `ProgramArguments` now execs the script by absolute
+    path directly, no quoting involved; the login-shell PATH pickup
+    for `python3` moved inside the script itself, wrapping only a
+    short, space-free command string. Still not confirmed working
+    end-to-end -- Armando needs to reload the corrected job. Full
+    details in the Design Decision entry above (RE-DASH.1.9).
 
 ## Version 2.09
 

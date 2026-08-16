@@ -5,15 +5,14 @@
     <key>Label</key>
     <string>com.armando.sop-dashboard-regen</string>
 
-    <!-- -l = login shell, so it sources the same profile (.zprofile/.zshrc)
-         that a normal Terminal session uses: same PATH that already
-         works when generate_dashboard.py is run by hand. -->
+    <!-- Direct exec of the script (its own #!/bin/zsh shebang runs it):
+         no shell string-wrapping at this level, so no path-with-spaces
+         quoting to get wrong. The script itself opens a nested login
+         shell just for the python3 call, where there is nothing left
+         to quote. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/zsh</string>
-        <string>-l</string>
-        <string>-c</string>
-        <string>"/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/scripts/regenerate_dashboard.sh"</string>
+        <string>/Users/armando/Library/Mobile Documents/com~apple~CloudDocs/12. FINANZAS/11. SOP/SOP_Research_Engine/scripts/regenerate_dashboard.sh</string>
     </array>
 
     <!-- Fires whenever anything under data/raw/ changes: covers
