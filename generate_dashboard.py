@@ -759,6 +759,23 @@ def build_alerts(data: dict) -> list:
     return alerts[:5]
 
 
+def drawdown_context(drawdown) -> str:
+    """
+    RE-SHILLER-DASH.1 -- extracted from render_html()'s inline block
+    (was duplicated logic waiting to happen: generate_shiller_dashboard.py
+    needs the exact same "plain fact, not z-score" drawdown reading
+    RE-DASH.1.4 already established -- a market mostly at 0% drawdown
+    would read as "cerca de la media" under z-score banding, which
+    misrepresents "at an all-time high" as some middling reading. One
+    function, both dashboards import it, so the two can't drift.
+    """
+    if drawdown is not None and drawdown == 0.0:
+        return "Mercado en máximo histórico"
+    if drawdown is not None:
+        return f"Caída del {_fmt_pct(abs(drawdown))} desde el máximo"
+    return "No disponible"
+
+
 # ---------------------------------------------------------------------------
 # Estado por patrimonio -- compact per-patrimonio helpers
 # ---------------------------------------------------------------------------
@@ -1132,12 +1149,7 @@ def render_html(data: dict) -> str:
     inflation_value = ctx.inflation if ctx else None
     rate_value = ctx.interest_rate if ctx else None
 
-    if snapshot.drawdown is not None and snapshot.drawdown == 0.0:
-        drawdown_context = "Mercado en máximo histórico"
-    elif snapshot.drawdown is not None:
-        drawdown_context = f"Caída del {_fmt_pct(abs(snapshot.drawdown))} desde el máximo"
-    else:
-        drawdown_context = "No disponible"
+    drawdown_context_str = drawdown_context(snapshot.drawdown)
 
     # RE-DASH.1.20 -- Armando's explicit choice (asked, not inferred):
     # "Valor, Human Approval y Liquidez disponible deben estar
@@ -1155,7 +1167,7 @@ def render_html(data: dict) -> str:
       </tr>
       <tr><th>Serie completa ({full_range_label})</th><th>Últimos {RECENT_WINDOW_YEARS} años ({recent_range_label})</th></tr>
       <tr><td>Fecha de datos</td><td>{data_date}</td><td>--</td><td>--</td></tr>
-      <tr><td>Caída actual desde máximo</td><td>{_fmt_pct(snapshot.drawdown)}</td><td>{drawdown_context}</td><td>--</td></tr>
+      <tr><td>Caída actual desde máximo</td><td>{_fmt_pct(snapshot.drawdown)}</td><td>{drawdown_context_str}</td><td>--</td></tr>
       <tr><td>CAPE</td><td>{_fmt_num(cape_value, 1)}</td><td>{context_bar(cape_value, cape_mean, cape_std)}</td><td>{context_bar(cape_value, recent_cape_mean, recent_cape_std)}</td></tr>
       <tr><td>Inflación (interanual)</td><td>{_fmt_pct(inflation_value)}</td><td>{context_bar(inflation_value, inflation_mean, inflation_std)}</td><td>{context_bar(inflation_value, recent_inflation_mean, recent_inflation_std)}</td></tr>
       <tr><td>Tipo de interés (bono EEUU 10 años)</td><td>{_fmt_rate(rate_value)}</td><td>{context_bar(rate_value, rate_mean, rate_std)}</td><td>{context_bar(rate_value, recent_rate_mean, recent_rate_std)}</td></tr>

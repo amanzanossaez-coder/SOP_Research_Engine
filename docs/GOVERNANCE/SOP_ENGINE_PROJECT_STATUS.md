@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.22\
+**Version:** 2.24\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,19 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.21 (2026-08-16). Nota RE-DASH.1.21: la Liquidez deja de
+As of RE-SHILLER-DASH.2 (2026-08-16). Nota RE-SHILLER-DASH.1/2: nuevo
+panel `generate_shiller_dashboard.py` -> `outputs/shiller_dashboard.html`,
+separado del dashboard operativo -- gráficas estáticas (matplotlib,
+cero `<script>`) sobre la serie completa de Shiller (1871-2026),
+reutilizando `run_drawdown_engine()` sin recalcular nada. Tras revisión
+de Armando: resumen ejecutivo, franja de indicadores, percentil de
+CAPE (99,0, verificado) y media a 10 años (32,4, verificado) añadidos.
+Hallazgo técnico real, no buscado: el gráfico de precio usaba la
+columna nominal ("P") en vez de la real ("Price") -- corregido; la
+detección de episodios del Research Engine (`drawdown_engine.py`)
+sigue sobre precio nominal, sin cambios, fuera de alcance de esta
+iteración. Cero cambios a gates, protocolos, motores o cifras del
+dashboard operativo. Nota RE-DASH.1.21: la Liquidez deja de
 ser una tabla con barra de 84px y pasa a una tarjeta por patrimonio a
 petición explícita de Armando ("demasiado pequeña y demasiado
 escondida... el suelo y techo no se ven directamente, solo aparecen en
@@ -8100,6 +8112,184 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.2 — Panorama histórico: executive layer, and a real
+   nominal-vs-real price finding
+
+Armando's structured review of v1: "lo veo más como un cuaderno de
+gráficas históricas que como un dashboard ejecutivo... le falta una
+capa superior de lectura." Six concrete changes requested, plus one
+real technical finding surfaced while implementing change #5:
+
+-   **Resumen ejecutivo**: one sentence at the top, built from the
+    same `drawdown_context()`/`_context_words()` readings the
+    indicator strip shows below it (imported from
+    `generate_dashboard.py`, not reimplemented) -- can't disagree with
+    the table under it because it's the same computation, not a second
+    independent judgment in prose.
+-   **Franja de indicadores**: a 4-row table (Drawdown, CAPE,
+    Inflación, Tipo a 10 años) before the charts, per Armando's own
+    mockup. His mockup read inflación as "Por encima" by eyeballing
+    4,2% vs. 2,3% -- checked against the same z-score bands the
+    operative dashboard already uses (confirmed by Armando for
+    RE-DASH.1.4) and flagged the disagreement rather than silently
+    picking one: inflación's z-score is 0.33 (std=5,8pp, so +1,9pp is
+    less than half a standard deviation) -- "Cerca de la media", not
+    "Por encima". Used the verified z-score reading; told Armando the
+    discrepancy and why, left the choice open if he prefers the
+    eyeballed version instead.
+-   **Percentil de CAPE**: computed directly (share of historical
+    months with a lower CAPE than today's) -- 99,0. Armando's own
+    estimate ("percentil histórico 98/99 aprox") checked out.
+-   **Media de CAPE a 10 años**: computed directly -- 32,36 -> "32,4",
+    matching the figure Armando already had. New `CAPE_RECENT_YEARS =
+    10` constant, deliberately not reusing `RECENT_WINDOW_YEARS = 50`
+    from `generate_dashboard.py` -- different window, different
+    purpose, not forced into one shared constant.
+-   **Precio real, no nominal**: Armando's request to clarify the
+    price chart's label ("¿es Price o Price.1?") led to checking the
+    actual column, not guessing -- and it was neither. `chart_price()`
+    was plotting `df["P"]`, which the Shiller workbook's own header
+    rows identify as "S&P Comp." (raw nominal price, not adjusted for
+    inflation). `df["Price"]` is the real (inflation-adjusted, no
+    dividends) series. Switched the chart to `"Price"` and corrected
+    the label to "S&P 500 -- precio real, sin dividendos". Verified
+    computationally before concluding anything: at the latest row `P`
+    and `Price` are equal (expected -- "real" terms are anchored to
+    today's dollars, so nominal=real for the most recent observation
+    by construction); at row 0 (1871) `P`=4.44 vs `Price`=119.94,
+    confirming the ~27x gap is cumulative inflation, not an error.
+    Explicitly scoped: this changes only which line this one chart
+    draws. `drawdown_engine.py`'s own episode detection (peak/bottom/
+    recovery dates, % drawdown) still runs on nominal `P`, unchanged,
+    out of scope -- flagged to Armando as a real fact about the core
+    engine's existing behavior, not something this iteration touches
+    or judges.
+-   **"Qué NO dice este panel"**: added as its own block in a new
+    "Nota metodológica" card at the end, near-verbatim to Armando's
+    wording.
+-   Page reordered to Armando's proposed structure: resumen ejecutivo
+    -> franja de indicadores -> precio -> CAPE -> inflación -> tipos
+    -> nota metodológica.
+-   `drawdown_context()` extracted from `generate_dashboard.py`'s
+    inline block into a shared function both scripts import -- the new
+    dashboard needed the identical "plain fact, not z-score" drawdown
+    reading RE-DASH.1.4 already established (a market at 0% drawdown
+    would misleadingly read as "cerca de la media" under z-score
+    banding), and duplicating that logic in a second file risked the
+    two drifting apart.
+
+What this does not authorize:
+
+-   No change to `drawdown_engine.py`, episode detection, or any
+    gate/protocol file. The nominal-vs-real finding is reported, not
+    acted on -- switching the core engine's own price basis would be a
+    separate, much larger decision requiring Armando's explicit
+    sign-off, not a side effect of a chart-label fix.
+
+Boundary:
+
+-   Two files modified: `generate_shiller_dashboard.py` (executive
+    summary, indicator strip, CAPE percentile/10-year mean, real-price
+    chart, restructured page, methodology card) and
+    `generate_dashboard.py` (`drawdown_context()` extracted as a
+    shared function; `render_html()`'s inline block replaced with a
+    call to it -- output unchanged, verified below).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `python3
+    generate_dashboard.py` re-run after the `drawdown_context()`
+    extraction -- `outputs/dashboard.html` still contains "Mercado en
+    máximo histórico" exactly as before. `python3
+    generate_shiller_dashboard.py` re-run -- indicator strip shows
+    Drawdown 0,0%/--/"Mercado en máximo histórico", CAPE 41,4/17,8/
+    "Muy por encima", Inflación 4,2%/2,3%/"Cerca de la media", Tipo
+    4,44%/4,48%/"Cerca de la media"; CAPE note shows percentil 99,
+    media 10 años 32,4; resumen ejecutivo sentence matches the same
+    four readings. Price chart's real-price line rendered and visually
+    inspected -- shows the 1966-1982 real bear market and 1982-2000
+    real bull market clearly, a materially different (and more honest)
+    shape than the nominal version. Full `tests/verify_*.py` suite
+    re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-SHILLER-DASH.1 — Panorama histórico (Shiller): new static-chart
+   dashboard, first version
+
+Armando, after RE-DASH.1.21 landed: "estaba pensando... que
+construyamos un dashboard parecido con la información de shiller, con
+gráficas e info relevante, ¿tiene sentido?" Answered directly before
+building, not by default agreement: yes, for a stated reason --
+distinct purpose from `outputs/dashboard.html` (decision-support
+snapshot for today vs. historical/diagnostic exploration), and it lets
+Armando visually verify what `run_drawdown_engine()`'s episode
+detection is doing against the real historical series instead of
+trusting it from tables alone. Also named the one real trade-off
+before starting: this sits outside the project's own stated next
+milestone (Similarity Engine v2, per `PROJECT_STATE.md`) -- not a
+blocker, a separate file touching none of the same code, but a
+conscious sequencing choice, not a silent one.
+
+Two architecture questions asked directly rather than inferred (both
+genuine forks, not details):
+
+-   Static charts (matplotlib -> PNG, no `<script>`) vs. interactive
+    (a JS charting library). Armando chose static -- preserves the
+    zero-`<script>`, read-only rule `outputs/dashboard.html` has kept
+    since RE-DASH.1.4; an interactive library would have been an
+    architecture change, not a detail, so not decided silently.
+-   New separate file/output vs. a new section inside the existing
+    operational dashboard. Armando chose separate -- different
+    audience/purpose, keeps the decision-support dashboard from
+    absorbing scope that isn't its job.
+
+New `generate_shiller_dashboard.py` -> `outputs/shiller_dashboard.html`:
+
+-   Reuses `run_drawdown_engine()` directly -- same `Dataset`, same
+    `Episode` objects, same computed columns (`CAPE`,
+    `InflationRate1Y`, `Rate GS10`, `Drawdown`) the Research Engine and
+    `outputs/dashboard.html` already use. No new loader, no
+    independently recomputed figures.
+-   Four charts: S&P price (log scale, v1 used `"P"` -- corrected to
+    real price in RE-SHILLER-DASH.2, see below), CAPE, inflación
+    interanual, tipo a 10 años -- chosen because they are exactly the
+    three "regime dimensions" `RegimeComparabilityGate` already
+    evaluates plus the price/drawdown anchor, not an arbitrary
+    selection.
+-   Each historical episode `run_drawdown_engine()` detects is shaded
+    on every chart (red = fase de caída, ochre = fase de recuperación)
+    -- the same `Episode` objects the Research Engine matches against,
+    not a second detector.
+-   Reuses `generate_dashboard.py`'s existing Spanish-format helpers
+    (`_esc`, `_fmt_amount`, `_fmt_num`, `_fmt_pct`, `_fmt_rate`,
+    `_fmt_shiller_date`) by direct import rather than reimplementing
+    number formatting a second time.
+-   Same color language as the operational dashboard (`.dot.ok/.warn/
+    .bad` reds/ochres/greens) reused for the shading, not a second
+    independent palette.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model, loader, or the Research
+    Engine itself -- purely a new, read-only presentation layer over
+    data those already produce.
+
+Boundary:
+
+-   One new file: `generate_shiller_dashboard.py` ->
+    `outputs/shiller_dashboard.html`. No existing file modified in
+    this entry (the `drawdown_context()` extraction is
+    RE-SHILLER-DASH.2, not this one).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` generated, all four PNG charts extracted
+    and visually inspected (episodes correctly shaded at 1929, 2000,
+    2008; today marked at the latest point on each series). Full
+    `tests/verify_*.py` suite re-run after generating: same four
+    pre-existing failures, nothing new -- confirms importing from
+    `generate_dashboard.py` introduced no side effects.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.21 — Dashboard: liquidity moves from a table cell to a
    full-width card per patrimonio
 
@@ -11654,6 +11844,27 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.24
+
+-   RE-SHILLER-DASH.2: executive-reading layer added to the new
+    Shiller panel per Armando's structured review (resumen ejecutivo,
+    franja de indicadores, percentil de CAPE, media 10 años). Real
+    finding surfaced and fixed: the price chart plotted nominal price,
+    not real -- corrected, core engine's episode detection unaffected.
+    `drawdown_context()` extracted to a shared function used by both
+    dashboards. Full details in the Design Decision entry above
+    (RE-SHILLER-DASH.2).
+
+## Version 2.23
+
+-   RE-SHILLER-DASH.1: new `generate_shiller_dashboard.py` ->
+    `outputs/shiller_dashboard.html`, a separate, read-only, static-
+    chart panel over the full Shiller series (1871-2026) -- distinct
+    purpose from the operational dashboard, agreed with Armando before
+    building. Reuses `run_drawdown_engine()` and existing formatters,
+    no new loader, no recalculated figures. Full details in the Design
+    Decision entry above (RE-SHILLER-DASH.1).
 
 ## Version 2.22
 
