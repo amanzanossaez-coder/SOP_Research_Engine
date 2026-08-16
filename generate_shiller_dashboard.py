@@ -160,6 +160,35 @@ tabla de CAPE."
     headers also reworded ("5 años" -> unambiguous, "anualizado" stated
     once in the lead paragraph instead of buried in a note underneath).
 
+RE-SHILLER-DASH.7 (same day) -- Armando, one line: "centra los
+episodios en el siglo XX y XXI." Directly resolves RE-SHILLER-DASH.6's
+own open hallucination-risk flag on the third named episode (1872-1877,
+uncertain correspondence to the Pánico de 1873) -- rather than trying
+to confirm that date with a source, the ranking pool for "peores
+episodios con nombre" is now filtered to peak_date >= 1900 before
+taking the top 3. Result: 1929 (Gran Depresión), 2007-2009 (crisis
+financiera global), 2000-2002 (estallido de la burbuja puntocom) -- all
+three well-documented, no date ambiguity, no hedge needed in the name
+itself anymore.
+
+RE-SHILLER-DASH.8 (same day) -- Armando: "simplifica el apartado de
+CAPE. Que sea facil de ver como se construye ese CAGR... me gusta una
+conclusion mas de este tipo en lugar de tanta palabrería donde te
+pierdes", with a concrete example of the tone he wants. He's right --
+RE-SHILLER-DASH.6's fix for "no entiendo" overcorrected into a wall of
+text (a "cómo leer esta tabla" paragraph, a worked example with 6
+numbers, a methodology note, and a caveat -- four paragraphs to read
+before reaching the table). Cut to two: one line on what the number is
+("ya descuenta la inflación y reinvierte dividendos"), and one
+conclusion in his own requested shape (zona extrema -> retornos muy
+inferiores a la media, especialmente a 5-10 años; muestra pequeña y
+concentrada -> contexto de valoración, no señal operativa). The worked
+cumulative-return example and the specific 1999-2000/1998-2001
+clustering detail from RE-SHILLER-DASH.5/6 are dropped from the visible
+page (the N column still exposes sample size per row) -- still on
+record in governance if needed again, just not fighting for space on
+the dashboard itself.
+
 Read-only, single command, no server:
 
     python3 generate_shiller_dashboard.py
@@ -233,17 +262,21 @@ FORWARD_RETURN_YEARS = (5, 10, 15)
 # drawdowns que tienen nombre y apellidos". Keyed by peak_date (the
 # Episode field, matches exactly since these names were assigned by
 # looking up the real top-3-by-magnitude episodes from a live run, not
-# guessed independently). Two are named with high confidence -- 1929
-# and 2007-2009 are about as well-documented as market history gets.
-# The third carries an explicit hedge in its own name string rather
-# than a separate footnote: the engine's detected peak (1872.05)
-# precedes the conventionally-cited Pánico de 1873 by over a year, and
-# 19th-century naming conventions are less standardized -- said inline
-# so the table itself doesn't overclaim.
+# guessed independently).
+#
+# RE-SHILLER-DASH.7 -- Armando: "centra los episodios en el siglo XX y
+# XXI". NOTABLE_DRAWDOWN_MIN_YEAR filters the ranking pool before
+# taking the top 3, which drops the pre-1900 episode this dict used to
+# carry with an unverified-date hedge (Pánico de 1873 candidate) --
+# resolves that hallucination-risk flag by removing the need for the
+# hedge entirely, rather than by asserting the date with more
+# confidence than the evidence supports. All three names below are
+# now well-documented 20th/21st-century events with no date ambiguity.
+NOTABLE_DRAWDOWN_MIN_YEAR = 1900
 NOTABLE_DRAWDOWN_NAMES = {
     1929.09: "Gran Depresión (Crac de 1929)",
     2007.10: "Crisis financiera global (2008)",
-    1872.05: "Depresión de la década de 1870 (posible Pánico de 1873 -- fecha de pico no coincide con exactitud, sin confirmar)",
+    2000.08: "Estallido de la burbuja puntocom (2000-2002)",
 }
 N_NOTABLE_DRAWDOWNS = 3
 
@@ -463,12 +496,6 @@ def build_cape_return_stats(df) -> list:
             median = series.median() if len(series) else None
             row[f"median_{years}y"] = median
             row[f"n_{years}y"] = len(series)
-            # RE-SHILLER-DASH.6 -- cumulative equivalent of the
-            # annualized median, computed here (not hand-typed in the
-            # HTML) so the plain-language lead paragraph can quote a
-            # real number instead of an approximation that could drift
-            # from the table above it.
-            row[f"cumulative_{years}y"] = (1 + median) ** years - 1 if median is not None else None
         rows.append(row)
     return rows
 
@@ -497,13 +524,20 @@ def build_notable_drawdowns(episodes) -> list:
     """
     RE-SHILLER-DASH.6 -- Armando: "los dos o tres peores episodios de
     drawdowns que tienen nombre y apellidos". Takes the real top-3 by
-    magnitude from the 23 detected episodes (not cherry-picked for
-    fame) and attaches the name from NOTABLE_DRAWDOWN_NAMES. If a
-    future data refresh ever changes which episodes rank in the top 3,
-    an unnamed one falls back to a plain, honest label instead of a
-    KeyError or a silently wrong name -- fail-visible, not fail-silent.
+    magnitude (not cherry-picked for fame) and attaches the name from
+    NOTABLE_DRAWDOWN_NAMES. If a future data refresh ever changes which
+    episodes rank in the top 3, an unnamed one falls back to a plain,
+    honest label instead of a KeyError or a silently wrong name --
+    fail-visible, not fail-silent.
+
+    RE-SHILLER-DASH.7 -- Armando: "centra los episodios en el siglo XX
+    y XXI". Ranking pool filtered to peak_date >= NOTABLE_DRAWDOWN_
+    MIN_YEAR before taking the top 3 -- not a second detector, just a
+    narrower slice of the same 23 episodes run_drawdown_engine()
+    already produced.
     """
-    worst = sorted(episodes, key=lambda e: e.drawdown)[:N_NOTABLE_DRAWDOWNS]
+    pool = [e for e in episodes if e.peak_date >= NOTABLE_DRAWDOWN_MIN_YEAR]
+    worst = sorted(pool, key=lambda e: e.drawdown)[:N_NOTABLE_DRAWDOWNS]
     rows = []
     for e in worst:
         name = NOTABLE_DRAWDOWN_NAMES.get(e.peak_date, "Episodio sin nombre popular asignado")
@@ -830,21 +864,6 @@ def render_html(data: dict) -> str:
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     headline_title = build_headline(data)
 
-    # RE-SHILLER-DASH.5 -- pulled out of the caveat f-string below for
-    # readability; count of months behind the "CAPE > 40" bucket,
-    # verified by direct inspection (see module docstring) to be almost
-    # entirely one historical cluster (1999-2000), not independent
-    # trials.
-    cape_gt_40_n = next(r["n_months"] for r in data["cape_return_rows"] if r["label"] == "CAPE > 40")
-
-    # RE-SHILLER-DASH.6 -- Armando: "NO entiendo las cifras de la tabla
-    # de CAPE." Pulled out so the plain-language lead paragraph can
-    # quote real, computed cumulative figures (not hand-typed
-    # approximations) for the row closest to today's CAPE (41,4) versus
-    # the "todos los meses" baseline, in the same sentence.
-    cape_gt_40_row = next(r for r in data["cape_return_rows"] if r["label"] == "CAPE > 40")
-    cape_all_row = next(r for r in data["cape_return_rows"] if r["label"] == "Todos los meses")
-
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -938,7 +957,7 @@ def render_html(data: dict) -> str:
   <p class="note">Lectura agregada de las {data['n_episodes']} caídas sombreadas en la gráfica de arriba -- mismos episodios, sin recalcular nada. Las {data['n_episodes']} han recuperado su máximo previo dentro de la serie (ninguna sigue abierta a día de hoy, coherente con que el mercado está en máximo histórico ahora mismo).</p>
   <h2 style="margin-top:1rem;">Los peores episodios, con nombre</h2>
   {build_notable_drawdowns_table(data['notable_drawdowns'])}
-  <p class="note">Los tres peores por magnitud, de los {data['n_episodes']} detectados. 1929 y 2007-2009 son identificaciones de alta confianza (episodios ampliamente documentados). El tercero incluye su propia advertencia en el nombre: la fecha de pico que detecta el motor no coincide con exactitud con el Pánico de 1873 tal y como se documenta habitualmente -- no verificado con precisión.</p>
+  <p class="note">Los tres peores por magnitud dentro del siglo XX y XXI (de los {data['n_episodes']} detectados en toda la serie, que arranca en 1871) -- los tres, episodios ampliamente documentados, sin ambigüedad de fecha.</p>
 </section>
 
 <section class="card">
@@ -950,10 +969,9 @@ def render_html(data: dict) -> str:
 
 <section class="card">
   <h2>Retornos reales posteriores según CAPE inicial</h2>
-  <p class="note" style="margin-top:0;">Cómo leer esta tabla: para cada mes de la serie con el CAPE en el rango indicado, ¿cuánto valió realmente (ajustado por inflación, dividendos reinvertidos) haber invertido a partir de ahí, N años después? La cifra es un <strong>porcentaje anual</strong>, no acumulado -- un -4,5% anual durante 5 años no es "-4,5% en total", es más. Ejemplo concreto con la fila que más se parece a hoy (CAPE actual: {_fmt_num(data['latest_cape'], 1)}): en los {cape_gt_40_row['n_months']} meses históricos con CAPE &gt; 40, la mediana fue {_fmt_pct(cape_gt_40_row['median_5y'], 1)} anual a 5 años -- equivalente a un {_fmt_pct(cape_gt_40_row['cumulative_5y'], 0)} acumulado en esos 5 años -- {_fmt_pct(cape_gt_40_row['median_10y'], 1)} anual ({_fmt_pct(cape_gt_40_row['cumulative_10y'], 0)} acumulado) a 10 años, y {_fmt_pct(cape_gt_40_row['median_15y'], 1)} anual ({_fmt_pct(cape_gt_40_row['cumulative_15y'], 0)} acumulado) a 15 años. Que el signo cambie de negativo a positivo entre 10 y 15 años no es un error: es reversión a la media -- el mercado tardó más en dar retorno positivo, pero incluso a 15 años ese {_fmt_pct(cape_gt_40_row['median_15y'], 1)} anual queda muy por debajo del {_fmt_pct(cape_all_row['median_15y'], 1)} anual de "todos los meses" (la fila sin filtrar, la referencia de fondo).</p>
+  <p class="note" style="margin-top:0;">Retorno real anualizado (CAGR): ya descuenta la inflación y reinvierte dividendos -- compara el CAPE de partida con lo que rindió esa inversión, en mediana, N años después.</p>
   {build_cape_returns_table(data['cape_return_rows'])}
-  <p class="note">Retorno real total anualizado (CAGR, dividendos reinvertidos), medido desde cada mes con el CAPE indicado hasta N años después, mediana por grupo -- mismo cálculo que ya usa el Research Engine para future_return_5y/10y en drawdown_engine.py, aplicado aquí a todos los meses de la serie, no solo a los 23 fondos de episodio.</p>
-  <p class="caveat">Muestra descriptiva, no señal operativa. Los periodos con CAPE extremo son pocos y no independientes: los {cape_gt_40_n} meses de la fila "CAPE &gt; 40" proceden casi en su totalidad de un único episodio histórico (1999-2000, más los últimos meses de hoy, aún sin retorno futuro que medir); "CAPE &gt; 35" combina dos periodos distintos (1998-2001 y 2021-2026), no docenas de casos independientes.</p>
+  <p class="caveat">Con CAPE en zona extrema, la historia muestra retornos reales muy inferiores a la media, especialmente a 5-10 años. La muestra es pequeña y concentrada (ver N por fila), por lo que debe leerse como contexto de valoración, no como señal operativa.</p>
 </section>
 
 <section class="card">

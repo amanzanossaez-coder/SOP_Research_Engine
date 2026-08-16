@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.28\
+**Version:** 2.30\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,17 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.6 (2026-08-16). Nota RE-SHILLER-DASH.6: los 3
+As of RE-SHILLER-DASH.8 (2026-08-16). Nota RE-SHILLER-DASH.8: la
+sección de retornos por CAPE se había pasado de frenada respondiendo a
+"no entiendo" -- cuatro párrafos antes de la tabla. Reducida a dos: qué
+es el CAGR en una línea, y una conclusión corta y directa (zona
+extrema -> retornos inferiores, muestra pequeña -> contexto, no señal),
+en el tono exacto que pidió Armando. Cero cambios a cifras. Nota
+RE-SHILLER-DASH.7: "peores
+episodios con nombre" ahora se elige solo entre siglo XX-XXI (peak_date
+>= 1900) -- el tercer puesto pasa de un episodio de 1872-1877 con fecha
+no verificada a 2000-2002 (burbuja puntocom), bien documentado. Cero
+ambigüedad de fecha en los tres nombres ahora. Nota RE-SHILLER-DASH.6: los 3
 peores episodios de caída, con nombre, dentro de "Resumen de drawdowns
 históricos" -- 1929 y 2008 con alta confianza, el tercero (1872-1877)
 con advertencia explícita de fecha no verificada en el propio nombre.
@@ -8146,6 +8156,89 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.8 — Panorama histórico: sección de CAPE, de cuatro
+   párrafos a dos
+
+Armando: "simplifica el apartado de CAPE. Que sea facil de ver como se
+construye ese CAGR... me gusta una conclusion mas de este tipo en lugar
+de tanta palabrería donde te pierdes", con un ejemplo textual del tono
+que quería. Tenía razón -- el arreglo de RE-SHILLER-DASH.6 para "no
+entiendo" se pasó de frenada: un párrafo "cómo leer esta tabla", un
+ejemplo trabajado con 6 cifras, una nota de metodología y un caveat --
+cuatro párrafos antes de llegar a la tabla.
+
+Reducido a dos: una línea sobre qué es el número ("ya descuenta la
+inflación y reinvierte dividendos"), y una conclusión con la forma
+exacta que pidió Armando (zona extrema -> retornos muy inferiores a la
+media, especialmente a 5-10 años; muestra pequeña y concentrada ->
+contexto de valoración, no señal operativa). El ejemplo de retorno
+acumulado y el detalle de qué periodos concretos forman cada bucket
+(1999-2000, 1998-2001/2021-2026, de RE-SHILLER-DASH.5/6) se retiran de
+la vista -- siguen registrados en gobernanza si hace falta recuperarlos,
+la columna N sigue exponiendo el tamaño de muestra por fila.
+
+What this does not authorize:
+
+-   No change to any underlying number -- pure text/paragraph
+    reduction in the presentation layer.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py` (removed the
+    now-unused `cumulative_Xy` computation from
+    `build_cape_return_stats()`; removed the `cape_gt_40_n`/
+    `cape_gt_40_row`/`cape_all_row` lookups from `render_html()`;
+    "Retornos reales posteriores según CAPE inicial" card reduced from
+    four paragraphs to two).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted -- section now
+    shows exactly two paragraphs plus the table, no dead code left
+    behind. Full `tests/verify_*.py` suite re-run: same single
+    pre-existing failure (`verify_research_engine.py`, ordering only),
+    nothing new. `generate_dashboard.py` (operational) regenerated
+    separately, unaffected.
+
+------------------------------------------------------------------------
+
+## RE-SHILLER-DASH.7 — Panorama histórico: episodios con nombre,
+   acotados al siglo XX-XXI
+
+Armando, inmediato tras RE-SHILLER-DASH.6: "centra los episodios en el
+siglo XX y XXi." Resuelve directamente el propio flag de riesgo de
+alucinación que RE-SHILLER-DASH.6 dejó abierto sobre el tercer episodio
+nombrado (1872-1877, correspondencia no verificada con el Pánico de
+1873) -- en vez de intentar confirmar esa fecha con una fuente, la
+selección de "peores episodios con nombre" ahora filtra el fondo de
+episodios a peak_date >= 1900 antes de tomar los 3 peores. Nuevo tercer
+lugar: 2000.08->2003.02 (-43,7%), estallido de la burbuja puntocom --
+bien documentado, sin ambigüedad de fecha, igual que los otros dos.
+
+What this does not authorize:
+
+-   No change to episode detection or any gate -- a narrower ranking
+    pool over the same 23 episodes, nothing recalculated.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py`
+    (`NOTABLE_DRAWDOWN_MIN_YEAR` added; `NOTABLE_DRAWDOWN_NAMES`'s
+    third entry replaced; `build_notable_drawdowns()` filters the pool
+    before ranking; the table's caveat note simplified since all three
+    names are now high-confidence).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted. Table now shows
+    exactly 1929.09->1932.06 (-84,8%, Gran Depresión), 2007.10->
+    2009.03 (-50,8%, crisis financiera global de 2008), 2000.08->
+    2003.02 (-43,7%, estallido de la burbuja puntocom) -- confirmed via
+    direct query that these are the real top-3-by-magnitude episodes
+    with peak_date >= 1900 among the 23 detected. Full
+    `tests/verify_*.py` suite re-run: same single pre-existing failure
+    (`verify_research_engine.py`, ordering only), nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.6 — Panorama histórico: episodios con nombre, y la
    tabla de CAPE explicada de verdad
 
@@ -12182,6 +12275,21 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.30
+
+-   RE-SHILLER-DASH.8: "Retornos reales posteriores según CAPE inicial"
+    reducido de cuatro párrafos a dos -- una línea de metodología, una
+    conclusión corta en el tono que pidió Armando. Full details in the
+    Design Decision entry above (RE-SHILLER-DASH.8).
+
+## Version 2.29
+
+-   RE-SHILLER-DASH.7: "peores episodios con nombre" acotado a peak_date
+    >= 1900 -- reemplaza el episodio de 1872-1877 (fecha no verificada
+    con precisión) por el estallido de la burbuja puntocom (2000-2002,
+    -43,7%), bien documentado. Full details in the Design Decision
+    entry above (RE-SHILLER-DASH.7).
 
 ## Version 2.28
 
