@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.11\
+**Version:** 2.20\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,17 +17,50 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.10 (2026-08-16). Nota RE-DASH.1.10: tras dos intentos
-fallidos de automatizar la regeneración en segundo plano vía launchd
-(RE-DASH.1.8, RE-DASH.1.9), un diagnóstico paso a paso con Armando
-aisló el fallo a una restricción real de macOS sobre procesos en
-segundo plano accediendo a iCloud Drive -- no el script, no el plist,
-no la descarga de iCloud (las tres teorías descartadas con pruebas
-directas). Sustituido por `Actualizar Dashboard.command`, un archivo
-de doble clic que se ejecuta de forma interactiva -- el mismo contexto
-ya probado que funciona. Se retiró la automatización de launchd del
-repo por no dejar código muerto. Sigue sin tocar ningún gate, protocolo
-ni motor. No altera ninguna cifra de progreso técnico de esta tabla:
+As of RE-DASH.1.19 (2026-08-16). Nota RE-DASH.1.19: la alerta
+"Régimen no comparable (CAPE)" era opaca para Armando -- reescrita en
+lenguaje llano ("No hay episodios comparables con un CAPE tan alto."),
+misma comparación ya existente, solo cambia la redacción. RE-DASH.1.18:
+"Liquidez disponible" desalineada con "Human Approval" pese a compartir
+ancho de columna (RE-DASH.1.17) -- se debía a que una estaba alineada a
+la derecha y la otra a la izquierda; corregido. RE-DASH.1.17: las dos
+tablas de "Estado por patrimonio" se auto-dimensionaban de forma
+independiente y desalineaban cada columna entre sí (el "triángulo" que
+Armando señaló) -- ahora comparten un esquema de anchos fijo.
+RE-DASH.1.16: el marcador de la barra de liquidez quedaba medio fuera
+del track en los extremos, y las zonas de color apenas se distinguían
+-- corregido con marcador anclado dentro del track y marcas de límite
+que no dependen del contraste de color. Cero cambios a gates,
+protocolos o cifras en las cuatro -- puramente capa de presentación.
+Nota RE-DASH.1.15: captura real de
+Armando destapó dos fallos reales en la barra de liquidez de
+RE-DASH.1.14 -- el marcador usaba una escala distinta a la de las
+zonas de color y por eso se salía visualmente de la barra (confirmado
+en pantallazo: "esto es un desastre a nivel de diseño"), y la cifra
+mostrada ("posición vs. suelo/techo") en realidad era solo la
+distancia a un único límite, ambigua tal y como estaba etiquetada.
+Ambos corregidos: marcador convertido a la misma escala que las zonas,
+cifra ahora nombra el límite explícitamente ("sobre techo"/"bajo
+suelo"). Cero cambios a gates, protocolos o cifras -- capa de
+presentación. Nota RE-DASH.1.14: la barra de
+liquidez añadida en RE-DASH.1.13 gana tres zonas de color fijas
+(déficit/objetivo/ocioso, rojo/verde/ámbar) sobre el propio track,
+a partir de una referencia de diseño que Armando compartió
+explícitamente como adaptable ("no lo tomes al pie de la letra");
+suelo/techo, retirados de la vista principal en RE-DASH.1.13, vuelven
+como tooltip nativo (`title`) sobre la barra -- no un control
+interactivo nuevo, metadato pasivo igual que el resto del dashboard.
+RE-DASH.1.13: corregido un problema real de cabeceras partiéndose en
+dos líneas (confirmado con una captura de pantalla real de Armando, no
+supuesto), y añadida una barra visual de posición para liquidez
+(suelo/techo), mismo patrón que Armando ya validó en Datos de mercado.
+RE-DASH.1.12 (documentada esta misma sesión, con retraso respecto al
+código): columna Estado alineada con Postura, y un bug real de
+tipografía corregido (Alertas y subtítulos heredaban el tamaño por
+defecto del navegador). Cero cambios a gates, protocolos o cifras
+mostradas -- puramente capa de presentación. Sigue sin tocar ningún
+gate, protocolo ni motor. No altera ninguna cifra de progreso técnico
+de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7996,6 +8029,511 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.14 — Dashboard: three-zone liquidity bar
+
+Armando shared a detailed design reference (his own words: "no lo
+tomes al pie de la letra, solo como referencia mejorable") for a
+"liquidity range bar" -- three colored zones (déficit/objetivo/
+ocioso), suelo/techo/actual labels, a diagnostic word. Compared
+against RE-DASH.1.13's bar rather than adopted verbatim:
+
+-   Color mapping (rojo=bajo suelo, verde=dentro, ámbar=sobre techo,
+    explicitly not verde for "over ceiling" since idle liquidity is a
+    SOP finding, not a win) was already exactly what
+    `liquidity_status()` returns -- confirmed, not changed.
+-   Added what was genuinely missing: three color zones on the track
+    itself (same pale tints as `.pill.bad/.ok/.warn`, not new colors),
+    computed from `LIQUIDITY_BAR_CLAMP_MIN/MAX` -- the same constants
+    that clamp the marker's position, so a boundary and a marker
+    resting on it can never silently disagree.
+-   Suelo/techo absolute figures, dropped from the visible row in
+    RE-DASH.1.13 to declutter per Armando's own prior request, restored
+    as a `title` attribute (native HTML hover tooltip, no script) --
+    same justification as `<details>` elsewhere: metadata available on
+    demand, not clutter in the default view. Still also in Detalle
+    técnico.
+-   Declined the "two cards, one per patrimonio" layout from the
+    reference: kept the existing row-per-patrimonio table. Reasoned,
+    not silent -- Armando's own prior instruction this same session
+    was to make Datos de mercado fit "en una línea" and reduce density;
+    a full separate card per patrimonio would have worked against
+    that, and diverged from the row-based pattern "Postura y permisos"
+    and "Datos de mercado" already use. Told to Armando directly, with
+    an offer to build the card layout instead if he still prefers it
+    after seeing the reasoning.
+
+What this does not authorize:
+
+-   No change to `liquidity_status()`, `liquidity_gap()`, or any gate/
+    protocol file -- the zone boundaries and marker position are both
+    presentation-layer derivations of numbers those functions already
+    return.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py`
+    (`LIQUIDITY_BAR_CLAMP_MIN/MAX` constants; `liquidity_bar()` gains
+    the zone gradient and `title` tooltip).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data:
+    `outputs/dashboard.html` regenerated. Spot-checked: AMS's marker
+    at 115% (ámbar zone, past the techo boundary) and AML's at -15%
+    (rojo zone, past the suelo boundary) -- both match the
+    already-verified real figures. Zone boundaries computed as 11.5%/
+    88.5%, matching the -15/115 clamp bounds by construction. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.19 — Dashboard: plain-language "not comparable" alert
+
+Armando saw "Régimen no comparable (CAPE)" in Alertas and asked what
+it meant, then "no acabo de entenderlo, ¿cuál es ese rango del que
+hablas?". Answered with the real numbers first (not guessed): today's
+CAPE is 41.37; the 10 historical episodes matched as comparable range
+from 14.82 (1990.06) to 33.53 (1998.07) -- no matched episode reaches
+anywhere near today's level. Armando then asked for the alert itself
+to say that plainly: "cambialo... por algo mas comprensible... 'no hay
+episodios comparables con un CAPE tan alto'".
+
+-   New `REGIME_DIMENSION_ALERT_ES` mapping (noun phrase + alto-form +
+    bajo-form per dimension, since Spanish gender/article differ: "un
+    CAPE"/alto/bajo, "una inflación"/alta/baja, "un tipo de
+    interés"/alto/bajo -- a single shared adjective across all three
+    would have been grammatically wrong for inflación).
+-   The alert now reuses `_regime_direction()` -- the exact same
+    today-vs-matched-range comparison `RegimeComparabilityGate`/
+    `_dimension_covered()` already makes and "Por qué no se actúa"
+    already renders -- not a second, independently-computed judgment.
+    Only the wording is new.
+
+What this does not authorize:
+
+-   No change to `RegimeComparabilityGate`, `_dimension_covered()`, or
+    any matching/evidence logic -- this changes only how an existing,
+    already-computed direction is worded in the Alertas list.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (new
+    `REGIME_DIMENSION_ALERT_ES`; `build_alerts()`'s "not comparable"
+    branch rewritten to use it).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: today's cape
+    41.368..., matched episodes' cape range [14.818..., 33.532...]
+    (10 episodes, one with a NaN cape context excluded) -- confirmed
+    via direct script execution before writing any wording, not
+    assumed. `outputs/dashboard.html` regenerated: Alertas now reads
+    "No hay episodios comparables con un CAPE tan alto." Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.18 — Dashboard: align "Liquidez disponible" with "Human
+   Approval"
+
+Armando, after RE-DASH.1.17: "alinea liquidez disponible con human
+approval y posicios vs con dry powder."
+
+-   Column 3 ("Liquidez disponible") was right-aligned (`td.num`, for
+    tabular-nums digit scanning) while column 3 of the table below
+    ("Human Approval") is plain left-aligned text. With both tables
+    now sharing identical fixed column widths (RE-DASH.1.17), that
+    alignment mismatch became visible as the two tables' column 3
+    starting at different x positions. Dropped the right-alignment so
+    both read from the same left edge.
+-   Column 4 ("Posición vs. suelo/techo" / "Dry Powder") was checked,
+    not assumed: both were already left-aligned by default (neither
+    carries `.num`), so no change was needed there -- confirmed by
+    extracting the real generated HTML before touching anything.
+
+What this does not authorize:
+
+-   No change to any figure -- `_fmt_amount()`'s output is unchanged,
+    only its cell's text-align.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`class="num"` removed
+    from the "Liquidez disponible" header and data cells).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated, extracted, and rendered as a live
+    preview from the real HTML/CSS before reporting done. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.17 — Dashboard: shared column widths across the two
+   "Estado por patrimonio" tables
+
+Armando's screenshot of RE-DASH.1.16's result: "Puedes alinear
+'Estado' y 'postura'? Puedes equilibrar ese triángulo entre
+liquidez/posición y Dry Powder y Human Approval?"
+
+-   "Liquidez" and "Postura y permisos" are two independent `<table>`
+    elements, each sized by `table-layout:auto` from its own content
+    only. A wide element in one (the liquidity bar) and a short one in
+    the other (Dry Powder's text) pulled each table's own column 4 to
+    a different width, staggering every column boundary between the
+    two tables -- the "triángulo" Armando named. No amount of content
+    changes inside either table can fix that; only forcing both tables
+    onto one shared width scheme can.
+-   New `.patrimonio-table` class: `table-layout:fixed` with explicit,
+    identical `nth-child` percentage widths (13/21/28/38%) applied to
+    both tables, so column 1 (Patrimonio) and column 2 (Estado/
+    Postura) land at the same x in both, and columns 3-4 split the
+    remaining width the same way in both instead of each table
+    expanding its own odd column to fill leftover space.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model, loader, or figure -- pure
+    column-width CSS on two already-existing tables.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (new
+    `.patrimonio-table` CSS class; applied to both tables in "Estado
+    por patrimonio").
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated, extracted, and rendered as a live
+    preview from the real HTML/CSS. Full `tests/verify_*.py` suite
+    re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.16 — Dashboard: liquidity bar marker inset and boundary
+   ticks
+
+Armando, after seeing the RE-DASH.1.15 fix rendered: "me gusta el
+contenido pero el diseño que me aparece es claramente mejorable aún."
+Two real, specific legibility problems, not a vague "make it prettier"
+ask:
+
+-   The marker's `left` position (0%/100% at the range extremes) plus
+    its own `translateX(-50%)` centers the dot exactly on the track's
+    edge, so half its own width hung off the track into blank cell
+    space -- looked disconnected from its own bar, especially at the
+    two most common alert-worthy positions (below suelo / above
+    techo). Fixed by insetting the *visual* position to 6%-94%
+    (`dot_visual_pct`), a display-only clamp that changes nothing
+    about `dot_pct`'s meaning for zone math.
+-   The three pale zone tints (deliberately dulled, reused from
+    `.pill.bad/.ok/.warn`, not new colors -- per Armando's standing
+    "no debe leer como oportunidad" instruction on this color
+    language) were too close in lightness to register as distinct
+    zones on a thin 4px line with no border -- read as one pale smudge
+    in his screenshot. Fixed without raising saturation (which would
+    have fought that same standing instruction): added tick marks at
+    the suelo/techo boundaries (reusing the existing `.ctx-tick`
+    pattern already used for context_bar()'s mean marker) so the
+    boundary is visible independent of color contrast, thickened the
+    track 4px->6px, and added a hairline border so it has a visible
+    edge against the white table background.
+-   All of this scoped to a new `.ctx-bar.liq` / `.ctx-dot`-under-
+    `.liq` variant, so `context_bar()`'s already-approved 52px/4px
+    market-data rows are untouched.
+
+What this does not authorize:
+
+-   No change to `liquidity_status()`, `liquidity_gap()`, or the
+    RE-DASH.1.15 coordinate fix -- purely a legibility pass on top of
+    already-correct positions.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`dot_visual_pct`
+    inset in `liquidity_bar()`; two new `<span class="ctx-tick">`
+    elements at the zone boundaries; `.ctx-bar.liq` gains height/
+    border, `.ctx-bar.liq .ctx-dot`/`.ctx-tick` gain matching
+    top-offsets).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated. AMS's dot at 94.0% (inset from the
+    raw 100%), AML's at 6.0% (inset from 0%), both still inside their
+    respective zone. Rendered as a live visual preview from the real
+    generated HTML/CSS before reporting done. Full `tests/verify_*.py`
+    suite re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.15 — Dashboard: liquidity bar marker/coordinate bug and
+   ambiguous figure label, both from a real screenshot
+
+Armando's screenshot of the shipped RE-DASH.1.14 bar: "esto es un
+desastre a nivel de diseño... la cifra que aparece no es posición vs
+suelo/techo, sino posición vs techo." Two separate real defects, not
+one:
+
+-   **Marker/zone coordinate mismatch (the "desastre").** RE-DASH.1.14's
+    verification claimed the marker sat "at 115% (ámbar zone)" -- true
+    of the underlying number, false of what actually rendered. The
+    zone gradient converts the clamped logical percent (-15 to 115,
+    percent of the suelo-techo span) into a 0-100% display scale
+    before painting (`floor_pct`/`ceiling_pct`). The marker's CSS
+    `left` skipped that conversion and used the clamped logical
+    percent directly -- so `left:115%` placed the dot 15% of the bar's
+    own width past its right edge, and `left:-15%` placed it 15% past
+    the left edge, both floating detached from the track exactly as
+    Armando's screenshot showed. This is a verification gap on my
+    part: RE-DASH.1.14 checked that the clamped number was correct,
+    not that it was correct *on the same coordinate system as the
+    zones it needed to sit inside*. Fixed by routing the marker
+    through the identical span conversion the zones already use --
+    one coordinate system, not two silently different ones.
+-   **Ambiguous figure.** `liquidity_gap()` always returns a gap
+    against a single boundary (suelo or techo, whichever applies),
+    never both at once -- but the label showed only a bare signed
+    amount under a column header reading "Posición vs. suelo/techo",
+    which read as if the number compared against both. Fixed at the
+    label, not the header: the boundary is now named explicitly
+    ("+17.273,00 € sobre techo" / "-50.625,00 € bajo suelo" / "+X €
+    sobre suelo" when within range), so the figure is self-explanatory
+    regardless of what the column header says.
+-   Also widened `.ctx-bar.liq` from 52px to 84px (a variant class, not
+    a change to `context_bar()`'s existing 52px track) -- at 52px the
+    two edge zones were only ~6px wide, functionally invisible.
+
+What this does not authorize:
+
+-   No change to `liquidity_status()` or `liquidity_gap()` -- both
+    remain the single source of truth for the underlying numbers; this
+    fixes only how the marker's position and the gap figure are
+    rendered.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`liquidity_bar()`
+    marker position now converted through the same span as the zone
+    boundaries; explicit boundary wording added to the label; new
+    `.ctx-bar.liq` CSS variant at 84px).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated. Recomputed AMS (167.273,00 €, floor
+    100.000, ceiling 150.000) -> marker `left:100.0%` (right edge,
+    inside the ámbar zone which starts at 88.5%), label "+17.273,00 €
+    sobre techo"; AML (199.375,00 €, floor 250.000, ceiling 300.000)
+    -> marker `left:0.0%` (left edge, inside the rojo zone which ends
+    at 11.5%), label "-50.625,00 € bajo suelo". Both markers now sit
+    visibly on the track, inside the zone their status color implies.
+    Rendered as a live visual preview from the real generated HTML and
+    CSS (not a reinterpretation) before reporting done. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.13 — Dashboard: one-line headers, liquidity as a visual gauge
+
+Armando sent a real screenshot of the shipped file: "Serie completa
+(1871-2026)" and "Últimos 50 años (1976-2026)" were wrapping to two
+lines in his actual browser, not just in a narrow preview -- confirmed
+before touching anything, not assumed. Also: "me gusta mucho el
+indicador... en datos de mercado, ¿podrías hacer algo similar con
+liquidez?"
+
+-   Table headers (`<th>`) are always short, single-line labels by
+    design (per RE-DASH.1.11's own comment) -- so `white-space:nowrap`
+    now enforces that rather than hoping column width happens to be
+    enough. The uppercase+letter-spacing treatment RE-DASH.1.11 added
+    was exactly what pushed "Serie completa (1871-2026)" past its
+    column and caused the real wrap.
+-   Applied the same `nowrap` discipline to `.ctx` (the context-bar
+    row) so a bar+label pair can't split across two lines either.
+-   New `liquidity_bar()`, the same gauge pattern as `context_bar()`:
+    a marker on a track. Replaces the separate "Rango de liquidez
+    (suelo/techo)" text column and "Exceso/Déficit" number column in
+    "Estado por patrimonio" with one visual unit -- track spans
+    suelo-to-techo, marker shows today's position (clamped to
+    -15%/115% so an out-of-range value still shows near the edge
+    instead of vanishing), exact signed € exceso/déficit kept as the
+    bar's caption (same `liquidity_gap()` figure already used, not
+    recalculated). Unlike `context_bar()`'s track (deliberately no
+    color judgment), this track's endpoints ARE the safe zone by
+    construction, so the marker reuses the same status_color
+    `liquidity_status()` already returned -- reinforcing the Estado
+    pill, not a second independent judgment; no new color language.
+-   The absolute suelo/techo € figures are not shown as literal
+    numbers in the main view anymore -- relocated, not dropped, to a
+    new row in Detalle técnico's per-patrimonio block, so anyone who
+    wants the raw figures can still open it.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model or loader file, and no
+    change to any figure -- `liquidity_gap()`/`liquidity_status()`
+    remain the single source of truth for the underlying numbers, the
+    bar only visualizes what they already return.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (new
+    `liquidity_bar()`; `th`/`.ctx` gain `white-space:nowrap`;
+    Liquidez table restructured to 4 columns; suelo/techo moved into
+    `technical_patrimonios`).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data:
+    `outputs/dashboard.html` regenerated. Spot-checked: AMS's marker
+    at 115% (clamped, ámbar, above techo) and AML's at -15% (clamped,
+    rojo, below suelo) match the real liquidity figures and the
+    already-verified exceso/déficit amounts (+17.273,00 €/-50.625,00 €).
+    Market table headers no longer wrap. Full `tests/verify_*.py`
+    suite re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.12 — Dashboard: column alignment and typography coherence
+
+Armando's screenshot of "Estado por patrimonio" plus a direct
+critique: "necesito que seas coherente con la tipografía y tamaños de
+letra... estado de liquidez alineado a la izquierda con postura...
+la parte de alertas parece tener otra tipografía y tamaño distinto."
+
+-   "Estado" moved from the last column of the Liquidez table to
+    right after "Patrimonio" -- the same position "Postura" already
+    occupies in the table below. The two pill columns now share the
+    same x-position when scanning down the card, instead of sitting
+    under unrelated headers at very different offsets.
+-   Diagnosed the typography complaint by checking, not guessing: the
+    CSS had no explicit `font-size` on `body`. Every other component
+    (tables, pills, notes, headline) had its own explicit rem-based
+    size (14-15px), but anything without one -- the `<ul><li>` in
+    Alertas, and the bare `<p><strong>` sub-section labels ("Liquidez",
+    "Postura y permisos", "Otros hallazgos") -- fell back to the
+    browser default (16px), reading as a second, larger typeface.
+    Fixed at the source: `body { font-size:0.88rem }`, plus explicit
+    `.alerts` styling (no default UA list markers/indent, matching
+    row rhythm) and a new `.subhead` class for the sub-section labels
+    instead of bare `<p><strong>`.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model or loader file, and no
+    change to any figure or the underlying data-collection logic.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (Liquidez table column
+    order; `body` gains an explicit `font-size`; `.alerts`/`.subhead`
+    classes added and applied).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data:
+    `outputs/dashboard.html` regenerated. Spot-checked: Estado and
+    Postura pill columns land at the same position; Alertas list items
+    render at the same size as table text. Full `tests/verify_*.py`
+    suite re-run: same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
+## RE-DASH.1.11 — Dashboard: McKinsey/Bain-style visual redesign
+
+Armando: "quiero que trabajes un diseño tipo consultoría Bain o
+McKinsey... mantén lo que consideres que ya encaja y modifica o
+elimina todo diseño que se salga de sus directrices." Explicit
+creative authority, bounded by a well-known reference. Reviewed the
+full CSS/HTML against consulting-report conventions (numbers
+right-aligned for scanability, muted small-caps table headers, sharp
+corners over rounded UI chrome, a single dominant headline message,
+headline metrics as tiles rather than a cramped list) and changed only
+what didn't fit -- the ok/warn/bad/neutral status-color system, the
+pill/dot vocabulary, the card structure and all data/gate logic were
+kept unchanged, per Armando's own instruction to preserve what already
+fits.
+
+Changes:
+
+-   Numeric table columns (Liquidez disponible, Rango de liquidez,
+    Exceso/Déficit, Valor de mercado) right-aligned with
+    `font-variant-numeric:tabular-nums` -- text stayed left-aligned.
+    New `.num` utility class, applied to both `<td>` and matching
+    `<th>`.
+-   Table headers (`<th>`) restyled small, gray, uppercase,
+    letter-spaced -- muted relative to the data, not competing with
+    it. Not applied to `.pill` values: several pill values are full
+    sentences ("Muy alto frente al histórico comparable"), and
+    uppercase hurts readability at that length, unlike short column
+    labels.
+-   Card and pill corner radius reduced (8px/10px -> 2-3px) -- reads
+    as a printed report rather than rounded app chrome.
+-   "Estado hoy" card gets a left-border accent in the same
+    ok/warn/bad/neutral color already used for dots and pills -- one
+    status language, not a second one. Mixed-posture case (AMS/AML
+    diverge) gets a neutral accent, not a guess at which posture
+    "wins" (RE-043.1).
+-   Evidencia histórica's four scalar indicators moved from a cramped
+    two-column `.kv` table to a horizontal `.stat-strip` of number/
+    label tiles -- the pattern for a small set of headline numbers is
+    tiles, not a list to "read as records".
+-   The "Qué mira este bloque" methodology paragraph moved below the
+    indicators as a `.note`, per Armando's explicit instruction
+    (indicators first, explanation as a de-emphasized caption after).
+
+Armando's review after seeing the rendered result (five reasons it
+was the right kind of change, four things to check before closing):
+confirmed as evidence-based, not a rubber stamp --
+
+1.  Amber for "Conservar" could read as "atención / oportunidad,
+    casi verde" rather than "prudente/limitado". Fixed: dulled the
+    warn color from a bright gold (`#c98a00`/`#fbe8c6`) to a duller
+    ochre-brown (`#96650f`/`#f0e6d3`) across dot, pill and card accent
+    together -- one color change, not three drifting variants.
+2.  A large "10,2%" in the stat strip must not read as a
+    recommendation. Fixed: replaced the caveat sentence with Armando's
+    own wording ("Esta evidencia no autoriza despliegue por sí sola: la
+    validez predictiva sigue no demostrada") and gave it a new
+    `.caveat` style distinct from `.note` -- tinted background, left
+    rule in the same warn ochre, more visual weight than a footnote --
+    so it holds its own next to the large numbers instead of being
+    easy to skip.
+3.  The status accent border must not be the only signal; large text
+    should remain the primary carrier, color only support. Checked,
+    not changed: the headline text ("NO ACTUAR" etc.) was already the
+    dominant visual element before this round and remains so -- the
+    accent border is additive, not a replacement. Flagged to Armando
+    as an inference, not silently assumed: if he actually wanted the
+    headline reworded to a posture-label format ("Postura SOP hoy:
+    Conservar") rather than the existing action-command wording, that
+    is a distinct, one-line follow-up, not done here.
+4.  The technical block must not surface `not_demonstrated`,
+    `Price.1`, `return_count` etc. near the top. Checked, not changed:
+    `Detalle técnico` was already the last card in `render_html()`'s
+    output order and already collapsed by default (`<details>`, per
+    RE-DASH.1's original design) -- confirmed via direct index
+    comparison in the rendered HTML, not assumed from memory of the
+    code.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model or loader file. No change
+    to `build_dashboard_data()` or any figure shown -- purely
+    presentation-layer.
+-   Does not reopen the ok/warn/bad/neutral status vocabulary itself,
+    the pill/dot pattern, or the card-per-block structure -- Armando's
+    instruction was to keep what fits, and these were judged to fit.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (CSS block; `_card()`
+    gains an optional `accent` parameter; `.num`/`.caveat` classes
+    added and applied; Evidencia histórica body restructured).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched.
+-   Verified by direct execution against real data:
+    `outputs/dashboard.html` regenerated twice (initial redesign, then
+    the four-point revision). Spot-checked: old warn hex values
+    (`#c98a00`, `#fbe8c6`, `#8a5a00`) absent from the output; new
+    caveat paragraph present with Armando's exact wording; `Detalle
+    técnico` confirmed last in document order and inside a collapsed
+    `<details>`. Full `tests/verify_*.py` suite re-run both times:
+    same four pre-existing failures, nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.10 — Dashboard: abandons launchd, one-click regeneration instead
 
 RE-DASH.1.9's fix did not work either. Diagnosed with Armando's help,
@@ -10966,6 +11504,114 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.20
+
+-   RE-DASH.1.19: the "Régimen no comparable (CAPE)" Alertas entry was
+    opaque to a non-technical reader (Armando: "no acabo de
+    entenderlo"). Reworded to plain language reusing the exact
+    existing today-vs-matched-range comparison ("No hay episodios
+    comparables con un CAPE tan alto."), with gender/article-correct
+    forms per dimension. No change to the underlying comparison. Full
+    details in the Design Decision entry above (RE-DASH.1.19).
+
+## Version 2.19
+
+-   RE-DASH.1.18: "Liquidez disponible" was right-aligned while "Human
+    Approval" (same column position, other table) is left-aligned
+    text -- visible as a mismatch once both tables shared column
+    widths (RE-DASH.1.17). Dropped the right-alignment. Full details
+    in the Design Decision entry above (RE-DASH.1.18).
+
+## Version 2.18
+
+-   RE-DASH.1.17: the two "Estado por patrimonio" tables auto-sized
+    columns independently, staggering every column boundary between
+    them (Armando's "triángulo"). New `.patrimonio-table` class forces
+    identical `table-layout:fixed` widths on both. Full details in the
+    Design Decision entry above (RE-DASH.1.17).
+
+## Version 2.17
+
+-   RE-DASH.1.16: the liquidity bar's marker hung half off the track
+    at the range extremes, and its three color zones were too faint to
+    read distinctly (Armando: "el diseño... es claramente mejorable").
+    Fixed with a visual-only position inset, boundary tick marks, a
+    thicker track, and a hairline border -- scoped to this bar variant
+    only. Full details in the Design Decision entry above
+    (RE-DASH.1.16).
+
+## Version 2.16
+
+-   RE-DASH.1.15: fixes two real defects in the RE-DASH.1.14 liquidity
+    bar, both surfaced by Armando's screenshot. (1) The marker's CSS
+    position used a different coordinate scale than the color zones it
+    was supposed to sit inside, so out-of-range markers rendered
+    visibly detached from the track instead of at its edge -- fixed by
+    converting the marker through the same span used for the zone
+    boundaries. (2) The signed € figure read as a "vs. suelo/techo"
+    comparison per the column header but was always a gap against a
+    single boundary -- fixed by naming the boundary in the label
+    itself ("sobre techo"/"bajo suelo"/"sobre suelo"). Also widened the
+    liquidity bar's track from 52px to 84px so the zones are legible.
+    Full details in the Design Decision entry above (RE-DASH.1.15).
+
+## Version 2.15
+
+-   RE-DASH.1.14: the liquidity bar (RE-DASH.1.13) gains three fixed
+    color zones painted on the track itself -- red (below suelo),
+    green (suelo-techo, the objetivo range), amber (above techo, idle
+    liquidity) -- from a personal design reference Armando shared and
+    explicitly invited adapting, not copying literally. Zone
+    boundaries computed from the same `LIQUIDITY_BAR_CLAMP_MIN/MAX`
+    constants that already bound the marker's position, so the zones
+    and the clamp can't drift apart. Suelo/techo € figures, dropped
+    from the main view in RE-DASH.1.13, return as a native `title`
+    tooltip on the bar -- passive metadata, not a new interactive
+    control. Full details in the Design Decision entry above
+    (RE-DASH.1.14).
+
+## Version 2.14
+
+-   RE-DASH.1.13: fixes a real header-wrap bug Armando confirmed with
+    a screenshot from his own browser ("Serie completa (1871-2026)"
+    wrapping to two lines) -- `white-space:nowrap` on `th`/`.ctx`.
+    New `liquidity_bar()` replaces the Liquidez table's separate
+    "Rango de liquidez"/"Exceso/Déficit" columns with one visual gauge
+    (marker on a suelo-techo track, colored with the same status
+    color as the Estado pill, exact € kept as the caption), the same
+    pattern as Datos de mercado's context bars that Armando explicitly
+    liked. Absolute suelo/techo figures relocated (not dropped) to
+    Detalle técnico. Full details in the Design Decision entry above
+    (RE-DASH.1.13).
+
+## Version 2.13
+
+-   RE-DASH.1.12: Estado column moved to align with Postura's position
+    across the two Estado por patrimonio tables. Fixed a real
+    typography bug: `body` had no explicit `font-size`, so Alertas and
+    the bare sub-section labels ("Liquidez", "Postura y permisos")
+    fell back to the browser default (16px) while every other
+    component was explicitly 14-15px -- the "otra tipografía" Armando
+    flagged. Full details in the Design Decision entry above
+    (RE-DASH.1.12).
+
+## Version 2.12
+
+-   RE-DASH.1.11: McKinsey/Bain-style visual redesign, per Armando's
+    explicit direction ("mantén lo que encaja, modifica o elimina lo
+    que se sale"). Right-aligned numeric table columns, muted
+    uppercase table headers, sharper corners, a status-colored accent
+    on "Estado hoy", Evidencia histórica's four indicators as a stat
+    strip with the methodology note moved below per his instruction.
+    After review, Armando confirmed four fixes: a duller, less
+    "opportunity-like" amber; his own wording for the "no autoriza
+    despliegue" caveat with more visual weight; confirmed (not
+    changed) that large text already carries the primary message, not
+    just the color accent; confirmed (not changed) that Detalle
+    técnico was already last and collapsed. Zero changes to gates,
+    protocols, or any figure shown -- presentation-layer only. Full
+    details in the Design Decision entry above (RE-DASH.1.11).
 
 ## Version 2.11
 
