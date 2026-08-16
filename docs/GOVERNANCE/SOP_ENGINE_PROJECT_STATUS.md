@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.24\
+**Version:** 2.25\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,13 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.2 (2026-08-16). Nota RE-SHILLER-DASH.1/2: nuevo
+As of RE-SHILLER-DASH.3 (2026-08-16). Nota RE-SHILLER-DASH.3: añadidos
+semáforos (verde/gris/ámbar/rojo) a Indicadores clave y Resumen
+ejecutivo -- en una escala deliberadamente distinta a la del dashboard
+operativo (distancia a la media histórica, no juicio de valor) para no
+implicar que "muy por encima" del CAPE es "malo". Y anotación de fecha
++ valor del último dato directamente sobre cada gráfica, no solo en el
+texto. Cero cambios a cifras o cálculos. Nota RE-SHILLER-DASH.1/2: nuevo
 panel `generate_shiller_dashboard.py` -> `outputs/shiller_dashboard.html`,
 separado del dashboard operativo -- gráficas estáticas (matplotlib,
 cero `<script>`) sobre la serie completa de Shiller (1871-2026),
@@ -8112,6 +8118,68 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.3 — Panorama histórico: semáforos y anotación de
+   última fecha/valor
+
+Two more rounds of feedback from Armando on the same day: "diseño tipo
+bain/mckinsey sobre todo en Indicadores clave y resumen ejecutivo...
+mira a ver lo de semáforos o algo parecido"; "añadir fecha y valor de
+la última cifra de referencia para ubicarnos en las gráficas."
+
+-   **Semáforos, on a deliberately different color axis than the
+    operational dashboard's.** `outputs/dashboard.html`'s `.dot.ok/
+    warn/bad` is a value judgment (below suelo IS bad, structurally).
+    A "muy por encima" CAPE reading isn't good or bad by itself --
+    `context_bar()`'s own docstring in `generate_dashboard.py` already
+    says this table is "descriptive context, not a verdict." New
+    `_reading_magnitude_color()` encodes distance from historical norm
+    instead: near (gray) / notable (ochre) / extreme (red) -- same hex
+    values as the operational dashboard's dots for visual family
+    consistency, different CSS class (`.mag-dot`, not `.dot`) so the
+    two meanings can't be confused by name. Drawdown's dot stays on
+    the real ok/warn scale (reuses `build_porque_rows()`'s existing
+    "Activa"->warn/"No activa"->ok distinction) since "hay una caída
+    activa" is a genuine status, not a magnitude, and doesn't fit the
+    near/notable/extreme axis.
+-   Indicator strip gets one dot per row. Resumen ejecutivo gets a dot
+    and a matching card accent border, both colored by whichever of
+    CAPE/inflación/tipos has the largest absolute z-score today --
+    computed, not picked by eye (today: CAPE, |z|=3.11, far ahead of
+    inflación's 0.33 and tipos' -0.02).
+-   **Última fecha/valor on the charts themselves**, not only in the
+    caption text below, per "para ubicarnos en las gráficas". New
+    `_annotate_latest()` places a small boxed label next to the latest
+    point on all four charts. Caption paragraphs also gained an
+    explicit "Último dato disponible: {fecha} -- {valor}" line (they
+    previously said "Hoy: X" with no date).
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model, loader, or the Research
+    Engine -- purely presentation-layer additions to the new panel.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py`
+    (`_reading_magnitude_color()`, `drawdown_dot_color()`,
+    `_annotate_latest()` added; indicator strip and resumen ejecutivo
+    gain dots/accent; all four chart functions take a `latest_label`
+    and annotate it; new `.dot`/`.mag-dot`/`.card.accent-*` CSS).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted. Resumen
+    ejecutivo card: `accent-extreme`, dot `extreme` (CAPE is the
+    driver, confirmed by its z-score being the largest of the three).
+    Indicator strip: Drawdown `dot ok`, CAPE `mag-dot extreme`,
+    Inflación `mag-dot near`, Tipo `mag-dot near` -- all match
+    already-verified readings. Chart annotations show "2026-07: 41,4"
+    (CAPE) and "2026-07: 7504" (precio real), both visually inspected
+    on the rendered PNGs and legible against the plotted line. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.2 — Panorama histórico: executive layer, and a real
    nominal-vs-real price finding
 
@@ -11844,6 +11912,14 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.25
+
+-   RE-SHILLER-DASH.3: traffic-light dots added to Indicadores clave
+    and Resumen ejecutivo, on a distance-from-norm axis distinct from
+    the operational dashboard's judgment-based dots, plus a fecha/
+    valor annotation on every chart's latest point. Full details in
+    the Design Decision entry above (RE-SHILLER-DASH.3).
 
 ## Version 2.24
 
