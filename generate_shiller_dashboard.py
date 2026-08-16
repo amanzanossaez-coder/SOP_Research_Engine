@@ -27,6 +27,27 @@ red. Each chart now has the last data point's date+value annotated
 directly on the image (not only in the caption text below it), per
 Armando's "ubicarnos en las gráficas".
 
+RE-SHILLER-DASH.4 (same day) -- Armando, blunt and correct: "de verdad
+esto te parece bain o mckinsey? El resumen ejecutivo en lineas con
+texto seguido, las cifras cada una por su lado, una con dos decimales,
+otras con uno... que poco detalle." Two real defects, not taste: (1)
+"Resumen ejecutivo" was one long run-on sentence stringing four clauses
+together with commas -- not a headline, a paragraph. Replaced with the
+operational dashboard's own proven headline-action/headline-sub split
+(short bold title + lighter supporting line), the same pattern Armando
+already approved for "Estado hoy" in RE-DASH.1.11 -- reused, not
+reinvented. (2) The indicator table mixed 1-decimal (_fmt_pct's
+default, used for inflación) and 2-decimal (_fmt_rate's default, used
+for tipo) formatting in adjacent rows of the same table -- standardized
+to 2 decimals for both percentage rows. This exact mismatch (inflación
+1dp, tipo 2dp) already existed in outputs/dashboard.html's own "Datos
+de mercado" table before this iteration -- flagged to Armando, not
+silently fixed there too (a different file, his call whether to touch
+it). Also added a stat-strip (same .stat-strip/.stat-value/.stat-label
+pattern RE-DASH.1.11 already established for "Evidencia histórica") as
+the primary at-a-glance visual, replacing scattered numbers with four
+grouped, dot-coded callout figures.
+
 Generates outputs/shiller_dashboard.html: static charts (matplotlib ->
 PNG, embedded inline, no <script> anywhere) over the full Robert
 Shiller dataset (1871-2026) exactly as run_drawdown_engine() already
@@ -75,6 +96,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 from engine.drawdown_engine import run_drawdown_engine
 from generate_dashboard import (
@@ -98,6 +120,18 @@ OUTPUT_PATH = Path("outputs/shiller_dashboard.html")
 # reference window for a different purpose. Not reused/renamed to avoid
 # implying the two dashboards must share one window definition.
 CAPE_RECENT_YEARS = 10
+
+# RE-SHILLER-DASH.4 -- grammatically fitted, mid-sentence forms for the
+# headline, same pattern as REGIME_DIMENSION_ES in generate_dashboard.py
+# (article included, fitted for "con {label} ..."), not reused directly
+# since that dict's third key is "interest_rate" not "rate" -- same
+# spirit, distinct dict, not a copy-paste that could silently drift if
+# generate_dashboard.py's dict changes for its own reasons.
+DRIVER_LABEL_ES = {
+    "cape": "el CAPE",
+    "inflation": "la inflación",
+    "rate": "el tipo de interés a 10 años",
+}
 
 # Same color language as outputs/dashboard.html (.dot.ok/.warn/.bad,
 # .pill.ok/.warn/.bad) -- reused here so a reader who has seen one
@@ -179,6 +213,19 @@ def _fig_to_data_uri(fig) -> str:
     return f"data:image/png;base64,{encoded}"
 
 
+# RE-SHILLER-DASH.4 -- verified before assuming: matplotlib's default
+# y-axis tick labels for the linear-scale charts (CAPE/inflación/tipo)
+# render with a period ("2.5", "5.0"), not the Spanish comma every
+# other number in both dashboards uses. Confirmed by rendering the real
+# Rate GS10 chart before writing this fix, not guessed. Applied only to
+# chart_series()'s linear axes -- NOT chart_price()'s log-scale axis,
+# whose default power-of-ten labels ("10³") have no decimal point to
+# convert and would lose their clean form under a plain numeric
+# formatter.
+def _es_tick_formatter(x, _pos):
+    return f"{x:g}".replace(".", ",")
+
+
 def _style_axes(ax) -> None:
     ax.grid(True, color=COLOR_GRID, linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
@@ -237,6 +284,7 @@ def chart_series(df, episodes, column, ylabel, latest_label: str, as_pct=False) 
     _annotate_latest(ax, latest["Date"], latest_value, latest_label)
     ax.set_ylabel(ylabel, fontsize=8.5, color="#666666")
     _style_axes(ax)
+    ax.yaxis.set_major_formatter(FuncFormatter(_es_tick_formatter))
     return _fig_to_data_uri(fig)
 
 
@@ -276,15 +324,20 @@ def build_shiller_data() -> dict:
     rate_short, rate_long = _context_words(rate_z)
     drawdown_reading = drawdown_context(latest["Drawdown"])
 
-    # RE-SHILLER-DASH.3 -- which dimension "drives" the headline dot:
+    # RE-SHILLER-DASH.3/4 -- which dimension "drives" the headline:
     # whichever of the three has the largest absolute z-score, i.e.
     # the most anomalous reading relative to its own history -- not an
     # arbitrary pick, the same magnitude axis _reading_magnitude_color()
-    # already uses per-row.
-    driver_short = max(
-        [(abs(cape_z or 0), cape_short), (abs(inflation_z or 0), inflation_short), (abs(rate_z or 0), rate_short)],
-        key=lambda pair: pair[0],
-    )[1]
+    # already uses per-row. Keeps (key, short, long) together so the
+    # headline builder doesn't have to re-derive which dimension won.
+    driver_key, driver_short, driver_long = max(
+        [
+            (abs(cape_z or 0), "cape", cape_short, cape_long),
+            (abs(inflation_z or 0), "inflation", inflation_short, inflation_long),
+            (abs(rate_z or 0), "rate", rate_short, rate_long),
+        ],
+        key=lambda row: row[0],
+    )[1:]
 
     return {
         "df": df,
@@ -311,6 +364,8 @@ def build_shiller_data() -> dict:
         "inflation_long": inflation_long,
         "rate_short": rate_short,
         "rate_long": rate_long,
+        "driver_key": driver_key,
+        "driver_long": driver_long,
         "driver_magnitude_color": _reading_magnitude_color(driver_short),
         "n_episodes": len(episodes),
         "earliest_date": df["Date"].min(),
@@ -321,26 +376,71 @@ def _lower_first(text: str) -> str:
     return text[0].lower() + text[1:] if text else text
 
 
-def build_executive_summary(data: dict) -> str:
+def build_headline(data: dict) -> tuple:
     """
-    RE-SHILLER-DASH.2 -- Armando: "falta la frase ejecutiva... eso
-    convierte el panel en lectura, no solo visualizacion." Built
-    entirely from the same readings the indicator strip shows below it
-    (drawdown_context(), _context_words()) -- not a second, separately
-    worded judgment that could disagree with the table under it.
+    RE-SHILLER-DASH.4 -- replaces the RE-SHILLER-DASH.2 single run-on
+    sentence. Armando: "el resumen ejecutivo en líneas con texto
+    seguido... que poco detalle." A McKinsey-style headline is short
+    and leads with the one fact that matters; the four-clause sentence
+    gave every dimension equal weight regardless of whether anything
+    about it was actually notable.
+
+    Returns (title, subtitle): title is one short sentence built around
+    market status + whichever dimension is most anomalous today
+    (driver_key/driver_long, same computation the headline dot and the
+    indicator table's dots already use -- not a second judgment).
+    subtitle is a compact, comma-free list of the four headline figures
+    -- detail kept, but out of the sentence itself.
     """
-    return (
-        "Lectura actual: "
-        f"{_lower_first(data['drawdown_reading'])}, "
-        f"CAPE {_lower_first(data['cape_long'])}, "
-        f"inflación {_lower_first(data['inflation_long'])} "
-        f"y tipos {_lower_first(data['rate_long'])}."
+    drawdown = data["latest_drawdown"]
+    if drawdown is not None and drawdown == 0.0:
+        market = "Mercado en máximo histórico"
+    elif drawdown is not None:
+        market = f"Mercado con una caída del {_fmt_pct(abs(drawdown))} desde máximos"
+    else:
+        market = "Estado de mercado no disponible"
+
+    if data["driver_magnitude_color"] == "near":
+        title = f"{market}. CAPE, inflación y tipos dentro de sus rangos históricos normales."
+    else:
+        driver_label = DRIVER_LABEL_ES[data["driver_key"]]
+        title = f"{market}, con {driver_label} {_lower_first(data['driver_long'])}."
+
+    subtitle = (
+        f"CAPE {_fmt_num(data['latest_cape'], 1)} (percentil {_fmt_num(data['cape_percentile'], 0)}) · "
+        f"Drawdown {_fmt_pct(data['latest_drawdown'])} · "
+        f"Inflación {_fmt_pct(data['latest_inflation'], 2)} · "
+        f"Tipo 10a {_fmt_rate(data['latest_rate'])}"
     )
+    return title, subtitle
+
+
+def build_stat_strip(data: dict) -> str:
+    """
+    RE-SHILLER-DASH.4 -- Armando: "las cifras cada una por su lado".
+    Same .stat-strip/.stat-value/.stat-label pattern already approved
+    for "Evidencia histórica" in the operational dashboard (RE-DASH.
+    1.11) -- reused, not a new visual language. Each tile gets the same
+    dot already computed for the indicator table below it (RE-SHILLER-
+    DASH.3), so the two can't disagree.
+    """
+    tiles = [
+        (_fmt_num(data["latest_cape"], 1), f"CAPE (percentil {_fmt_num(data['cape_percentile'], 0)})", "mag-dot", _reading_magnitude_color(data["cape_short"])),
+        (_fmt_pct(data["latest_drawdown"]), "Drawdown", "dot", drawdown_dot_color(data["latest_drawdown"])),
+        (_fmt_pct(data["latest_inflation"], 2), "Inflación interanual", "mag-dot", _reading_magnitude_color(data["inflation_short"])),
+        (_fmt_rate(data["latest_rate"]), "Tipo a 10 años", "mag-dot", _reading_magnitude_color(data["rate_short"])),
+    ]
+    body = "".join(
+        f'<div class="stat"><div class="stat-value"><span class="{dot_class} {color}"></span>{_esc(value)}</div>'
+        f'<div class="stat-label">{_esc(label)}</div></div>'
+        for value, label, dot_class, color in tiles
+    )
+    return f'<div class="stat-strip">{body}</div>'
 
 
 def build_indicator_strip(data: dict) -> str:
     """
-    RE-SHILLER-DASH.2/3 -- Armando's requested table, "contexto en 10
+    RE-SHILLER-DASH.2/3/4 -- Armando's requested table, "contexto en 10
     segundos" before the charts, now with a dot per row (semáforo).
     Drawdown's "Media histórica" cell is an em dash, not a number --
     RE-DASH.1.4 already established drawdown as "reported as a plain
@@ -351,11 +451,18 @@ def build_indicator_strip(data: dict) -> str:
     the other three use the near/notable/extreme magnitude scale --
     see _reading_magnitude_color()'s docstring for why they're not the
     same color language.
+
+    RE-SHILLER-DASH.4 -- Inflación forced to 2 decimals (was _fmt_pct's
+    default of 1), matching Tipo's 2 decimals -- Armando: "una con dos
+    decimales, otras con uno". The exact same mismatch (_fmt_pct's 1dp
+    default vs. _fmt_rate's 2dp default) already exists in outputs/
+    dashboard.html's own Datos de mercado table -- not changed here,
+    flagged to Armando separately since that's a different file.
     """
     rows = [
         ("Drawdown", _fmt_pct(data["latest_drawdown"]), "--", data["drawdown_reading"], "dot", drawdown_dot_color(data["latest_drawdown"])),
         ("CAPE", _fmt_num(data["latest_cape"], 1), _fmt_num(data["cape_mean"], 1), data["cape_short"], "mag-dot", _reading_magnitude_color(data["cape_short"])),
-        ("Inflación", _fmt_pct(data["latest_inflation"]), _fmt_pct(data["inflation_mean"]), data["inflation_short"], "mag-dot", _reading_magnitude_color(data["inflation_short"])),
+        ("Inflación", _fmt_pct(data["latest_inflation"], 2), _fmt_pct(data["inflation_mean"], 2), data["inflation_short"], "mag-dot", _reading_magnitude_color(data["inflation_short"])),
         ("Tipo (10 años)", _fmt_rate(data["latest_rate"]), _fmt_rate(data["rate_mean"]), data["rate_short"], "mag-dot", _reading_magnitude_color(data["rate_short"])),
     ]
     body = "".join(
@@ -392,6 +499,7 @@ def render_html(data: dict) -> str:
 
     range_label = f"{_fmt_shiller_date(data['earliest_date'])} - {fecha}"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    headline_title, headline_subtitle = build_headline(data)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -407,7 +515,19 @@ def render_html(data: dict) -> str:
   .card {{ background:#fff; border:1px solid #ddd; border-left:3px solid #ddd; border-radius:2px; padding:1rem 1.25rem; margin-bottom:1rem; text-align:left; }}
   .card h2 {{ font-size:0.95rem; font-weight:700; margin-top:0; margin-bottom:0.4rem; padding-bottom:0.4rem; border-bottom:1px solid #eee; letter-spacing:0.01em; }}
   .card img {{ width:100%; height:auto; display:block; margin:0.4rem 0; }}
-  .headline-sub {{ color:#333; margin:0; font-size:1.05rem; font-weight:700; display:flex; align-items:center; }}
+  /* RE-SHILLER-DASH.4 -- same headline-action/headline-sub split as
+     outputs/dashboard.html's "Estado hoy" (RE-DASH.1.11), reused here
+     rather than the RE-SHILLER-DASH.2 run-on sentence Armando called
+     out ("en líneas con texto seguido"). */
+  .headline-action {{ font-size:1.15rem; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; margin:0; }}
+  .headline-support {{ color:#666; margin:0.5rem 0 0; font-size:0.82rem; font-variant-numeric:tabular-nums; }}
+  /* Same .stat-strip/.stat-value/.stat-label pattern already approved
+     for "Evidencia histórica" (RE-DASH.1.11) -- reused, not a new
+     visual language, so headline figures read as grouped tiles instead
+     of scattered numbers ("las cifras cada una por su lado"). */
+  .stat-strip {{ display:flex; flex-wrap:wrap; gap:2rem; margin:0.6rem 0 0.2rem; }}
+  .stat-value {{ font-size:1.5rem; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; font-variant-numeric:tabular-nums; }}
+  .stat-label {{ font-size:0.76rem; color:#666; margin-top:0.15rem; max-width:11rem; }}
   table {{ border-collapse: collapse; width:100%; font-size:0.88rem; margin-bottom:0.5rem; }}
   td, th {{ text-align:left; padding:0.4rem 0.6rem; border-bottom:1px solid #f0f0f0; vertical-align:top; }}
   th {{ color:#666; font-weight:700; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; }}
@@ -448,11 +568,13 @@ def render_html(data: dict) -> str:
 
 <section class="card accent-{data['driver_magnitude_color']}">
   <h2>Resumen ejecutivo</h2>
-  <p class="headline-sub"><span class="mag-dot {data['driver_magnitude_color']}"></span>{_esc(build_executive_summary(data))}</p>
+  <p class="headline-action"><span class="mag-dot {data['driver_magnitude_color']}"></span>{_esc(headline_title)}</p>
+  <p class="headline-support">{_esc(headline_subtitle)}</p>
+  {build_stat_strip(data)}
 </section>
 
 <section class="card">
-  <h2>Indicadores clave</h2>
+  <h2>Detalle de indicadores</h2>
   {build_indicator_strip(data)}
 </section>
 
@@ -478,8 +600,8 @@ def render_html(data: dict) -> str:
 <section class="card">
   <h2>Inflación interanual</h2>
   <img src="{inflation_img}" alt="Inflación interanual (CPI), 1871-2026">
-  <p class="note">Media de toda la serie: {_fmt_pct(data['inflation_mean'])} (línea discontinua). Desviación típica: {_fmt_pct(data['inflation_std'])}.</p>
-  <p class="note">Último dato disponible: {fecha} -- {_fmt_pct(data['latest_inflation'])}.</p>
+  <p class="note">Media de toda la serie: {_fmt_pct(data['inflation_mean'], 2)} (línea discontinua). Desviación típica: {_fmt_pct(data['inflation_std'], 2)}.</p>
+  <p class="note">Último dato disponible: {fecha} -- {_fmt_pct(data['latest_inflation'], 2)}.</p>
 </section>
 
 <section class="card">

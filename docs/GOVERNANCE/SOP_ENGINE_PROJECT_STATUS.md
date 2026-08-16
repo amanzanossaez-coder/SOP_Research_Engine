@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.25\
+**Version:** 2.26\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,15 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.3 (2026-08-16). Nota RE-SHILLER-DASH.3: añadidos
+As of RE-SHILLER-DASH.4 (2026-08-16). Nota RE-SHILLER-DASH.4: el
+resumen ejecutivo del panel Shiller pasa de una frase corrida a
+headline-action/headline-support + stat-strip (mismo patrón ya
+aprobado para "Estado hoy"/"Evidencia histórica" en el dashboard
+operativo), a petición directa de Armando ("¿de verdad esto te parece
+bain o mckinsey?"). Inflación pasa a 2 decimales en todo el panel
+(estaba en 1, inconsistente con Tipo). Corregidas también las
+etiquetas de eje en formato inglés en las gráficas lineales. Cero
+cambios a cifras o cálculos -- solo presentación. Nota RE-SHILLER-DASH.3: añadidos
 semáforos (verde/gris/ámbar/rojo) a Indicadores clave y Resumen
 ejecutivo -- en una escala deliberadamente distinta a la del dashboard
 operativo (distancia a la media histórica, no juicio de valor) para no
@@ -8118,6 +8126,76 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.4 — Panorama histórico: headline de verdad, no
+   frase corrida, y decimales consistentes
+
+Armando, tras ver el resultado de RE-SHILLER-DASH.3, sin rodeos: "¿de
+verdad esto te parece bain o mckinsey? El resumen ejecutivo en líneas
+con texto seguido, las cifras cada una por su lado, una con dos
+decimales, otras con uno... qué poco detalle. Ponte las pilas." Dos
+defectos reales, no de gusto:
+
+-   **"Resumen ejecutivo" era una sola frase corrida** encadenando
+    cuatro ideas con comas -- no un titular, un párrafo. Sustituido por
+    el mismo patrón headline-action/headline-support ya aprobado por
+    Armando para "Estado hoy" en el dashboard operativo (RE-DASH.1.11)
+    -- reutilizado, no inventado. `build_headline()` (nueva función)
+    calcula un título corto (estado de mercado + el indicador más
+    anómalo hoy, mismo cálculo de z-score que ya usa el dot y la tabla,
+    no un segundo juicio) y una línea de apoyo con las cuatro cifras
+    clave sin comas dentro de la frase. Se añade un `.stat-strip` (el
+    mismo patrón ya aprobado para "Evidencia histórica" en RE-DASH.1.11)
+    con esas cuatro cifras como bloques grandes, cada una con su propio
+    dot -- "las cifras cada una por su lado", tal cual lo pidió.
+-   **Decimales inconsistentes dentro de la misma tabla**: Inflación
+    usaba el default de `_fmt_pct` (1 decimal) y Tipo el de `_fmt_rate`
+    (2 decimales), en filas contiguas de "Detalle de indicadores".
+    Corregido forzando 2 decimales en Inflación en todo el archivo
+    (franja, resumen, notas de gráfica). Hallazgo colateral, no pedido:
+    este mismo desajuste (inflación a 1 decimal, tipo a 2) existe hoy
+    en la tabla "Datos de mercado" del dashboard OPERATIVO
+    (`generate_dashboard.py`) -- confirmado por grep, no corregido ahí
+    sin que Armando lo decida, es un archivo distinto.
+-   **Hallazgo técnico adicional, no buscado**: las etiquetas del eje Y
+    en las gráficas de CAPE/inflación/tipo (escala lineal) usaban
+    decimales en formato inglés ("2.5", "7.5") por el formateador por
+    defecto de matplotlib -- inconsistente con la coma española usada
+    en todo el resto de ambos paneles. Corregido con un
+    `FuncFormatter` nuevo (`_es_tick_formatter`), aplicado solo a los
+    ejes lineales (`chart_series()`), no al eje logarítmico del precio
+    (`chart_price()`), cuyas etiquetas en potencias de 10 no tienen
+    punto decimal que convertir.
+
+What this does not authorize:
+
+-   No change to any gate, protocol, model, loader, or the Research
+    Engine -- purely presentation-layer fixes to the new panel.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py`
+    (`DRIVER_LABEL_ES` added; `build_shiller_data()` now also returns
+    `driver_key`/`driver_long`; `build_executive_summary()` replaced by
+    `build_headline()` + new `build_stat_strip()`; `build_indicator_
+    strip()`'s Inflación row forced to 2 decimals; `_es_tick_formatter()`
+    added and applied inside `chart_series()`; CSS gains `.headline-
+    action`/`.headline-support`/`.stat-strip`/`.stat-value`/`.stat-
+    label`, copied from the operational dashboard's own values).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted. Resumen
+    ejecutivo: "Mercado en máximo histórico, con el CAPE muy por
+    encima de su media histórica." / stat-strip "CAPE 41,4 (percentil
+    99) · Drawdown 0,0% · Inflación 4,23% · Tipo 10a 4,44%" -- Inflación
+    now 2 decimals everywhere (was 4,2% in RE-SHILLER-DASH.3, now
+    4,23%, matching Tipo's decimal count). Rate GS10 chart PNG visually
+    inspected: y-axis now reads "2,5 / 5 / 7,5 / 10 / 12,5 / 15", comma
+    decimals confirmed. Full `tests/verify_*.py` suite re-run: same
+    four pre-existing failures, nothing new. `generate_dashboard.py`
+    (operational) regenerated separately, unaffected.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.3 — Panorama histórico: semáforos y anotación de
    última fecha/valor
 
@@ -11912,6 +11990,17 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.26
+
+-   RE-SHILLER-DASH.4: Resumen ejecutivo replaces its run-on sentence
+    with a headline-action/headline-support split plus a stat-strip of
+    grouped, dot-coded figures (same patterns already approved for
+    "Estado hoy"/"Evidencia histórica" in RE-DASH.1.11). Inflación
+    standardized to 2 decimals throughout (was mismatched against
+    Tipo's 2 decimals). Chart y-axis tick labels on linear-scale charts
+    fixed from English-period to Spanish-comma decimals. Full details
+    in the Design Decision entry above (RE-SHILLER-DASH.4).
 
 ## Version 2.25
 
