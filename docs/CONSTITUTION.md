@@ -383,7 +383,7 @@ decisión.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v2.21 a fecha de este documento).
+(v2.22 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -452,7 +452,7 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada
   proyecto. Auditada ese mismo día contra el código real: cinco
   violaciones encontradas y corregidas.
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v2.21.
+  Research Engine, v2.22.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 

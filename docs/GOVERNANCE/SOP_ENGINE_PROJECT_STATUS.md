@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.21\
+**Version:** 2.22\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,15 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.20 (2026-08-16). Nota RE-DASH.1.20: "Valor" (Datos de
+As of RE-DASH.1.21 (2026-08-16). Nota RE-DASH.1.21: la Liquidez deja de
+ser una tabla con barra de 84px y pasa a una tarjeta por patrimonio a
+petición explícita de Armando ("demasiado pequeña y demasiado
+escondida... el suelo y techo no se ven directamente, solo aparecen en
+tooltip"), tras seis rondas puliendo esa celda sin resolverlo -- señal
+de que el contenedor era el problema, no el diseño. Suelo/techo ahora
+visibles como texto, no solo en hover; misma lógica de zonas, marcador
+y cifra auditada de RE-DASH.1.14-1.16, sin recalcular nada. Confirmado
+por Armando ("así está ok"). Nota RE-DASH.1.20: "Valor" (Datos de
 mercado) era la única columna de valores que seguía alineada a la
 derecha tras RE-DASH.1.18 -- Armando lo señaló en captura y, al haber
 dos direcciones válidas en conflicto, se le preguntó en vez de
@@ -8092,6 +8100,99 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.21 — Dashboard: liquidity moves from a table cell to a
+   full-width card per patrimonio
+
+Armando's own detailed design critique, unprompted by a screenshot
+this time -- a written proposal after six rounds (RE-DASH.1.13-1.20)
+polishing the liquidity indicator inside an 84px table cell: "la idea
+de barra es buena, pero tal como está ahora queda demasiado pequeña y
+demasiado escondida dentro de una tabla... el suelo y techo no se ven
+directamente, solo aparecen en tooltip. Eso obliga a interpretar." He
+proposed one full-width card per patrimonio (bullet-chart style):
+visible suelo/techo text, a full-width three-zone bar, the
+exceso/déficit caption, and a one-line diagnosis sentence.
+
+Agreed with the core critique before building, not silently -- two
+points it corrected: (1) the suelo/techo tooltip-only display
+(RE-DASH.1.14) was always in tension with this dashboard's own rule
+everywhere else (`<details>`, no hidden state, nothing requiring
+interaction to read) -- introduced as an anti-clutter compromise that
+didn't hold for the block's single most load-bearing number; (2) six
+rounds failing to make one 84px cell work is itself a signal the
+container was wrong, not that a seventh polish pass was needed. This
+reverses my own RE-DASH.1.14 decision to decline a card layout (then
+reasoned as "diverges from the row-based pattern the rest of the card
+uses") -- his argument here (suelo/techo must be visible, not just
+implied) outweighs that consistency concern.
+
+-   New `liquidity_card()` replaces `liquidity_bar()` -- reuses, not
+    reimplements: `liquidity_status()`, `liquidity_gap()`, the same
+    `LIQUIDITY_BAR_CLAMP_MIN/MAX`-derived zone/tick math from
+    RE-DASH.1.14/1.16, and the same boundary-labeled caption from
+    RE-DASH.1.15. Only the container changed -- full-width instead of
+    84px, suelo/techo now visible as text at each end of the bar (the
+    `title` tooltip is kept too, as a redundant convenience, not the
+    only way to see it).
+-   New `liquidity_diagnosis()`: one-line reading per Armando's spec,
+    keyed off the same `status_color` `liquidity_status()` already
+    returns -- not a fourth independent judgment about the same three
+    states.
+-   Declined, with reasoning given to Armando, the optional summary
+    table he offered ("si quieres conservar tabla... pero visualmente
+    mandaría la barra") -- every figure in it (actual/suelo/techo/
+    diferencia) is already visible on the card itself, so adding it
+    back as a table would be pure redundancy. Reversible if he still
+    wants it.
+-   "Postura y permisos" stays a table -- categorical status data
+    (postura/Human Approval/Dry Powder), not a range-against-threshold
+    metric, so a bullet-chart card doesn't fit it. Flagged to Armando,
+    not silently decided, that this leaves two visual formats inside
+    one card (Liquidez as cards, Postura as a table): judged
+    appropriate given the different data shapes, not an inconsistency
+    to fix.
+-   RE-DASH.1.17's `.patrimonio-table` shared-width class existed only
+    to keep Liquidez's and Postura's table columns lined up with each
+    other -- with Liquidez no longer a table, it has nothing left to
+    synchronize against. Removed from Postura (reverts to
+    content-sized columns) and its now-orphaned CSS deleted, along
+    with the RE-DASH.1.15/1.16 `.ctx-bar.liq` variant rules
+    `liquidity_bar()` used (function removed, rules removed with it --
+    `context_bar()`'s own `.ctx-bar`/`.ctx-dot`/`.ctx-tick` at 52px are
+    untouched).
+
+What this does not authorize:
+
+-   No change to `liquidity_status()`, `liquidity_gap()`, or any gate/
+    protocol/loader file -- this is a container change around numbers
+    those functions already compute.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`liquidity_bar()`
+    removed; new `liquidity_card()`/`liquidity_diagnosis()`; Liquidez
+    section of `patrimonio_body` now cards instead of a table; Postura
+    table reverts to `table-layout:auto`; new `.liq-card` CSS family;
+    orphaned `.patrimonio-table`/`.ctx-bar.liq` CSS removed).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated and extracted. AMS: card shows
+    "167.273,00 €" actual, "100.000,00 €"/"150.000,00 €" suelo/techo
+    visible as text, marker at 98.0% (inset, warn/ámbar), caption
+    "+17.273,00 € sobre techo", diagnosis "Liquidez por encima del
+    techo: exceso disponible, no restricción." AML: "199.375,00 €"
+    actual, "250.000,00 €"/"300.000,00 €" suelo/techo, marker at 2.0%
+    (bad/rojo), caption "-50.625,00 € bajo suelo", diagnosis "Liquidez
+    por debajo del suelo: limita la capacidad personal." -- all match
+    already-verified real figures, nothing recalculated. Rendered as a
+    live visual preview from the real generated HTML/CSS; Armando
+    confirmed ("así está ok"). Full `tests/verify_*.py` suite re-run:
+    same four pre-existing failures, nothing new. Grepped for
+    remaining `liquidity_bar(` and `.patrimonio-table` references:
+    none outside this changelog's own prose.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.20 — Dashboard: one left-aligned convention for every
    value column
 
@@ -11553,6 +11654,16 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.22
+
+-   RE-DASH.1.21: Liquidez moves from a table row + 84px inline bar to
+    one full-width card per patrimonio, per Armando's own detailed
+    design proposal after six rounds (1.13-1.20) failing to make the
+    small format work. Suelo/techo now visible as text, not only in a
+    hover tooltip. Reuses all existing zone/marker/caption math and
+    figures unchanged -- container only. Confirmed by Armando. Full
+    details in the Design Decision entry above (RE-DASH.1.21).
 
 ## Version 2.21
 

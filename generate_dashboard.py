@@ -789,102 +789,92 @@ def liquidity_gap(actual, floor, ceiling, gap_floor, gap_ceiling):
     return gap_floor
 
 
-def liquidity_bar(actual, floor, ceiling, gap_floor, gap_ceiling, status_color) -> str:
+def liquidity_diagnosis(status_color: str) -> str:
     """
-    RE-DASH.1.13/1.14 -- same visual gauge pattern as context_bar(): a
-    marker on a track, this time suelo-to-techo instead of a z-score,
-    replacing the separate "Rango de liquidez" text column and
-    "Exceso/Déficit" number column with one visual unit. Per Armando's
-    request to make Estado por patrimonio "más limpio y visual" the
-    same way Datos de mercado already reads.
-
-    RE-DASH.1.14 -- three color zones added per Armando's own design
-    note: déficit (rojo) / rango objetivo (verde) / ocioso (ámbar),
-    same pale tints already used by .pill.bad/.ok/.warn -- not new
-    colors. Zone boundaries computed from LIQUIDITY_BAR_CLAMP_MIN/MAX,
-    the exact same constants that clamp the marker's position, so a
-    marker sitting past a boundary and the boundary itself can never
-    silently drift apart. Suelo/techo absolute figures, dropped from
-    the visible row in RE-DASH.1.13 to declutter, are restored here as
-    a `title` tooltip on the bar -- native HTML, no script, same
-    justification as <details> elsewhere in this file: metadata, not a
-    control. Still also in Detalle técnico for anyone who won't find
-    the hover.
-
-    Unlike context_bar()'s track (purely positional, no verdict), this
-    track's endpoints ARE the safe zone by construction (suelo/techo),
-    so the marker is colored with the same status_color
-    liquidity_status() already returned -- reinforcing the Estado
-    pill, not a second independent judgment. The exact exceso/déficit
-    figure is kept, not dropped, as the bar's caption -- same
-    pre-audited spreadsheet figure liquidity_gap() already selects,
-    never recalculated here.
-
-    Fail-closed: missing floor/ceiling or an inverted range (ceiling
-    <= floor, which should not happen in real data but is not assumed
-    away) falls back to a plain label instead of drawing a
-    meaningless bar.
+    RE-DASH.1.21 -- one-line plain-language reading per card, per
+    Armando's spec ("AMS: Liquidez por encima del techo: exceso
+    disponible, no restricción."). Keyed off status_color, which
+    liquidity_status() already computed -- not a second, independent
+    judgment about the same three states.
     """
+    return {
+        "warn": "Liquidez por encima del techo: exceso disponible, no restricción.",
+        "bad": "Liquidez por debajo del suelo: limita la capacidad personal.",
+        "ok": "Liquidez dentro del rango objetivo.",
+        "neutral": "Sin datos suficientes para diagnosticar liquidez.",
+    }.get(status_color, "Sin datos suficientes para diagnosticar liquidez.")
+
+
+def liquidity_card(name, status_text, status_color, actual, floor, ceiling, gap_floor, gap_ceiling) -> str:
+    """
+    RE-DASH.1.21 -- replaces liquidity_bar() (RE-DASH.1.13-1.16), which
+    lived inside a 84px-wide table cell. Armando's own critique after
+    six rounds of polishing that cell: "la idea de barra es buena, pero
+    tal como está ahora queda demasiado pequeña y demasiado escondida
+    dentro de una tabla... el suelo y techo no se ven directamente,
+    solo aparecen en tooltip. Eso obliga a interpretar." That tooltip
+    dependency was always in tension with this dashboard's own rule
+    elsewhere (native <details>, no hidden state) -- introduced in
+    RE-DASH.1.14 as an anti-clutter compromise, and Armando is right
+    that it doesn't hold for the single most load-bearing number in
+    the block.
+
+    One full-width card per patrimonio, per Armando's own mockup:
+    name + Estado pill, "Liquidez disponible" headline, suelo/techo as
+    visible text at each end of a full-width bar (not just a title
+    attribute -- title kept too, doesn't hurt), the same three-zone
+    gradient and boundary tick marks from RE-DASH.1.14/1.16 (unchanged
+    math, just no longer squeezed into 84px), the marker still colored
+    by liquidity_status()'s status_color, the same pre-audited
+    exceso/déficit figure from liquidity_gap() as caption, and a new
+    one-line diagnosis (liquidity_diagnosis()).
+
+    Fail-closed: missing floor/ceiling or an inverted range falls back
+    to a minimal card with just the pill and actual amount, no bar
+    drawn from meaningless bounds.
+    """
+
+    header = (
+        f'<div class="liq-card-header">'
+        f'<span class="liq-card-name">{_esc(name)}</span>'
+        f"{_pill(status_text, status_color)}"
+        "</div>"
+    )
+    actual_line = f'<div class="liq-card-actual">Liquidez disponible: <strong>{_esc(_fmt_amount(actual))} €</strong></div>' if actual is not None else ""
 
     if actual is None or floor is None or ceiling is None or ceiling <= floor:
-        return '<span class="ctx-label">Sin datos</span>'
+        return f'<div class="liq-card">{header}{actual_line}<p class="liq-card-diagnosis">Sin datos suficientes para mostrar el rango de liquidez.</p></div>'
 
     gap = liquidity_gap(actual, floor, ceiling, gap_floor, gap_ceiling)
     pct = (actual - floor) / (ceiling - floor) * 100
     pct_clamped = max(LIQUIDITY_BAR_CLAMP_MIN, min(LIQUIDITY_BAR_CLAMP_MAX, pct))
-    dot_class = f"ctx-dot {status_color}"
+    dot_class = f"liq-card-dot {status_color}"
 
     span = LIQUIDITY_BAR_CLAMP_MAX - LIQUIDITY_BAR_CLAMP_MIN
     floor_pct = (0 - LIQUIDITY_BAR_CLAMP_MIN) / span * 100
     ceiling_pct = (100 - LIQUIDITY_BAR_CLAMP_MIN) / span * 100
-    # RE-DASH.1.15 fix -- the marker's CSS `left` is a percentage of the
-    # bar's own on-screen width (0-100), a different scale than
-    # pct_clamped (-15 to 115, percent of the suelo-techo span). The
-    # previous version used pct_clamped directly as `left`, so a value
-    # of 115 rendered 15% of the bar's width past its right edge instead
-    # of at the edge -- the marker visibly detached from the track
-    # (confirmed by Armando's screenshot). Converting through the same
-    # span used to place floor_pct/ceiling_pct puts the marker back on
-    # the same coordinate system as the zones it is supposed to sit in.
+    # Same coordinate conversion fixed in RE-DASH.1.15 -- the marker's
+    # CSS `left` must be on the same 0-100% display scale as the zone
+    # boundaries, not the raw -15/115 clamp range.
     dot_pct = (pct_clamped - LIQUIDITY_BAR_CLAMP_MIN) / span * 100
-    # RE-DASH.1.16 -- dot_pct alone still leaves a real legibility
-    # problem at the extremes: `left:0%`/`left:100%` combined with the
-    # dot's own `translateX(-50%)` centers it exactly on the track's
-    # edge, so half the dot's own width hangs off the track into blank
-    # cell space -- reads as a marker floating apart from its own bar,
-    # which is what Armando's screenshot showed even after the 1.15
-    # coordinate fix. Insetting the *visual* position by roughly the
-    # dot's own radius (~6% of an 84px track ≈ 5px) keeps the dot's
-    # full circle inside the track at both extremes without changing
-    # what dot_pct means for anything else (zone math is untouched).
-    dot_visual_pct = max(6.0, min(94.0, dot_pct))
+    # RE-DASH.1.16's inset (keep the dot's full circle inside the
+    # track) used 6%/94% tuned for an 84px track. This bar is now
+    # full-width (hundreds of px), so the same absolute dot radius is a
+    # much smaller percentage of the track -- 2%/98% is a conservative
+    # inset for realistic desktop widths.
+    dot_visual_pct = max(2.0, min(98.0, dot_pct))
     zones = (
         "linear-gradient(to right,"
         f" #f6d9d9 0%, #f6d9d9 {floor_pct:.1f}%,"
         f" #dcefdc {floor_pct:.1f}%, #dcefdc {ceiling_pct:.1f}%,"
         f" #f0e6d3 {ceiling_pct:.1f}%, #f0e6d3 100%)"
     )
-    # RE-DASH.1.16 -- tick marks at the suelo/techo boundaries. The
-    # pale zone tints alone (reused from .pill so they read correctly
-    # as pill backgrounds, deliberately not saturated per Armando's
-    # standing "no debe leer como oportunidad" instruction on this
-    # color language) are too close in lightness to register as three
-    # distinct zones on a 4-6px line -- confirmed by Armando's
-    # screenshot, where the bar read as a single pale smudge. A hard
-    # boundary mark does not depend on color contrast to be seen.
     ticks = (
-        f'<span class="ctx-tick" style="left:{floor_pct:.1f}%"></span>'
-        f'<span class="ctx-tick" style="left:{ceiling_pct:.1f}%"></span>'
+        f'<span class="liq-card-tick" style="left:{floor_pct:.1f}%"></span>'
+        f'<span class="liq-card-tick" style="left:{ceiling_pct:.1f}%"></span>'
     )
     tooltip = f"Suelo: {_fmt_amount(floor)} € · Techo: {_fmt_amount(ceiling)} €"
 
-    # RE-DASH.1.15 -- the figure is always a gap against a single
-    # boundary (liquidity_gap() picks one), never "vs. suelo/techo"
-    # simultaneously. Armando flagged that the old bare signed amount
-    # read as if it were both. Naming the boundary in the label itself
-    # removes the ambiguity without relying on the column header to
-    # carry meaning it can't (the header still correctly names the
-    # axis the bar spans, not the specific figure per row).
     if ceiling is not None and actual > ceiling:
         boundary_label = "sobre techo"
     elif actual < floor:
@@ -892,13 +882,20 @@ def liquidity_bar(actual, floor, ceiling, gap_floor, gap_ceiling, status_color) 
     else:
         boundary_label = "sobre suelo"
 
-    return (
-        f'<div class="ctx" title="{_esc(tooltip)}">'
-        f'<div class="ctx-bar liq" style="background:{zones}">{ticks}'
-        f'<span class="{dot_class}" style="left:{dot_visual_pct:.1f}%"></span></div>'
-        f'<span class="ctx-label">{_esc(_fmt_signed_amount(gap))} € {boundary_label}</span>'
+    bounds_line = (
+        '<div class="liq-card-bounds">'
+        f'<span>{_esc(_fmt_amount(floor))} €<span class="liq-card-bound-label">Suelo</span></span>'
+        f'<span class="liq-card-bounds-right">{_esc(_fmt_amount(ceiling))} €<span class="liq-card-bound-label">Techo</span></span>'
         "</div>"
     )
+    bar = (
+        f'<div class="liq-card-bar" title="{_esc(tooltip)}" style="background:{zones}">{ticks}'
+        f'<span class="{dot_class}" style="left:{dot_visual_pct:.1f}%"></span></div>'
+    )
+    caption = f'<div class="liq-card-caption">{_esc(_fmt_signed_amount(gap))} € {boundary_label}</div>'
+    diagnosis = f'<p class="liq-card-diagnosis">{_esc(liquidity_diagnosis(status_color))}</p>'
+
+    return f'<div class="liq-card">{header}{actual_line}{bounds_line}{bar}{caption}{diagnosis}</div>'
 
 
 def human_approval_short(ha, missing_reason) -> str:
@@ -1052,7 +1049,7 @@ def render_html(data: dict) -> str:
     if not data["personal_capacity_available"]:
         patrimonio_body = "<p>personal_capacity_facts.xlsx no encontrado.</p>"
     else:
-        liquidity_rows = ""
+        liquidity_cards = ""
         operational_rows = ""
         findings_rows = ""
 
@@ -1061,30 +1058,16 @@ def render_html(data: dict) -> str:
             status_text, status_color = liquidity_status(
                 p["liquidity_actual"], p["liquidity_floor"], p["liquidity_ceiling"]
             )
-            # RE-DASH.1.12 -- Estado moved right after Patrimonio (was
-            # last column) so it lands in the same visual column as
-            # Postura in the table below: the two pill columns line up
-            # at the same x-position when scanning down the card,
-            # instead of sitting under unrelated headers.
-            # RE-DASH.1.13 -- "Rango de liquidez" and "Exceso/Déficit"
-            # consolidated into one visual bar (liquidity_bar()), same
-            # pattern as Datos de mercado's context gauge -- both
-            # figures are still there, inside the bar's caption, not
-            # dropped.
-            # RE-DASH.1.18 -- "Liquidez disponible" was right-aligned
-            # (td.num, for tabular-nums digit scanning) while "Human
-            # Approval" in the table below is plain left-aligned text.
-            # With both tables now sharing identical column widths
-            # (RE-DASH.1.17), that alignment mismatch became visible as
-            # column 3's content starting at two different x positions
-            # between the two tables. Armando asked to align them --
-            # dropped the right-alignment here so both read from the
-            # same left edge as the rest of the card.
-            liquidity_rows += (
-                f"<tr><td>{_esc(name)}</td>"
-                f"<td>{_pill(status_text, status_color)}</td>"
-                f"<td>{_fmt_amount(p['liquidity_actual'])} €</td>"
-                f"<td>{liquidity_bar(p['liquidity_actual'], p['liquidity_floor'], p['liquidity_ceiling'], p['liquidity_gap_floor'], p['liquidity_gap_ceiling'], status_color)}</td></tr>"
+            # RE-DASH.1.21 -- Liquidez moved from a table row (RE-DASH.
+            # 1.13-1.20) to one full-width card per patrimonio, per
+            # Armando's own mockup: "la idea de barra es buena, pero tal
+            # como está ahora queda demasiado pequeña y demasiado
+            # escondida dentro de una tabla." Suelo/techo now visible as
+            # text on the card itself, not only in a hover tooltip.
+            liquidity_cards += liquidity_card(
+                name, status_text, status_color,
+                p["liquidity_actual"], p["liquidity_floor"], p["liquidity_ceiling"],
+                p["liquidity_gap_floor"], p["liquidity_gap_ceiling"],
             )
 
             combined = p["combined"]
@@ -1105,28 +1088,17 @@ def render_html(data: dict) -> str:
             <table><tr><th>Patrimonio</th><th>Hecho</th><th>Estado</th></tr>{findings_rows}</table>
             """
 
-        # RE-DASH.1.17 -- "Liquidez" and "Postura y permisos" are two
-        # separate <table> elements, each auto-sized to its own content
-        # (Armando's request to align "Estado" under "Postura" and
-        # balance the two right-hand columns can't be met by
-        # table-layout:auto: two independent tables size their columns
-        # independently, so "Posición vs. suelo/techo" -- a wide bar --
-        # pulled column 4 wider in one table while "Dry Powder" -- short
-        # text -- left it narrow in the other, staggering every column
-        # boundary instead of lining them up). The `patrimonio-table`
-        # class forces identical, table-layout:fixed percentage widths
-        # on both, so column 1 (Patrimonio) and column 2 (Estado/
-        # Postura) land at the same x in both tables, and columns 3-4
-        # split the remaining width the same way in both instead of
-        # each table's odd column ballooning to fill leftover space.
+        # RE-DASH.1.21 -- Liquidez is no longer a <table> (see
+        # liquidity_card()), so the RE-DASH.1.17 `.patrimonio-table`
+        # shared-width hack -- which existed only to keep Liquidez's
+        # and Postura's columns lined up with each other -- has nothing
+        # left to synchronize against. Postura y permisos reverts to a
+        # plain table, sized from its own content again.
         patrimonio_body = f"""
         <p class="subhead">Liquidez</p>
-        <table class="patrimonio-table">
-          <tr><th>Patrimonio</th><th>Estado</th><th>Liquidez disponible</th><th>Posición vs. suelo/techo</th></tr>
-          {liquidity_rows}
-        </table>
+        {liquidity_cards}
         <p class="subhead">Postura y permisos</p>
-        <table class="patrimonio-table">
+        <table>
           <tr><th>Patrimonio</th><th>Postura</th><th>Human Approval</th><th>Dry Powder</th></tr>
           {operational_rows}
         </table>
@@ -1344,19 +1316,28 @@ def render_html(data: dict) -> str:
       .kv { max-width:640px; }
       .kv td:first-child { width:55%; }
 
-      /* RE-DASH.1.17 -- shared column widths for the two "Estado por
-         patrimonio" tables (Liquidez / Postura y permisos), forced
-         identical via table-layout:fixed so "Estado" and "Postura"
-         (and every other column boundary) line up at the same x
-         between the two tables -- table-layout:auto sizes each table
-         independently from its own content, so a wide element in one
-         table (the liquidity bar) and a short one in the other (Dry
-         Powder text) staggered every column instead. */
-      .patrimonio-table { table-layout:fixed; }
-      .patrimonio-table th:nth-child(1), .patrimonio-table td:nth-child(1) { width:13%; }
-      .patrimonio-table th:nth-child(2), .patrimonio-table td:nth-child(2) { width:21%; }
-      .patrimonio-table th:nth-child(3), .patrimonio-table td:nth-child(3) { width:28%; }
-      .patrimonio-table th:nth-child(4), .patrimonio-table td:nth-child(4) { width:38%; }
+      /* RE-DASH.1.21 -- one full-width card per patrimonio, replacing
+         the RE-DASH.1.13-1.20 table row + 84px inline bar. Armando's
+         own critique after six rounds polishing that cell: the bar was
+         "demasiado pequeña y demasiado escondida dentro de una tabla"
+         and suelo/techo lived only in a hover tooltip -- in tension
+         with this dashboard's own no-hidden-state rule elsewhere. */
+      .liq-card { border:1px solid #e2e2dd; border-radius:2px; padding:0.9rem 1.1rem; margin-bottom:0.8rem; }
+      .liq-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem; }
+      .liq-card-name { font-weight:700; font-size:0.95rem; }
+      .liq-card-actual { font-size:0.88rem; color:#333; margin-bottom:0.7rem; }
+      .liq-card-actual strong { font-variant-numeric:tabular-nums; }
+      .liq-card-bounds { display:flex; justify-content:space-between; font-size:0.82rem; color:#444; font-variant-numeric:tabular-nums; }
+      .liq-card-bounds-right { text-align:right; }
+      .liq-card-bound-label { display:block; font-size:0.68rem; color:#888; text-transform:uppercase; letter-spacing:0.04em; font-variant-numeric:normal; margin-top:0.1rem; }
+      .liq-card-bar { position:relative; width:100%; height:10px; border:1px solid #d9d9d4; border-radius:2px; margin:0.35rem 0; }
+      .liq-card-tick { position:absolute; left:50%; top:-3px; width:1px; height:16px; background:#bbb; }
+      .liq-card-dot { position:absolute; top:-4px; width:14px; height:14px; border-radius:50%; background:#555; transform:translateX(-50%); border:2px solid #fff; }
+      .liq-card-dot.ok { background:#2f8f4e; }
+      .liq-card-dot.warn { background:#96650f; }
+      .liq-card-dot.bad { background:#c23b3b; }
+      .liq-card-caption { text-align:right; font-size:0.85rem; font-weight:700; color:#333; font-variant-numeric:tabular-nums; }
+      .liq-card-diagnosis { font-size:0.85rem; color:#555; margin:0.5rem 0 0; padding-top:0.5rem; border-top:1px solid #f0f0f0; }
 
       /* Context gauge: replaces a full sentence ("Muy por encima de su
          media histórica") with a short label plus a marker on a track
@@ -1367,19 +1348,6 @@ def render_html(data: dict) -> str:
          actúa"). */
       .ctx { display:flex; align-items:center; gap:0.6rem; white-space:nowrap; }
       .ctx-bar { position:relative; width:52px; height:4px; background:#e6e6e2; border-radius:2px; flex-shrink:0; }
-      /* RE-DASH.1.15/1.16 -- the liquidity bar's three color zones
-         (unlike context_bar()'s plain track) need real room to read as
-         distinct zones, not a sliver at each end. Widened (52->84px)
-         and thickened (4->6px) with its own hairline border so it has
-         a visible edge against the white table background -- Armando's
-         screenshot showed the pale zone tints (deliberately dulled,
-         reused from .pill, not new colors) dissolving into an
-         indistinct smudge at the original size. Scoped to this
-         variant only, so context_bar()'s market-data rows, already
-         approved at 52px/4px, are untouched. */
-      .ctx-bar.liq { width:84px; height:6px; border:1px solid #d9d9d4; }
-      .ctx-bar.liq .ctx-dot { top:-2px; }
-      .ctx-bar.liq .ctx-tick { top:-2px; height:10px; }
       .ctx-tick { position:absolute; left:50%; top:-2px; width:1px; height:8px; background:#bbb; }
       .ctx-dot { position:absolute; top:-3px; width:10px; height:10px; border-radius:50%; background:#555; transform:translateX(-50%); }
       .ctx-dot.ok { background:#2f8f4e; }
