@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.27\
+**Version:** 2.28\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,17 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.5 (2026-08-16). Nota RE-SHILLER-DASH.5: dos
+As of RE-SHILLER-DASH.6 (2026-08-16). Nota RE-SHILLER-DASH.6: los 3
+peores episodios de caída, con nombre, dentro de "Resumen de drawdowns
+históricos" -- 1929 y 2008 con alta confianza, el tercero (1872-1877)
+con advertencia explícita de fecha no verificada en el propio nombre.
+Además, la tabla "Retornos reales posteriores según CAPE inicial" tenía
+un problema real de claridad, no de familiaridad -- Armando no la
+entendía porque llevaba jerga técnica antes que explicación; ahora
+lleva un párrafo en llano al principio con un ejemplo concreto
+(acumulado, no solo anualizado) y cabeceras reescritas. Cero cambios a
+cifras subyacentes, solo presentación y explicación. Nota
+RE-SHILLER-DASH.5: dos
 bloques nuevos en el panel Shiller, ambos pedidos y acotados por
 Armando ("añadiría solo dos bloques"): retornos reales posteriores
 según CAPE inicial (5/10/15 años, mediana por bucket, con N por
@@ -8136,6 +8146,71 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.6 — Panorama histórico: episodios con nombre, y la
+   tabla de CAPE explicada de verdad
+
+Armando, inmediatamente tras ver RE-SHILLER-DASH.5: "yo aquí, aparte de
+la media, introduciría los dos o tres peores episodios de drawdowns que
+tienen nombre y apellidos"; "NO entiendo las cifras de la tabla de
+CAPE."
+
+-   **Peores episodios con nombre**, nueva tabla dentro de "Resumen de
+    drawdowns históricos": los 3 peores por magnitud de los 23
+    detectados (no elegidos por fama, calculados). 1929.09->1932.06
+    (-84,8%) = Gran Depresión / Crac de 1929; 2007.10->2009.03 (-50,8%)
+    = crisis financiera global de 2008 -- ambos identificados con alta
+    confianza, episodios ampliamente documentados. El tercero,
+    1872.05->1877.06 (-47,3%), lleva su propia advertencia dentro del
+    nombre en vez de una nota aparte: la fecha de pico que detecta el
+    motor precede en más de un año al Pánico de 1873 tal y como se
+    documenta habitualmente, la correspondencia no está verificada con
+    precisión -- riesgo de alucinación señalado explícitamente en vez
+    de una etiqueta histórica presentada como hecho.
+-   **La tabla de CAPE no se entendía porque le faltaba explicación, no
+    porque Armando no supiera leerla**: llevaba jerga ("CAGR",
+    "anualizado") antes de decir qué significan los números, y nunca
+    explicaba por qué el retorno a 15 años es positivo cuando el de 5 y
+    10 es negativo (parece una contradicción sin saber que es reversión
+    a la media). Corregido con un párrafo en lenguaje llano al principio
+    de la sección, con un ejemplo concreto usando la fila más parecida
+    a hoy (CAPE > 40): -4,5%/-3,4%/+2,1% anual a 5/10/15 años equivale a
+    -21%/-30%/+36% acumulado en esos mismos periodos -- cifras
+    acumuladas calculadas en Python junto a las medianas, no escritas a
+    mano en el texto, para que no puedan desalinearse de la tabla.
+    Contraste explícito con la fila "todos los meses" (6,7% anual a 15
+    años) para que quede claro que incluso el "positivo" a 15 años
+    queda muy por debajo de lo normal. Cabeceras de columna reescritas
+    ("A 5 años" en vez de "Retorno real 5a").
+
+What this does not authorize:
+
+-   No change to `drawdown_engine.py`, episode detection, or any gate --
+    both fixes are new content/wording in the presentation layer only.
+
+Boundary:
+
+-   One file modified: `generate_shiller_dashboard.py`
+    (`NOTABLE_DRAWDOWN_NAMES`, `N_NOTABLE_DRAWDOWNS` added;
+    `build_notable_drawdowns()`, `build_notable_drawdowns_table()`
+    added; `build_cape_return_stats()` now also computes
+    `cumulative_Xy` per bucket/horizon; new plain-language lead
+    paragraph and reworded headers in the CAPE returns section).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    shiller_dashboard.html` regenerated and extracted. Named episodes
+    table shows exactly the 3 real top-by-magnitude episodes with
+    correct dates/durations (1929-09->1932-06, 33 meses; 2007-10->
+    2009-03, 17 meses; 1872-05->1877-06, 61 meses). CAPE lead paragraph
+    shows "-4,5% anual ... -21% acumulado" / "-3,4% anual ... -30%
+    acumulado" / "2,1% anual ... 36% acumulado" for CAPE>40, matching
+    the table's own median row exactly (no drift, since both come from
+    the same computed dict). Full `tests/verify_*.py` suite re-run:
+    same single pre-existing failure (`verify_research_engine.py`,
+    ordering only), nothing new. `generate_dashboard.py` (operational)
+    regenerated separately, unaffected.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.5 — Panorama histórico: retornos por CAPE, resumen
    de drawdowns, lectura más clara
 
@@ -12107,6 +12182,18 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.28
+
+-   RE-SHILLER-DASH.6: "Resumen de drawdowns históricos" gains a table
+    naming the 3 worst episodes by magnitude (1929, 2007-2009, both
+    high-confidence; a third from the 1870s carries an explicit
+    unverified-date caveat in its own name). "Retornos reales
+    posteriores según CAPE inicial" gains a plain-language lead
+    paragraph with a concrete cumulative-return example and reworded
+    headers, fixing a real clarity gap Armando flagged ("NO entiendo
+    las cifras"). Full details in the Design Decision entry above
+    (RE-SHILLER-DASH.6).
 
 ## Version 2.27
 
