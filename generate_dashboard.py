@@ -1167,18 +1167,26 @@ def render_html(data: dict) -> str:
     else:
         drawdown_context = "No disponible"
 
+    # RE-DASH.1.20 -- Armando's explicit choice (asked, not inferred):
+    # "Valor, Human Approval y Liquidez disponible deben estar
+    # alineadas y justificadas a la izqda." Right-aligned "Valor"
+    # (td.num) was the one holdout numeric column still right-aligned
+    # after RE-DASH.1.18 moved "Liquidez disponible" to the left --
+    # his screenshot showed that split as its own new inconsistency.
+    # Dropped `class="num"` here so every value column in the
+    # dashboard now shares one left-aligned convention.
     market_body = f"""
     <table>
       <tr>
-        <th rowspan="2">Dato</th><th rowspan="2" class="num">Valor</th>
+        <th rowspan="2">Dato</th><th rowspan="2">Valor</th>
         <th colspan="2">Contexto histórico (vs. media del periodo)</th>
       </tr>
       <tr><th>Serie completa ({full_range_label})</th><th>Últimos {RECENT_WINDOW_YEARS} años ({recent_range_label})</th></tr>
-      <tr><td>Fecha de datos</td><td class="num">{data_date}</td><td>--</td><td>--</td></tr>
-      <tr><td>Caída actual desde máximo</td><td class="num">{_fmt_pct(snapshot.drawdown)}</td><td>{drawdown_context}</td><td>--</td></tr>
-      <tr><td>CAPE</td><td class="num">{_fmt_num(cape_value, 1)}</td><td>{context_bar(cape_value, cape_mean, cape_std)}</td><td>{context_bar(cape_value, recent_cape_mean, recent_cape_std)}</td></tr>
-      <tr><td>Inflación (interanual)</td><td class="num">{_fmt_pct(inflation_value)}</td><td>{context_bar(inflation_value, inflation_mean, inflation_std)}</td><td>{context_bar(inflation_value, recent_inflation_mean, recent_inflation_std)}</td></tr>
-      <tr><td>Tipo de interés (bono EEUU 10 años)</td><td class="num">{_fmt_rate(rate_value)}</td><td>{context_bar(rate_value, rate_mean, rate_std)}</td><td>{context_bar(rate_value, recent_rate_mean, recent_rate_std)}</td></tr>
+      <tr><td>Fecha de datos</td><td>{data_date}</td><td>--</td><td>--</td></tr>
+      <tr><td>Caída actual desde máximo</td><td>{_fmt_pct(snapshot.drawdown)}</td><td>{drawdown_context}</td><td>--</td></tr>
+      <tr><td>CAPE</td><td>{_fmt_num(cape_value, 1)}</td><td>{context_bar(cape_value, cape_mean, cape_std)}</td><td>{context_bar(cape_value, recent_cape_mean, recent_cape_std)}</td></tr>
+      <tr><td>Inflación (interanual)</td><td>{_fmt_pct(inflation_value)}</td><td>{context_bar(inflation_value, inflation_mean, inflation_std)}</td><td>{context_bar(inflation_value, recent_inflation_mean, recent_inflation_std)}</td></tr>
+      <tr><td>Tipo de interés (bono EEUU 10 años)</td><td>{_fmt_rate(rate_value)}</td><td>{context_bar(rate_value, rate_mean, rate_std)}</td><td>{context_bar(rate_value, recent_rate_mean, recent_rate_std)}</td></tr>
     </table>
     """
 

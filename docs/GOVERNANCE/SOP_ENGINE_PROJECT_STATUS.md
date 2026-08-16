@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.20\
+**Version:** 2.21\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,13 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.19 (2026-08-16). Nota RE-DASH.1.19: la alerta
+As of RE-DASH.1.20 (2026-08-16). Nota RE-DASH.1.20: "Valor" (Datos de
+mercado) era la única columna de valores que seguía alineada a la
+derecha tras RE-DASH.1.18 -- Armando lo señaló en captura y, al haber
+dos direcciones válidas en conflicto, se le preguntó en vez de
+inferir; eligió izquierda para las tres (Valor, Human Approval,
+Liquidez disponible). Cero cambios a cifras -- solo alineación de
+celda. Nota RE-DASH.1.19: la alerta
 "Régimen no comparable (CAPE)" era opaca para Armando -- reescrita en
 lenguaje llano ("No hay episodios comparables con un CAPE tan alto."),
 misma comparación ya existente, solo cambia la redacción. RE-DASH.1.18:
@@ -8086,6 +8092,49 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.20 — Dashboard: one left-aligned convention for every
+   value column
+
+Armando's screenshot, cropped to the right edge of the page: "Liquidez
+Disponible" (left-aligned since RE-DASH.1.18) sitting above "Human
+Approval" (already left) sitting above "Valor" in Datos de mercado
+(still right-aligned, `td.num`) -- "podrías alinear estas columnas?"
+Two directions were both technically valid (right-align everything
+back per the original "financial report" convention, or left-align
+everything to match 1.18), and they conflict, so this was asked
+directly rather than inferred: "¿Qué alineación quieres para las
+cifras?" Armando's answer: "Valor, Human Approval y Liquidez
+disponible deben estar alineadas y justificadas a la izqda."
+
+-   Dropped `class="num"` from "Valor"'s header and its five data
+    cells (Fecha de datos, Caída actual, CAPE, Inflación, Tipo de
+    interés) in the Datos de mercado table -- the one remaining
+    right-aligned value column in the dashboard. Every value column
+    now shares one left-aligned convention.
+-   `td.num`/`th.num`'s CSS rule is left in place, unused for now, not
+    deleted -- a general-purpose alignment utility, not something tied
+    to this specific table; removing it would be a separate,
+    unrequested cleanup.
+
+What this does not authorize:
+
+-   No change to any figure, formatter, or gate -- `_fmt_pct()`,
+    `_fmt_num()`, `_fmt_rate()` outputs are unchanged, only their
+    cells' text-align.
+
+Boundary:
+
+-   One file modified: `generate_dashboard.py` (`class="num"` removed
+    from six cells in the Datos de mercado table).
+-   No Frozen Core component touched.
+-   Verified by direct execution against real data: `outputs/
+    dashboard.html` regenerated, extracted, and rendered as a live
+    preview from the real HTML/CSS before reporting done. Full
+    `tests/verify_*.py` suite re-run: same four pre-existing failures,
+    nothing new.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.19 — Dashboard: plain-language "not comparable" alert
 
 Armando saw "Régimen no comparable (CAPE)" in Alertas and asked what
@@ -11504,6 +11553,17 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.21
+
+-   RE-DASH.1.20: "Valor" (Datos de mercado) was the last remaining
+    right-aligned value column after RE-DASH.1.18 moved "Liquidez
+    disponible" left -- Armando's screenshot showed that split.
+    Asked which direction he wanted rather than inferring (right
+    everywhere, or left everywhere -- both valid, in conflict with
+    each other); he chose left for all three (Valor, Human Approval,
+    Liquidez disponible). Full details in the Design Decision entry
+    above (RE-DASH.1.20).
 
 ## Version 2.20
 
