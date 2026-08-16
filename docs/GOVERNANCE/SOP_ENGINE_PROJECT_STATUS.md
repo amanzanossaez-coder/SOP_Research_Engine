@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.10\
+**Version:** 2.11\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,14 +17,17 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-DASH.1.9 (2026-08-16). Nota RE-DASH.1.9: la primera
-instalación real de RE-DASH.1.8 falló en la máquina de Armando
-(`zsh: can't open input file`) -- exactamente el riesgo que esa misma
-entrada había señalado como no verificable desde este sandbox.
-Corregido eliminando el envoltorio de shell frágil a nivel de launchd;
-pendiente de que Armando confirme que la reinstalación funciona de
-verdad. Sigue sin tocar ningún gate, protocolo ni motor. No altera
-ninguna cifra de progreso técnico de esta tabla:
+As of RE-DASH.1.10 (2026-08-16). Nota RE-DASH.1.10: tras dos intentos
+fallidos de automatizar la regeneración en segundo plano vía launchd
+(RE-DASH.1.8, RE-DASH.1.9), un diagnóstico paso a paso con Armando
+aisló el fallo a una restricción real de macOS sobre procesos en
+segundo plano accediendo a iCloud Drive -- no el script, no el plist,
+no la descarga de iCloud (las tres teorías descartadas con pruebas
+directas). Sustituido por `Actualizar Dashboard.command`, un archivo
+de doble clic que se ejecuta de forma interactiva -- el mismo contexto
+ya probado que funciona. Se retiró la automatización de launchd del
+repo por no dejar código muerto. Sigue sin tocar ningún gate, protocolo
+ni motor. No altera ninguna cifra de progreso técnico de esta tabla:
 
 | Bloque | Avance honesto |
 |---|---:|
@@ -7993,6 +7996,80 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-DASH.1.10 — Dashboard: abandons launchd, one-click regeneration instead
+
+RE-DASH.1.9's fix did not work either. Diagnosed with Armando's help,
+step by step, before touching any file again:
+
+-   Interactive test (`zsh "<path>/regenerate_dashboard.sh"` run
+    directly in Terminal): succeeded -- `logs/dashboard_regen.log`
+    got a real new entry, `outputs/dashboard.html` regenerated. This
+    proves the script, the file, and its permissions are all fine.
+-   `brctl download "<path>/regenerate_dashboard.sh"` (forces full
+    iCloud materialization) followed by unload/reload of the launchd
+    job: failed again, identical error
+    (`zsh: can't open input file: ...`), twice. This rules out the
+    iCloud-placeholder-not-downloaded theory RE-DASH.1.9 implicitly
+    relied on.
+
+Conclusion, now evidence-based rather than guessed: the failure is
+specific to *launchd's background invocation* of a file inside iCloud
+Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/`), most likely
+a macOS privacy/sandboxing restriction on background processes -- not
+a quoting bug (RE-DASH.1.8's theory), not a materialization bug
+(RE-DASH.1.9's implicit theory), and not fixable by rewriting the
+script or the plist again. Two attempts already failed on two
+different, specific theories; a third blind attempt was not proposed
+-- offered the choice to Armando instead (deeper TCC diagnostics vs.
+abandon background automation vs. try cron instead of launchd).
+Armando chose to abandon the background trigger.
+
+Replaced with the simplest mechanism proven to actually work: a
+double-clickable `Actualizar Dashboard.command` at the repo root.
+Double-clicking a `.command` file opens Terminal and runs it
+interactively -- the exact context RE-DASH.1.10's own diagnostic just
+confirmed works, every time, with this exact file. No daemon, no
+background permission surface, nothing to silently fail. Less
+"automatic" than RE-DASH.1.8's original ambition, but it is the
+option consistent with this project's stated preference for
+robustness over sophistication: a system Armando can trust and
+understand over one that looks more automatic but fails silently in
+the background.
+
+Removed as dead code: `scripts/com.armando.sop-dashboard-regen.plist`
+and `scripts/regenerate_dashboard.sh` (the `scripts/` directory is now
+empty and was not kept). Leaving non-functional launchd config in the
+repo would have misled a future reader into believing background
+auto-regeneration works.
+
+What this does not authorize:
+
+-   No change to `generate_dashboard.py` -- the `.command` file calls
+    it unmodified, same as every prior mechanism attempted.
+-   Does not reopen RE-DASH.1.8/1.9's launchd approach without new
+    evidence -- if background automation is revisited later, it needs
+    an actual TCC/permissions diagnosis first (Console.app, or
+    Armando confirming a specific System Settings grant), not another
+    blind retry of the same mechanism.
+
+Boundary:
+
+-   `scripts/com.armando.sop-dashboard-regen.plist` and
+    `scripts/regenerate_dashboard.sh` deleted. New file:
+    `Actualizar Dashboard.command` (repo root).
+-   No Frozen Core component touched. No gate, protocol, model or
+    loader file touched. `generate_dashboard.py` itself untouched
+    across all of RE-DASH.1.8/1.9/1.10.
+-   Verified: the diagnostic interactive run in RE-DASH.1.10 already
+    proved this exact invocation pattern (`zsh` running this file
+    directly, from Terminal) regenerates the dashboard correctly. The
+    `.command` file's own `read "?..."` pause-before-close line is
+    standard zsh syntax, not independently tested in this sandbox (no
+    `zsh` here) -- low risk, since the regeneration itself uses the
+    identical proven pattern; only the closing prompt is new.
+
+------------------------------------------------------------------------
+
 ## RE-DASH.1.9 — Dashboard: fixes RE-DASH.1.8's real launchd failure
 
 Armando installed RE-DASH.1.8's launchd job and it failed on the real
@@ -10889,6 +10966,20 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.11
+
+-   RE-DASH.1.10: abandons the launchd/`WatchPaths` approach after two
+    failed fixes (RE-DASH.1.8, RE-DASH.1.9) and a step-by-step
+    diagnosis with Armando that isolated the failure to background
+    (launchd) access to a file inside iCloud Drive -- not the script,
+    not the plist syntax, not iCloud materialization (all three ruled
+    out with direct tests, not assumed). Replaced with
+    `Actualizar Dashboard.command` at the repo root: a double-click
+    file that runs interactively, the exact context already proven to
+    work. Removed the dead `scripts/` files rather than leave
+    non-functional automation in the repo. Full details in the Design
+    Decision entry above (RE-DASH.1.10).
 
 ## Version 2.10
 
