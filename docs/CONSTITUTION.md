@@ -1,7 +1,7 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 2.0\
-**Última actualización:** 2026-08-15
+**Versión:** 2.2\
+**Última actualización:** 2026-08-17
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
 > versiones anteriores de `CONSTITUTION.md`, `PROJECT_STATE.md`,
@@ -19,6 +19,22 @@
 > el cambio de forma. El inventario completo que precedió esta fusión
 > — qué se solapaba, qué faltaba, qué entraba en conflicto — vive en
 > la conversación del 2026-08-15, no se reproduce aquí.
+>
+> **v2.1 (2026-08-17)** corrige un desajuste real encontrado al hacer
+> un recap de proyecto a petición de Armando: las Secciones 4, 9 y 10
+> seguían describiendo el Dashboard como "pendiente", sin mencionar
+> que el operativo llevaba hasta RE-DASH.1.21 ni que existía ya un
+> segundo panel (panorama histórico de Shiller, RE-SHILLER-DASH.1 a
+> .8). Corregido -- ver `SOP_ENGINE_PROJECT_STATUS.md`, RE-DOC-006.
+> Cero cambios de principios o reglas, solo sincronización con lo que
+> el repositorio ya tenía construido.
+>
+> **v2.2 (2026-08-17)** registra RE-KERNEL.1: primer módulo real del
+> Kernel (`engine/kernel.py`), extracción pura de la orquestación que
+> vivía dentro de `audit_posture.py` -- sin diseñar ni implementar
+> K1/K2/K3/K5/K6, que siguen sin spec. Ver Secciones 4, 5 y 9, y
+> `SOP_ENGINE_PROJECT_STATUS.md`, RE-KERNEL.1, para el detalle
+> completo y la verificación carácter a carácter.
 
 Para el detalle técnico del Research Engine (motores, gates, tests,
 cada iteración con su justificación) sigue rigiendo
@@ -286,10 +302,10 @@ sistema completo.
 |---|---|---|
 | **Constitución** | Define los principios permanentes del sistema | Existe — este documento |
 | **Arquitectura Patrimonial** | Organiza el patrimonio por funciones (Sección 3) | Existe parcialmente — clasificación en 3 cajas ya traducida a Excel; Nivel 4 (rotación entre estrategias) sin reglas |
-| **Kernel** | Aplica las reglas de gobierno y determina si una decisión es válida (Sección 5) | Pendiente como módulo único — piezas parciales ya operativas por separado |
+| **Kernel** | Aplica las reglas de gobierno y determina si una decisión es válida (Sección 5) | Existe parcialmente — `engine/kernel.py` (RE-KERNEL.1) centraliza en un módulo importable los fragmentos K4/gobernanza ya implementados; K1/K2/K3/K5/K6 siguen sin spec ni código |
 | **Protocolos** | Definen cómo actuar ante situaciones concretas (Sección 6) | Existe parcialmente — Dry Powder y Human Approval operativos; Portfolio Reallocation, Rebalanceo y Protección pendientes |
 | **Research Engine** | Genera evidencia objetiva para apoyar las decisiones. No decide (Sección 7) | Existe — núcleo cerrado y auditado contra su propia constitución el 2026-08-14 |
-| **Dashboard** | Representa el estado del SOP. Nunca modifica el sistema. Su misión es informar | Pendiente — primer paso planeado: RE-DASH.1, dashboard estático de auditoría |
+| **Dashboard** | Representa el estado del SOP. Nunca modifica el sistema. Su misión es informar | Existe — dos paneles estáticos de solo lectura: operativo (`generate_dashboard.py`, RE-DASH.1.21) y panorama histórico de Shiller (`generate_shiller_dashboard.py`, RE-SHILLER-DASH.8). Sin filtros, sin interactividad, deliberadamente fuera de alcance salvo necesidad real |
 | **Reporting** | Documenta decisiones y evolución del sistema en el tiempo | Pendiente — sin diseño todavía |
 
 ------------------------------------------------------------------------
@@ -300,13 +316,18 @@ El Kernel del SOP es el modelo lógico que combina restricciones,
 gates, protocolos y autorización humana para determinar si una
 decisión de capital es válida.
 
-Hoy no existe como módulo único de código. Sus piezas existen
-parcialmente, repartidas: `gate_combination.py`, `posture_mapper.py`,
-`human_approval.py`, `dry_powder_protocol.py`. Su aproximación de
-solo lectura más cercana hoy es `audit_posture.py`, que combina esas
-piezas para auditoría — **no es el Kernel, ni una herramienta de
-decisión**; es un dry-run sobre sus fragmentos, y su propio código lo
-dice explícitamente.
+Hoy no existe como módulo único que implemente los seis filtros. Sus
+piezas siguen repartidas: `gate_combination.py`, `posture_mapper.py`,
+`human_approval.py`, `dry_powder_protocol.py`. Desde RE-KERNEL.1
+(2026-08-17), la orquestación de lectura de esas piezas — antes
+código inline dentro de `audit_posture.py` — vive en
+`engine/kernel.py`, un módulo importable (`build_kernel_results()`)
+que cualquier otra parte del sistema puede usar sin duplicar lógica.
+`audit_posture.py` es ahora un wrapper fino sobre ese módulo, verificado
+carácter a carácter contra su comportamiento anterior. Sigue sin ser
+el Kernel ni una herramienta de decisión — su propio docstring lo dice
+explícitamente: solo centraliza los fragmentos K4/gobernanza ya
+implementados, no los seis filtros.
 
 El diseño lógico completo contempla seis filtros que toda decisión
 debería superar:
@@ -328,8 +349,12 @@ descartada. Human Approval es un prerrequisito independiente, no un
 séptimo filtro dentro de este `min()` — nunca se computa a partir de
 los otros seis, ni ellos a partir de él (ver Sección 6).
 
-Construir el Kernel como módulo unificado es trabajo pendiente, sin
-disparador que lo haga urgente hoy — ver Sección 10.
+Diseñar y construir K1/K2/K3/K5/K6 sigue siendo trabajo pendiente, sin
+disparador que lo haga urgente hoy — ver Sección 10. A diferencia de
+la extracción de RE-KERNEL.1 (ingeniería pura sobre lo ya existente),
+esto es trabajo de diseño de política: definir qué significa
+operativamente cada filtro antes de poder escribir una sola línea de
+código para ellos.
 
 ------------------------------------------------------------------------
 
@@ -383,7 +408,7 @@ decisión.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v2.30 a fecha de este documento).
+(v2.32 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -422,7 +447,10 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 `regime_comparability_gate.py`, `personal_capacity_facts_gate.py`,
 `gate_combination.py`, `posture_mapper.py`, `dry_powder_protocol.py`,
 `dry_powder_ledger_state.py`, `human_approval.py`,
-`human_approval_state.py`.
+`human_approval_state.py`, y `kernel.py` (RE-KERNEL.1 — capa de
+ensamblaje de solo lectura que centraliza los fragmentos anteriores en
+un único módulo importable; no implementa K1/K2/K3/K5/K6, ver Sección
+5).
 
 **Loaders** (`loaders/`) — un loader por fuente de datos real:
 `dry_powder_ledger_loader.py`, `human_approval_loader.py`,
@@ -437,9 +465,26 @@ núcleo del Research Engine, `evidence_quality_gate.py`,
 | `human_approval_attestations.xlsx` | Ambos patrimonios con una atestación real (2026-08-13): AMS Deploy Aggressively (bajo cooling-off), AML Conserve (vigente). |
 | `shiller.xlsx` | Serie histórica completa, fuente del Research Engine. |
 
-**Scripts operativos:** `audit_posture.py` (dry-run de lectura,
-combina todos los gates y protocolos por patrimonio, no ejecuta nada
-— ver Sección 5 sobre por qué no es el Kernel).
+**Scripts operativos:** `audit_posture.py` (dry-run de lectura, wrapper
+fino sobre `engine/kernel.py::build_kernel_results()` desde
+RE-KERNEL.1 — combina todos los gates y protocolos por patrimonio, no
+ejecuta nada, ver Sección 5 sobre por qué no es el Kernel).
+
+**Dashboards** (solo lectura, sin `<script>`, sin filtros ni
+interactividad — deliberado, ver Sección 4):
+
+- `generate_dashboard.py` → `outputs/dashboard.html` — dashboard
+  operativo (RE-DASH.1 a RE-DASH.1.21): estado por patrimonio,
+  liquidez, Dry Powder, Human Approval, alertas y datos de mercado.
+- `generate_shiller_dashboard.py` → `outputs/shiller_dashboard.html`
+  (RE-SHILLER-DASH.1 a RE-SHILLER-DASH.8) — panorama histórico
+  diagnóstico sobre la serie completa de Shiller (1871-2026): resumen
+  ejecutivo, indicadores con semáforo, gráficas de precio/CAPE/
+  inflación/tipos con episodios de caída sombreados, resumen agregado
+  de drawdowns con los peores episodios nombrados, y retornos reales
+  posteriores según nivel de CAPE inicial. Explícitamente no dice si
+  comprar o vender ni evalúa gates — esa lectura sigue viviendo solo en
+  el dashboard operativo.
 
 **Tests:** suite `tests/verify_*.py`, re-ejecutada en cada iteración.
 
@@ -452,7 +497,7 @@ combina todos los gates y protocolos por patrimonio, no ejecuta nada
   proyecto. Auditada ese mismo día contra el código real: cinco
   violaciones encontradas y corregidas.
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v2.30.
+  Research Engine, v2.32.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 
@@ -466,9 +511,12 @@ sin que nadie lo decida a propósito.
 
 ### Construible ya, sin bloqueo externo
 
-- **RE-DASH.1** — dashboard estático de auditoría SOP/Shiller
-  (`generate_dashboard.py` → `outputs/dashboard.html`). Especificado
-  por completo, listo para empezar en cuanto se retome.
+- Nada en esta categoría ahora mismo. RE-DASH.1 (dashboard operativo,
+  hasta RE-DASH.1.21) y su ampliación con el panorama histórico de
+  Shiller (RE-SHILLER-DASH.1 a .8) se completaron en agosto 2026 — ver
+  Sección 9. Próximo candidato real para esta categoría, si se decide
+  priorizarlo: Portfolio Reallocation Protocol, una vez resueltas sus
+  preguntas de diseño abiertas más abajo.
 
 ### Condicionado a un disparador real o una fecha concreta
 
@@ -498,11 +546,14 @@ sin que nadie lo decida a propósito.
 Distinto del grupo anterior: aquí no hay un evento concreto que se
 esté esperando, solo ausencia de necesidad real para priorizarlo hoy.
 
-- **Kernel unificado como módulo de código** (Sección 5) — sus piezas
-  ya funcionan por separado; unificarlas es trabajo de ingeniería, no
-  algo bloqueado por un evento externo.
-- **Dashboard** más allá de RE-DASH.1, y **Reporting** (Sección 4) —
-  sin diseño todavía.
+- **K1/K2/K3/K5/K6 del Kernel** (Sección 5) — la extracción de lo ya
+  existente a `engine/kernel.py` se completó (RE-KERNEL.1); diseñar e
+  implementar los cinco filtros que hoy no tienen ni spec es trabajo
+  de política, no de ingeniería, y sigue sin disparador que lo haga
+  urgente.
+- **Dashboard** más allá del alcance actual (RE-DASH.1.21 operativo +
+  RE-SHILLER-DASH.8 histórico — filtros, interactividad, nuevas
+  vistas), y **Reporting** (Sección 4) — sin diseño todavía.
 - **Rebalanceo** y **Protección** (Sección 6) — protocolos sin
   definir, ni siquiera como spec.
 - **Similarity Engine v2** del Research Engine (duración, velocidad,

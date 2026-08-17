@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.30\
+**Version:** 2.32\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,20 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-SHILLER-DASH.8 (2026-08-16). Nota RE-SHILLER-DASH.8: la
+As of RE-KERNEL.1 (2026-08-17). Nota RE-KERNEL.1: primer módulo real
+del Kernel (`engine/kernel.py`), extraído de `audit_posture.py` sin
+cambiar ninguna decisión -- solo los fragmentos K4/gobernanza ya
+implementados (Evidence Quality, Regime Comparability, Personal
+Capacity Facts, Human Approval, Dry Powder), K1/K2/K3/K5/K6 siguen sin
+spec. Verificado carácter a carácter contra la salida anterior; única
+diferencia real encontrada (reordenación de un print del loader, no un
+cambio de contenido) investigada y documentada, no descartada sin
+mirar. Nota RE-DOC-006: recap de proyecto a
+petición de Armando destapó que `CONSTITUTION.md` seguía marcando el
+dashboard como "pendiente" y no mencionaba el panorama histórico de
+Shiller en absoluto -- corregido, ver el Design Decision de más abajo.
+Cero cambios funcionales, solo sincronización de documentación con lo
+que el repo ya tenía construido. Nota RE-SHILLER-DASH.8: la
 sección de retornos por CAPE se había pasado de frenada respondiendo a
 "no entiendo" -- cuatro párrafos antes de la tabla. Reducida a dos: qué
 es el CAGR en una línea, y una conclusión corta y directa (zona
@@ -146,7 +159,9 @@ de esta tabla:
 | Portfolio Reallocation | 0-5% |
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 85-90% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en ambos patrimonios 2026-08-13 -- AMS Deploy Aggressively bajo cooling-off de 14 días hasta 2026-08-27, AML Conserve vigente de inmediato al no ser subida de tolerancia respecto al suelo implícito; todavía sin wiring a run.py, deliberado) |
-| Dashboard (RE-DASH.1) | 100% del alcance v1 (estático, solo lectura, seis bloques + alertas); sin filtros, sin gráficos, sin interactividad -- deliberadamente fuera de alcance salvo que un uso real lo justifique |
+| Dashboard operativo (RE-DASH.1.21) | 100% del alcance actual (estático, solo lectura; liquidez como tarjeta por patrimonio, Dry Powder, Human Approval, alertas, datos de mercado); sin filtros, sin gráficos interactivos -- deliberadamente fuera de alcance salvo que un uso real lo justifique |
+| Panorama histórico Shiller (RE-SHILLER-DASH.8) | 100% del alcance actual (estático, solo lectura, gráficas 1871-2026 + resumen ejecutivo, indicadores con semáforo, drawdowns históricos con episodios nombrados, retornos reales por nivel de CAPE); explícitamente no evalúa gates ni propone postura -- esa lectura sigue solo en el dashboard operativo |
+| Kernel -- fragmentos existentes unificados (RE-KERNEL.1) | 100% de la extracción (K4/gobernanza ya implementados, ahora en un módulo importable, `audit_posture.py` como wrapper fino verificado idéntico); 0% de K1/K2/K3/K5/K6 -- sin spec, sin código, no es el Kernel constitucional completo |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
 real (AMS) resolvieron todos a favorable -- `ADEQUATE`, cero campos sin
@@ -8156,6 +8171,135 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-KERNEL.1 — Kernel assembly layer: extracción de audit_posture.py
+   a un módulo importable
+
+Armando, sobre unificar el Kernel: "extraer lo que ya existe a un
+módulo" -- explícitamente NO diseñar K1/K2/K3/K5/K6 (Constitución,
+Sección 5), que hoy no tienen ni spec. Confirmado con tres precisiones
+suyas antes de escribir código:
+
+1.  **Docstring defensivo** en `engine/kernel.py`: dice explícitamente
+    que esto NO es el Kernel constitucional completo, solo centraliza
+    los fragmentos K4/gobernanza ya implementados (Evidence Quality,
+    Regime Comparability, Personal Capacity Facts, Human Approval,
+    Dry Powder) -- no implementa K1/K2/K3/K5/K6, no ejecuta decisiones,
+    no está wired a `run.py`/`DecisionEngine`.
+2.  **Contrato de `None`**: el segundo elemento de la tupla que
+    devuelve `build_kernel_results()` es `None` única y exclusivamente
+    cuando `data/raw/personal_capacity_facts.xlsx` no se encuentra --
+    nunca para otros fallos (falta de atestación de Human Approval,
+    falta de ledger, sin episodio activo), que se representan como
+    resultados parciales con el campo afectado a `None`, exactamente
+    como ya hacía `audit_posture.py`.
+3.  **Criterio de aceptación**: salida de `audit_posture.py` idéntica
+    antes/después del refactor.
+
+**Desviación real encontrada al implementar, no aplicada en
+silencio**: el diseño original (aprobado literalmente por Armando)
+proponía que `build_kernel_results()` devolviera un `None` desnudo
+para toda la tupla cuando falta el fichero de hechos personales. Eso
+habría sido incorrecto -- `audit_posture.py`, en esa misma rama,
+siempre imprimió Evidence Quality, Regime Comparability y una postura
+combinada de solo esos dos gates (nunca dependieron de ese fichero).
+Un `None` desnudo habría hecho imposible reproducir esa salida.
+Corregido: `KernelMarketResult` siempre se devuelve; solo el segundo
+elemento (por patrimonio) puede ser `None`. Se añadió también
+`combined_posture_without_personal_capacity` a `KernelMarketResult`
+-- el fallback de dos gates que el script original computaba en esa
+rama -- para que el wrapper no tenga que re-derivar lógica de gates
+por su cuenta.
+
+**Segunda diferencia real encontrada al verificar, no ignorada**: la
+comparación carácter a carácter reveló una diferencia genuina (no
+cosmética por defecto, investigada antes de descartarla): dos líneas
+de aviso ("Etiquetas de Concepto repetidas...") cambian de posición
+en la salida. Rastreado hasta su origen exacto:
+`loaders/personal_capacity_facts_loader.py:93` -- un `print()` directo
+dentro del loader (no un `warnings.warn()`, no va a stderr), que se
+dispara en el momento en que se llama al loader. Como
+`build_kernel_results()` calcula todo antes de que el wrapper imprima
+nada, ese aviso ahora sale al principio en vez de a mitad de
+ejecución -- mismo texto exacto, misma información, distinta posición
+en el stream. Verificado explícitamente: excluyendo esas dos líneas,
+el resto de la salida es idéntico carácter a carácter.
+
+What this does not authorize:
+
+-   No K1/K2/K3/K5/K6 -- siguen sin spec, sin código.
+-   No wiring a `run.py` ni `DecisionEngine`.
+-   No cambio a ningún gate, protocolo, ni a la separación Human
+    Approval / `min()` de gates (Sección 5, Constitución) -- Human
+    Approval sigue siendo un campo separado en
+    `KernelPatrimonioResult`, nunca combinado dentro de
+    `combined_posture`.
+
+Boundary:
+
+-   One file added: `engine/kernel.py` (`KernelMarketResult`,
+    `KernelPatrimonioResult`, `build_kernel_results()`).
+-   One file rewritten as a thin wrapper: `audit_posture.py` -- toda
+    su lógica de orquestación (RE-039.1 a RE-C) se movió a
+    `engine/kernel.py` sin cambiar una sola decisión; este archivo
+    ahora solo llama y imprime.
+-   No Frozen Core component touched -- ningún gate, protocolo, ni
+    loader modificado en su lógica (el `print()` del loader que causó
+    la reordenación ya existía, no se tocó).
+-   Verified by direct execution against real data: salida de
+    `python3 audit_posture.py` capturada antes y después del refactor;
+    diff exacto de solo dos líneas (el aviso reordenado, explicado
+    arriba); excluyendo esas dos líneas, cero diferencias. Full
+    `tests/verify_*.py` suite re-run: mismo único fallo preexistente
+    (`verify_research_engine.py`, orden, no valores), nada nuevo.
+
+------------------------------------------------------------------------
+
+## RE-DOC-006 — Constitución y Avance honesto sincronizados con el
+   estado real del dashboard
+
+Armando pidió un recap del estado del proyecto (2026-08-17). Al
+verificar directamente contra el repo, en vez de contra la memoria de
+la conversación, aparecieron dos huecos reales de documentación, no
+solo de estilo:
+
+-   `CONSTITUTION.md`, Sección 4 (tabla de módulos) y Sección 10
+    (Pendiente), seguían diciendo que "Dashboard" estaba **pendiente**
+    y que RE-DASH.1 estaba "listo para empezar en cuanto se retome" --
+    cuando en realidad el dashboard operativo llevaba hasta
+    RE-DASH.1.21, y el panorama histórico de Shiller (RE-SHILLER-
+    DASH.1 a .8, un panel completo, no una nota al margen) no aparecía
+    mencionado en ningún sitio de la Constitución.
+-   La tabla "Avance honesto" de este mismo documento tenía una única
+    fila de "Dashboard (RE-DASH.1)" congelada en el estado de
+    RE-DASH.1.12 -- desactualizada desde antes de que empezara la
+    mayor parte del trabajo de diseño de esta sesión.
+
+Corregido: Sección 4 y Sección 9 de `CONSTITUTION.md` reflejan ahora
+los dos dashboards como existentes (con qué cubre cada uno); Sección
+10 marca la categoría "Construible ya" como vacía explícitamente (no
+se borra sin más -- se dice que está vacía y por qué, siguiendo el
+mismo principio de esta tabla de no ocultar huecos); la tabla "Avance
+honesto" de abajo separa el dashboard operativo del panorama histórico
+en dos filas, cada una con su alcance real.
+
+What this does not authorize:
+
+-   No functional change anywhere -- pure documentation sync, zero
+    code touched.
+
+Boundary:
+
+-   Two files modified: `docs/CONSTITUTION.md` (Sección 4 tabla de
+    módulos, Sección 9 Entregables, Sección 10 Pendiente) and this
+    file (Avance honesto table).
+-   No Frozen Core component touched.
+-   Verified by direct inspection: `git log` confirms RE-DASH.1.21 and
+    RE-SHILLER-DASH.1-8 are committed and pushed; the previous
+    Constitution text was checked against that log before being
+    corrected, not assumed stale from memory.
+
+------------------------------------------------------------------------
+
 ## RE-SHILLER-DASH.8 — Panorama histórico: sección de CAPE, de cuatro
    párrafos a dos
 
@@ -12275,6 +12419,26 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.32
+
+-   RE-KERNEL.1: `engine/kernel.py` -- primer módulo real del Kernel,
+    extracción pura de `audit_posture.py` (K4/gobernanza ya
+    implementados: Evidence Quality, Regime Comparability, Personal
+    Capacity Facts, Human Approval, Dry Powder). K1/K2/K3/K5/K6 siguen
+    sin spec, deliberadamente. `audit_posture.py` pasa a ser un
+    wrapper fino. Verificado carácter a carácter contra la salida
+    anterior. Full details in the Design Decision entry above
+    (RE-KERNEL.1).
+
+## Version 2.31
+
+-   RE-DOC-006: `CONSTITUTION.md` sincronizada con el estado real del
+    dashboard -- ya no dice "pendiente" de algo que lleva construido y
+    committeado desde hace varias sesiones (RE-DASH.1.21, RE-SHILLER-
+    DASH.1-8). Tabla "Avance honesto" separa dashboard operativo y
+    panorama histórico en dos filas. Cero cambios funcionales. Full
+    details in the Design Decision entry above (RE-DOC-006).
 
 ## Version 2.30
 

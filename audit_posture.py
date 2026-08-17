@@ -47,56 +47,30 @@ si no la hay (mismo fail-closed de siempre, nunca se asume autorizacion
 por ausencia de dato). Ver engine/dry_powder_protocol.py (RE-C) para
 como se usa ese booleano una vez dentro.
 
+RE-KERNEL.1 -- este script deja de ser "el sitio donde vive la
+logica" y pasa a ser solo una vista. Toda la orquestacion que vivia
+aqui (RE-039.1 a RE-C) se extrajo tal cual, sin cambiar una sola
+decision, a engine/kernel.py::build_kernel_results() -- ese modulo es
+ahora la unica fuente de esta logica, importable desde cualquier otro
+sitio (dashboard, Reporting futuro) sin duplicarla ni hacer scraping
+de este stdout. Este archivo solo llama a esa funcion e imprime.
+Verificado: salida de `python3 audit_posture.py` idéntica carácter a
+carácter antes y después de este refactor (ver
+docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md, RE-KERNEL.1).
+
 Esto NO es el Capital Posture Engine -- no existe tal componente.
 Esto NO es una herramienta de decision -- es un dry-run de lectura, no
 esta conectado a run.py ni a DecisionEngine. El resultado es, en el
 mejor caso, tan permisivo o mas que la postura real -- nunca menos.
 """
 
-from engine.dry_powder_ledger_state import (
-    build_local_dry_powder_ledger_state,
-    to_dry_powder_protocol_inputs,
-)
-from engine.dry_powder_protocol import DryPowderProtocol
-from engine.evidence_quality_gate import (
-    EvidenceQualityGate,
-    GlobalModelValidationState,
-    PREDICTIVE_VALIDATION_NOT_DEMONSTRATED,
-    build_local_evidence_quality_inputs,
-)
-from engine.human_approval import HumanApprovalGate
-from engine.human_approval_state import build_local_human_approval_inputs
-from engine.personal_capacity_facts_gate import (
-    PersonalCapacityFactsGate,
-    build_local_personal_capacity_facts_inputs,
-)
-from engine.posture_mapper import evaluate_capital_posture
-from engine.regime_comparability_gate import (
-    RegimeComparabilityGate,
-    build_local_regime_comparability_inputs,
-)
-from engine.drawdown_engine import run_drawdown_engine
-from engine.research_engine import ResearchEngine
+from engine.evidence_quality_gate import PREDICTIVE_VALIDATION_NOT_DEMONSTRATED
+from engine.kernel import build_kernel_results
 
 
 def main() -> None:
 
-    dataset = run_drawdown_engine()
-    research = ResearchEngine().run(dataset)
-
-    eq_local = build_local_evidence_quality_inputs(research.evidence)
-    eq_result = EvidenceQualityGate().evaluate(
-        local=eq_local,
-        global_state=GlobalModelValidationState(
-            predictive_validation_status=PREDICTIVE_VALIDATION_NOT_DEMONSTRATED,
-        ),
-    )
-
-    regime_local = build_local_regime_comparability_inputs(
-        research.snapshot,
-        research.evidence,
-    )
-    regime_result = RegimeComparabilityGate().evaluate(regime_local)
+    market, by_patrimonio = build_kernel_results()
 
     print("=" * 70)
     print("SOP RESEARCH ENGINE")
@@ -112,37 +86,27 @@ def main() -> None:
     print(f"predictive_validation_status used: {PREDICTIVE_VALIDATION_NOT_DEMONSTRATED}")
     print("  (reflects RE-PRED.16's confirmed finding -- not automatic)")
     print()
-    print(f"Evidence Quality state: {eq_result.state}")
-    print(f"Evidence Quality explanations: {eq_result.explanations}")
+    print(f"Evidence Quality state: {market.evidence_quality_result.state}")
+    print(f"Evidence Quality explanations: {market.evidence_quality_result.explanations}")
     print()
-    print(f"Regime Comparability state: {regime_result.state}")
-    print(f"Regime Comparability explanations: {regime_result.explanations}")
+    print(f"Regime Comparability state: {market.regime_comparability_result.state}")
+    print(f"Regime Comparability explanations: {market.regime_comparability_result.explanations}")
 
-    personal_capacity_inputs = build_local_personal_capacity_facts_inputs()
-
-    if personal_capacity_inputs is None:
+    if by_patrimonio is None:
         print()
         print("Personal Capacity Facts: data/raw/personal_capacity_facts.xlsx")
         print("not found -- combined posture below excludes it, same as")
         print("before RE-043.1.")
-        combined = evaluate_capital_posture(eq_result, regime_result)
+        combined = market.combined_posture_without_personal_capacity
         print()
         print(f"COMBINED posture ceiling: {combined.posture_ceiling}")
         print(f"COMBINED explanations: {combined.explanations}")
         return
 
-    pc_gate = PersonalCapacityFactsGate()
+    for patrimonio_name, patrimonio in by_patrimonio.items():
 
-    ledger_states = build_local_dry_powder_ledger_state()
-    human_approval_inputs = build_local_human_approval_inputs()
-    human_approval_gate = HumanApprovalGate()
-
-    for patrimonio_name, pc_local in personal_capacity_inputs.items():
-
-        pc_result = pc_gate.evaluate(pc_local)
-        combined = evaluate_capital_posture(
-            eq_result, regime_result, pc_result
-        )
+        pc_result = patrimonio.personal_capacity_result
+        combined = patrimonio.combined_posture
 
         print()
         print("-" * 70)
@@ -156,21 +120,13 @@ def main() -> None:
         print(f"COMBINED explanations ({patrimonio_name}): {combined.explanations}")
 
         print()
-        ha_inputs = (
-            human_approval_inputs.get(patrimonio_name)
-            if human_approval_inputs
-            else None
-        )
-        # RE-C -- default fail-closed, same as before: absence of a
-        # Human Approval result never becomes an assumed authorization.
-        ha_result = None
-        if ha_inputs is None:
+        ha_result = patrimonio.human_approval_result
+        if ha_result is None:
             print(
                 f"Human Approval ({patrimonio_name}): "
                 "data/raw/human_approval_attestations.xlsx not found."
             )
         else:
-            ha_result = human_approval_gate.evaluate(ha_inputs)
             print(f"Human Approval state ({patrimonio_name}): {ha_result.state}")
             print(f"Human Approval blocked ({patrimonio_name}): {ha_result.blocked}")
             print(
@@ -196,9 +152,7 @@ def main() -> None:
                 "computed from the other."
             )
 
-        ledger_state = (
-            ledger_states.get(patrimonio_name) if ledger_states else None
-        )
+        ledger_state = patrimonio.dry_powder_ledger_state
 
         print()
         if ledger_state is None:
@@ -210,29 +164,14 @@ def main() -> None:
 
         print(f"Dry Powder Ledger state ({patrimonio_name}): {ledger_state}")
 
-        # RE-C -- wired for real: fail-closed default False if there is
-        # no Human Approval result at all for this patrimonio (file
-        # missing), never assumed True by absence of data.
-        human_approval_above_ceiling = (
-            ha_result.authorizes_dry_powder_ceiling_90
-            if ha_result is not None
-            else False
-        )
+        dp_result = patrimonio.dry_powder_result
 
-        dp_inputs = to_dry_powder_protocol_inputs(
-            ledger_state,
-            combined.posture_ceiling,
-            human_approval_above_ceiling=human_approval_above_ceiling,
-        )
-
-        if dp_inputs is None:
+        if dp_result is None:
             print(
                 f"Dry Powder Protocol ({patrimonio_name}): not evaluated "
                 f"-- {ledger_state.explanations}"
             )
             continue
-
-        dp_result = DryPowderProtocol().evaluate(dp_inputs)
 
         print(f"Dry Powder Protocol status ({patrimonio_name}): {dp_result.status}")
         print(
