@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.32\
+**Version:** 2.33\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,16 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-KERNEL.1 (2026-08-17). Nota RE-KERNEL.1: primer módulo real
+As of RE-PRED.17 (2026-08-17). Nota RE-PRED.17: "Similarity Engine v2"
+(citado como próximo hito) resultó tener dos problemas al verificarlo
+antes de diseñar -- la premisa estaba desactualizada (duración,
+velocidad, tendencia, volatilidad y ponderaciones ya existen en v1), y
+la evidencia ya reunida (RE-PRED.13-16, confirmada con bootstrap de
+clusters dependientes) argumenta en contra de "más dimensiones" como
+siguiente paso: aislar cada dimensión no recupera la correlación de
+rango positiva que sí tiene un heurístico trivial de mean-reversion.
+Decisión de Armando, presentada con tres opciones: dejarlo como está.
+Cero cambios de código. Nota RE-KERNEL.1: primer módulo real
 del Kernel (`engine/kernel.py`), extraído de `audit_posture.py` sin
 cambiar ninguna decisión -- solo los fragmentos K4/gobernanza ya
 implementados (Evidence Quality, Regime Comparability, Personal
@@ -8171,6 +8180,65 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-PRED.17 — Similarity Engine v2 (dimension enrichment): not
+   pursued, decision recorded
+
+Armando pidió avanzar a "Similarity Engine v2" tras RE-KERNEL.1, citado
+como "próximo hito" en la documentación de proyecto. Antes de proponer
+diseño, verificación directa contra el código real encontró dos cosas:
+
+1.  **La premisa estaba desactualizada.** Duración, velocidad,
+    tendencia previa (`pre_crash_return_3y`), volatilidad y
+    ponderaciones (`SIMILARITY_WEIGHTS`, `core/constants.py`) ya están
+    implementadas en `engine/similarity_engine.py` -- no son trabajo
+    pendiente. La nota de "próximo hito: enriquecer con nuevas
+    dimensiones" en `PROJECT_STATE.md` (ya retirado, Sección 9) estaba
+    desactualizada.
+2.  **La evidencia ya reunida argumenta en contra de "más dimensiones"
+    como próximo paso productivo.** `RE-PRED.13`-`RE-PRED.16` (ya
+    canónicas, confirmadas bajo runtime fijado, con bootstrap de
+    clusters dependientes, no solo estimaciones puntuales) encontraron:
+    el modelo combinado tiene rank correlation negativa (-0,26505)
+    contra los retornos reales a 5 años; un heurístico trivial de
+    mean-reversion (solo -drawdown, sin comparables) tiene rank
+    correlation positiva (+0,26316); esa brecha es real bajo
+    resampling dependence-aware, no ruido de muestra (RE-PRED.16,
+    intervalo del 90% `[-0,94270, -0,34208]`, enteramente negativo);
+    y aislar cada dimensión activa una a una (RE-PRED.14) no recupera
+    correlación positiva en ninguna -- descartando que sea un problema
+    de ponderación. La hipótesis de trabajo registrada, no autorizada
+    como hecho: el problema podría ser el propio mecanismo de vecino-
+    más-cercano-y-mediana, no las dimensiones que alimenta.
+
+Presentado a Armando explícitamente, con tres opciones (dejarlo como
+está; investigar el mecanismo de selección en vez de las dimensiones;
+añadir dimensiones de todas formas pese al hallazgo). Decisión:
+**dejarlo como está.** `SimilarityEngine` sigue siendo Frozen Core, sus
+limitaciones ya están honestamente reportadas (Evidence Quality Gate
+ya marca `predictive_validation_status` como `NOT_DEMONSTRATED`, per
+RE-PRED.16's confirmed finding), y no se añaden dimensiones que la
+evidencia ya reunida sugiere que no resolverían el problema real.
+
+What this does not authorize:
+
+-   No change to `SimilarityEngine`, `SIMILARITY_WEIGHTS`, or any
+    Frozen Core component -- esta iteración es puramente una decisión
+    documentada, cero código.
+-   No reopens RE-PRED.13-16's findings -- se citan, no se
+    reinterpretan.
+-   No closes the door permanently -- "investigar el mecanismo de
+    selección" queda registrado como la dirección con mejor
+    justificación evidencial si algún día se retoma, distinta de
+    "añadir dimensiones".
+
+Boundary:
+
+-   Documentation-only. No code changed.
+-   `docs/CONSTITUTION.md` Sección 10 actualizada para reflejar esta
+    decisión, no solo "baja prioridad, sin disparador".
+
+------------------------------------------------------------------------
+
 ## RE-KERNEL.1 — Kernel assembly layer: extracción de audit_posture.py
    a un módulo importable
 
@@ -12419,6 +12487,15 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.33
+
+-   RE-PRED.17: "Similarity Engine v2" (enriquecer con dimensiones) no
+    se persigue -- la premisa estaba desactualizada (dimensiones ya
+    implementadas en v1) y la evidencia ya reunida (RE-PRED.13-16)
+    argumenta en contra de esa dirección concreta. Decisión de Armando
+    tras presentarle el hallazgo. Documentation-only. Full details in
+    the Design Decision entry above (RE-PRED.17).
 
 ## Version 2.32
 

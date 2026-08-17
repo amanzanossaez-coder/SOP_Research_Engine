@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 2.2\
+**Versión:** 2.3\
 **Última actualización:** 2026-08-17
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -35,6 +35,12 @@
 > K1/K2/K3/K5/K6, que siguen sin spec. Ver Secciones 4, 5 y 9, y
 > `SOP_ENGINE_PROJECT_STATUS.md`, RE-KERNEL.1, para el detalle
 > completo y la verificación carácter a carácter.
+>
+> **v2.3 (2026-08-17)** registra RE-PRED.17: "Similarity Engine v2"
+> (enriquecer con dimensiones) verificado y descartado antes de
+> escribir código -- la premisa estaba desactualizada y la evidencia
+> ya reunida en `SOP_ENGINE_PROJECT_STATUS.md` (RE-PRED.13-16)
+> argumenta en contra. Ver Sección 10.
 
 Para el detalle técnico del Research Engine (motores, gates, tests,
 cada iteración con su justificación) sigue rigiendo
@@ -408,7 +414,7 @@ decisión.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v2.32 a fecha de este documento).
+(v2.33 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -497,7 +503,7 @@ interactividad — deliberado, ver Sección 4):
   proyecto. Auditada ese mismo día contra el código real: cinco
   violaciones encontradas y corregidas.
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v2.32.
+  Research Engine, v2.33.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 
@@ -556,10 +562,19 @@ esté esperando, solo ausencia de necesidad real para priorizarlo hoy.
   vistas), y **Reporting** (Sección 4) — sin diseño todavía.
 - **Rebalanceo** y **Protección** (Sección 6) — protocolos sin
   definir, ni siquiera como spec.
-- **Similarity Engine v2** del Research Engine (duración, velocidad,
-  tendencia previa, volatilidad, similitud multidimensional) — hito
-  técnico identificado en `SOP_ENGINE_PROJECT_STATUS.md`, actualmente
-  de baja prioridad.
+- **Similarity Engine — enriquecer con más dimensiones**: verificado y
+  descartado (RE-PRED.17, 2026-08-17), no solo "baja prioridad". Duración,
+  velocidad, tendencia previa, volatilidad y ponderaciones ya están
+  implementadas en v1. La evidencia ya reunida (RE-PRED.13-16,
+  confirmada con bootstrap de clusters dependientes) argumenta en
+  contra de añadir más dimensiones: el modelo pierde en rank
+  correlation frente a un heurístico trivial de mean-reversion, y
+  aislar cada dimensión activa una a una no recupera esa correlación
+  positiva en ninguna — no es un problema de ponderación. Dirección
+  con mejor justificación evidencial si se retoma algún día:
+  investigar el mecanismo de selección (vecino-más-cercano-y-mediana),
+  no las dimensiones — pregunta de investigación mayor, sin
+  disparador ni prioridad hoy.
 
 ### Fuera de alcance, deliberado, en todo el proyecto
 
