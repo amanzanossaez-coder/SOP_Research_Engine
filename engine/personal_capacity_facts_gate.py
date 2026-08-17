@@ -31,8 +31,17 @@ attested channel exists to guard against. Recording this taxonomy
 exists specifically so that, months from now, an OPERATOR_JUDGMENT
 boolean is never mistaken for a mechanically verified one.
 
-Still not wired into run.py, DecisionEngine or gate_combination.py.
-That integration remains explicit future work, not this iteration.
+RE-043.4 -- corrects a stale claim left over from this module's
+original RE-032.5 header: this gate has been wired into
+gate_combination.py since RE-040.1, via
+engine/posture_mapper.py::personal_capacity_facts_to_gate_input() and
+evaluate_capital_posture(), which translate a
+PersonalCapacityFactsGateResult into a GateCombinationInput and feed it
+into combine_gate_outputs()'s min() alongside Evidence Quality and
+Regime Comparability. RE-043.1 then wired real data into that path.
+audit_posture.py exercises this end-to-end on every run. Still not
+wired into run.py or DecisionEngine -- that remains explicit future
+work, not this iteration.
 """
 
 from dataclasses import dataclass, field
