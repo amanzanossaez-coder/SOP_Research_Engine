@@ -1,6 +1,6 @@
 # SOP — Sistema Operativo Patrimonial
 
-**Versión:** 2.3\
+**Versión:** 2.4\
 **Última actualización:** 2026-08-17
 
 > Este documento es la autoridad máxima del SOP. Sustituye a las
@@ -41,6 +41,13 @@
 > escribir código -- la premisa estaba desactualizada y la evidencia
 > ya reunida en `SOP_ENGINE_PROJECT_STATUS.md` (RE-PRED.13-16)
 > argumenta en contra. Ver Sección 10.
+>
+> **v2.4 (2026-08-17)** registra RE-SHILLER-DASH.9: ajuste de diseño
+> puramente visual en el panorama histórico de Shiller -- marca cada
+> episodio de caída desde 1900 con punto verde (máximo previo) y punto
+> rojo (fondo) sobre el precio real, más una flecha con la duración en
+> meses. Sin cambios de reglas ni de datos. Ver Sección 9 y
+> `SOP_ENGINE_PROJECT_STATUS.md`, RE-SHILLER-DASH.9.
 
 Para el detalle técnico del Research Engine (motores, gates, tests,
 cada iteración con su justificación) sigue rigiendo
@@ -311,7 +318,7 @@ sistema completo.
 | **Kernel** | Aplica las reglas de gobierno y determina si una decisión es válida (Sección 5) | Existe parcialmente — `engine/kernel.py` (RE-KERNEL.1) centraliza en un módulo importable los fragmentos K4/gobernanza ya implementados; K1/K2/K3/K5/K6 siguen sin spec ni código |
 | **Protocolos** | Definen cómo actuar ante situaciones concretas (Sección 6) | Existe parcialmente — Dry Powder y Human Approval operativos; Portfolio Reallocation, Rebalanceo y Protección pendientes |
 | **Research Engine** | Genera evidencia objetiva para apoyar las decisiones. No decide (Sección 7) | Existe — núcleo cerrado y auditado contra su propia constitución el 2026-08-14 |
-| **Dashboard** | Representa el estado del SOP. Nunca modifica el sistema. Su misión es informar | Existe — dos paneles estáticos de solo lectura: operativo (`generate_dashboard.py`, RE-DASH.1.21) y panorama histórico de Shiller (`generate_shiller_dashboard.py`, RE-SHILLER-DASH.8). Sin filtros, sin interactividad, deliberadamente fuera de alcance salvo necesidad real |
+| **Dashboard** | Representa el estado del SOP. Nunca modifica el sistema. Su misión es informar | Existe — dos paneles estáticos de solo lectura: operativo (`generate_dashboard.py`, RE-DASH.1.21) y panorama histórico de Shiller (`generate_shiller_dashboard.py`, RE-SHILLER-DASH.9). Sin filtros, sin interactividad, deliberadamente fuera de alcance salvo necesidad real |
 | **Reporting** | Documenta decisiones y evolución del sistema en el tiempo | Pendiente — sin diseño todavía |
 
 ------------------------------------------------------------------------
@@ -414,7 +421,7 @@ decisión.
 
 Estado técnico completo, motor a motor, con cada iteración justificada
 y cada test verificado: `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md`
-(v2.33 a fecha de este documento).
+(v2.34 a fecha de este documento).
 
 ------------------------------------------------------------------------
 
@@ -483,14 +490,17 @@ interactividad — deliberado, ver Sección 4):
   operativo (RE-DASH.1 a RE-DASH.1.21): estado por patrimonio,
   liquidez, Dry Powder, Human Approval, alertas y datos de mercado.
 - `generate_shiller_dashboard.py` → `outputs/shiller_dashboard.html`
-  (RE-SHILLER-DASH.1 a RE-SHILLER-DASH.8) — panorama histórico
+  (RE-SHILLER-DASH.1 a RE-SHILLER-DASH.9) — panorama histórico
   diagnóstico sobre la serie completa de Shiller (1871-2026): resumen
   ejecutivo, indicadores con semáforo, gráficas de precio/CAPE/
   inflación/tipos con episodios de caída sombreados, resumen agregado
   de drawdowns con los peores episodios nombrados, y retornos reales
-  posteriores según nivel de CAPE inicial. Explícitamente no dice si
-  comprar o vender ni evalúa gates — esa lectura sigue viviendo solo en
-  el dashboard operativo.
+  posteriores según nivel de CAPE inicial. La gráfica de precio marca
+  además, para cada episodio desde 1900, el máximo previo (punto
+  verde) y el fondo (punto rojo) con la duración en meses entre ambos
+  (RE-SHILLER-DASH.9). Explícitamente no dice si comprar o vender ni
+  evalúa gates — esa lectura sigue viviendo solo en el dashboard
+  operativo.
 
 **Tests:** suite `tests/verify_*.py`, re-ejecutada en cada iteración.
 
@@ -503,7 +513,7 @@ interactividad — deliberado, ver Sección 4):
   proyecto. Auditada ese mismo día contra el código real: cinco
   violaciones encontradas y corregidas.
 - `docs/GOVERNANCE/SOP_ENGINE_PROJECT_STATUS.md` — estado técnico del
-  Research Engine, v2.33.
+  Research Engine, v2.34.
 - `docs/MANUAL_OPERATIVO.md` / `.docx` — manual de uso diario (Dry
   Powder Protocol y Human Approval); Word e idéntico en contenido.
 
@@ -519,7 +529,7 @@ sin que nadie lo decida a propósito.
 
 - Nada en esta categoría ahora mismo. RE-DASH.1 (dashboard operativo,
   hasta RE-DASH.1.21) y su ampliación con el panorama histórico de
-  Shiller (RE-SHILLER-DASH.1 a .8) se completaron en agosto 2026 — ver
+  Shiller (RE-SHILLER-DASH.1 a .9) se completaron en agosto 2026 — ver
   Sección 9. Próximo candidato real para esta categoría, si se decide
   priorizarlo: Portfolio Reallocation Protocol, una vez resueltas sus
   preguntas de diseño abiertas más abajo.

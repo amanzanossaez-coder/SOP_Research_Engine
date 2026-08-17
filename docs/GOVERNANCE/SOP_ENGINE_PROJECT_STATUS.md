@@ -1,6 +1,6 @@
 # SOP ENGINE PROJECT STATUS
 
-**Version:** 2.33\
+**Version:** 2.34\
 **Status:** Core Stable — Evidence Layer Aligned
 
 ------------------------------------------------------------------------
@@ -17,7 +17,18 @@ and "operationally usable today" are tracked as different numbers on
 purpose; collapsing them into one blended percentage would flatter the
 system's actual readiness.
 
-As of RE-PRED.17 (2026-08-17). Nota RE-PRED.17: "Similarity Engine v2"
+As of RE-SHILLER-DASH.9 (2026-08-17). Nota RE-SHILLER-DASH.9: ajuste
+visual puro en el panorama histórico de Shiller -- marca punto verde
+(máximo previo) y punto rojo (fondo) sobre el precio real, más flecha
+con la duración en meses, para los 20 episodios de caída desde 1900.
+Verificado por inspección directa de la imagen renderizada, no
+asumido: una primera versión con altura fija de flecha produjo texto
+solapado e ilegible en dos clusters densos (1956-1970, 2018-2025);
+corregido agrupando episodios en clusters reales (hueco >= 6 años los
+separa) y repartiendo cada cluster en alturas espaciadas según su
+propio tamaño. Cero cambios de datos, detección de episodios o reglas
+de decisión -- solo cómo se dibuja lo que ya se sombreaba. Nota
+RE-PRED.17: "Similarity Engine v2"
 (citado como próximo hito) resultó tener dos problemas al verificarlo
 antes de diseñar -- la premisa estaba desactualizada (duración,
 velocidad, tendencia, volatilidad y ponderaciones ya existen en v1), y
@@ -169,7 +180,7 @@ de esta tabla:
 | Human Approval especificación | 50% |
 | Human Approval operativo real | 85-90% (demostrado end-to-end en audit_posture.py como prerrequisito independiente; autorización extraordinaria del 90% completa de punta a punta -- RE-032.10 B+C; primera atestación real cargada en ambos patrimonios 2026-08-13 -- AMS Deploy Aggressively bajo cooling-off de 14 días hasta 2026-08-27, AML Conserve vigente de inmediato al no ser subida de tolerancia respecto al suelo implícito; todavía sin wiring a run.py, deliberado) |
 | Dashboard operativo (RE-DASH.1.21) | 100% del alcance actual (estático, solo lectura; liquidez como tarjeta por patrimonio, Dry Powder, Human Approval, alertas, datos de mercado); sin filtros, sin gráficos interactivos -- deliberadamente fuera de alcance salvo que un uso real lo justifique |
-| Panorama histórico Shiller (RE-SHILLER-DASH.8) | 100% del alcance actual (estático, solo lectura, gráficas 1871-2026 + resumen ejecutivo, indicadores con semáforo, drawdowns históricos con episodios nombrados, retornos reales por nivel de CAPE); explícitamente no evalúa gates ni propone postura -- esa lectura sigue solo en el dashboard operativo |
+| Panorama histórico Shiller (RE-SHILLER-DASH.9) | 100% del alcance actual (estático, solo lectura, gráficas 1871-2026 + resumen ejecutivo, indicadores con semáforo, drawdowns históricos con episodios nombrados, retornos reales por nivel de CAPE, marcadores de pico/fondo + duración en la gráfica de precio); explícitamente no evalúa gates ni propone postura -- esa lectura sigue solo en el dashboard operativo |
 | Kernel -- fragmentos existentes unificados (RE-KERNEL.1) | 100% de la extracción (K4/gobernanza ya implementados, ahora en un módulo importable, `audit_posture.py` como wrapper fino verificado idéntico); 0% de K1/K2/K3/K5/K6 -- sin spec, sin código, no es el Kernel constitucional completo |
 
 Hoy, por primera vez, los nueve hechos verificables de un patrimonio
@@ -8180,6 +8191,71 @@ Boundary:
 
 ------------------------------------------------------------------------
 
+## RE-SHILLER-DASH.9 — S&P 500 chart: peak/bottom markers + duration
+   arrow per episode (1900+)
+
+Armando: "en el gráfico de SP500 marques con un punto verde el máximo
+previo a la caída y con punto rojo el máximo punto de drawdown y abajo
+en forma de flecha el número de meses que separan ambos." Scope
+question (3 named episodes vs. all 23) put to Armando via
+AskUserQuestion was rejected by the tool UI itself; he answered
+directly in plain text instead: "los correspondientes al siglo XX y al
+XXI" -- i.e. every episode with `peak_date >= NOTABLE_DRAWDOWN_MIN_YEAR`
+(1900, the same cutoff RE-SHILLER-DASH.7 already established), not
+only the 3 named ones. 20 of the 23 total episodes qualify.
+
+**Real trap found and avoided before writing any plotting code:**
+`Episode.peak_price`/`bottom_price` (`drawdown_engine.py`) are computed
+on the raw NOMINAL `"P"` column (RE-SHILLER-DASH.2's finding), but
+`chart_price()` plots the REAL `"Price"` column. Verified concretely:
+for the 1872 episode, nominal `peak_price=5.18` vs. real `Price` at
+that exact date `=132.83` -- roughly a 25x gap. Using the Episode
+fields directly would have placed every dot at the wrong height by
+roughly an order of magnitude. Fixed with `_price_at_date(df, date)`,
+an exact-date lookup into `df["Price"]` -- confirmed to return exactly
+one row for both `peak_date` and `bottom_date` across all 20
+qualifying episodes before this was relied on (no silent
+nearest-date fallback, since none was needed).
+
+**Visual clutter, found by looking at the rendered image, not
+assumed.** First version: fixed arrow height for every episode. Result
+(inspected directly, cropped and zoomed the actual PNG): three tight
+clusters produced overlapping, unreadable text -- 1956-1970 (5
+episodes in 14 years) and especially 2018-2025 (4 short episodes --
+3m/2m/10m/2m -- packed inside 7 years). Second attempt: a 3-tier cycle
+advancing height whenever the gap to the previous episode's peak_date
+was under 6 years. Fixed 1956-1970; still left 2018-2025 overlapping
+(4 close episodes need 4 distinct heights, and consecutive-gap cycling
+with only 3 tiers can wrap two nearby episodes back onto the same
+height). Final fix: proper cluster grouping (a new cluster starts on
+any gap >= `CLUSTER_GAP_YEARS`, 6 years) with each cluster's episodes
+spread evenly across a full height band (`ARROW_HEIGHT_MAX_TIER=0.82`
+to `ARROW_HEIGHT_MIN_TIER=0.32`) sized to that cluster's own episode
+count -- a lone episode gets the top tier, a 4-episode cluster spreads
+across all 4 slots. Re-rendered, re-cropped, re-inspected: both
+previously-cluttered clusters read cleanly, nothing else regressed.
+
+**Color choices:** green (`#2f8f4e`) reuses the same green as
+`.dot.ok` elsewhere in this dashboard's own color language (visual
+family consistency, not a new palette). Red for the bottom dot reuses
+`COLOR_DRAWDOWN` (`#c23b3b`) -- the same red already shading the
+drawdown phase underneath, so the dot reads as "the same event" as the
+band, not an unrelated second red.
+
+**Scope discipline:** only `chart_price()` (the S&P 500 chart) was
+touched, per "en el gráfico de SP500" read literally -- `chart_series()`
+(CAPE/inflación/tipo) is untouched. No change to episode detection,
+`drawdown_engine.py`, or any data/decision logic -- purely how the
+already-shaded episodes are annotated on one chart.
+
+**Verification:** `git status` confirmed only `generate_shiller_dashboard.py`
+touched. Full `tests/verify_*.py` suite re-run: same four pre-existing
+failures (unpinned pandas/numpy runtime in this sandbox -- RE-025.5's
+known gap, not caused by this change), nothing new -- confirmed by the
+git-status check that no engine file was modified.
+
+------------------------------------------------------------------------
+
 ## RE-PRED.17 — Similarity Engine v2 (dimension enrichment): not
    pursued, decision recorded
 
@@ -12487,6 +12563,19 @@ to Assessment / SOP governance, not Evidence.
 ------------------------------------------------------------------------
 
 # Changelog
+
+## Version 2.34
+
+-   RE-SHILLER-DASH.9: gráfica de precio del panorama histórico de
+    Shiller marca punto verde (máximo previo) y punto rojo (fondo) más
+    flecha con duración en meses, para los 20 episodios desde 1900.
+    Trampa nominal-vs-real detectada y evitada antes de dibujar nada.
+    Solapamiento de texto en dos clusters densos, detectado por
+    inspección directa de la imagen renderizada (no asumido) y
+    corregido con agrupación en clusters reales + reparto de altura
+    proporcional al tamaño de cada cluster. Cero cambios de datos o
+    reglas -- solo cómo se anota lo ya sombreado. Full details in the
+    Design Decision entry above (RE-SHILLER-DASH.9).
 
 ## Version 2.33
 

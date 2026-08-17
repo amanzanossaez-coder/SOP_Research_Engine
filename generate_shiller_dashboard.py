@@ -189,6 +189,38 @@ page (the N column still exposes sample size per row) -- still on
 record in governance if needed again, just not fighting for space on
 the dashboard itself.
 
+RE-SHILLER-DASH.9 (2026-08-17) -- Armando: "en el grafico de SP500
+marques con un punto verde el maximo previo a la caida y con punto
+rojo el maximo punto de drawdown y abajo en forma de flecha el numero
+de meses que separan ambos." Scope confirmed directly (after an
+AskUserQuestion on "3 named episodes vs all 23" was rejected): "los
+correspondientes al siglo XX y al XXI" -- i.e. every episode with
+peak_date >= NOTABLE_DRAWDOWN_MIN_YEAR (the same 1900 cutoff
+RE-SHILLER-DASH.7 already established), not only the 3 named ones. 20
+of the 23 total episodes qualify.
+
+Real trap found and avoided before writing any plotting code:
+Episode.peak_price/bottom_price (drawdown_engine.py) are computed on
+the raw NOMINAL "P" column (see RE-SHILLER-DASH.2's finding above),
+but chart_price() plots the REAL "Price" column. Using
+episode.peak_price/bottom_price directly would have placed every dot
+at the wrong height by roughly an order of magnitude (verified
+concretely: 1872 episode, nominal peak_price=5.18 vs real Price at
+that exact date=132.83). Fixed with _price_at_date(), an exact-date
+lookup into df["Price"] -- verified to return exactly one row for both
+peak_date and bottom_date across all 20 qualifying episodes before
+this was relied on.
+
+Green dot = peak_price (real) at peak_date. Red dot = bottom_price
+(real) at bottom_date -- reuses COLOR_DRAWDOWN, the same red already
+used for the drawdown-phase shading, so the red dot reads as "the same
+event" as the shaded band underneath it, not a second, unrelated red.
+Double-headed arrow + "Nm" label between the two dates, positioned
+below the lower of the two points so it doesn't cross the price line
+itself. This only touches chart_price() (the S&P 500 chart) -- not
+chart_series() (CAPE/inflación/tipo), per "en el gráfico de SP500"
+read literally.
+
 Read-only, single command, no server:
 
     python3 generate_shiller_dashboard.py
@@ -290,6 +322,7 @@ COLOR_DRAWDOWN = "#c23b3b"   # same red as .dot.bad -- caída
 COLOR_RECOVERY = "#96650f"  # same ochre as .dot.warn -- recuperación
 COLOR_MEAN = "#999999"
 COLOR_TODAY = "#1a1a1a"
+COLOR_PEAK = "#2f8f4e"  # same green as .dot.ok -- RE-SHILLER-DASH.9, peak-before-drawdown marker
 
 
 def _reading_magnitude_color(short_label: str) -> str:
@@ -400,16 +433,163 @@ def _shade_episodes(ax, episodes) -> None:
             ax.axvspan(ep.bottom_date, ep.recovery_date, color=COLOR_RECOVERY, alpha=0.08, linewidth=0, zorder=1)
 
 
+def _price_at_date(df, date):
+    """
+    RE-SHILLER-DASH.9 -- exact-date lookup of the REAL "Price" column
+    (same series chart_price() plots), not episode.peak_price/
+    bottom_price (nominal -- see module docstring's RE-SHILLER-DASH.2
+    finding). Verified before use: returns exactly one row for both
+    peak_date and bottom_date across all 20 qualifying episodes -- no
+    silent fallback to a nearest-date match, since none was needed.
+    Returns None (fail-visible, not a guessed value) if a future data
+    refresh ever removes the exact date this wasn't the case for.
+    """
+    rows = df[df["Date"] == date]
+    if len(rows) == 0:
+        return None
+    return rows.iloc[0]["Price"]
+
+
+# RE-SHILLER-DASH.9 -- verified by rendering and looking at the actual
+# image, not assumed: a first version (fixed arrow height for every
+# episode) produced unreadable overlapping labels in three tight
+# clusters. A second version (3-tier cycle, any gap < CLUSTER_GAP_YEARS
+# advances one tier) fixed 1956-1970 but still left 2018-2025 (four
+# short episodes -- 3m/2m/10m/2m -- inside 7 years) with overlapping
+# text, visually confirmed by cropping and zooming that region of the
+# rendered PNG. Root cause: 4 close episodes need 4 distinct heights,
+# not 3, and consecutive-gap cycling can wrap two nearby episodes back
+# onto the same tier. Fixed by grouping into true clusters first
+# (break on any gap >= CLUSTER_GAP_YEARS) and spacing each cluster's
+# own episodes evenly across the full height band, sized to that
+# cluster -- a lone episode gets the least-intrusive top tier, a
+# 4-episode cluster gets 4 tiers spread across the whole band, not 3
+# tiers cycled.
+CLUSTER_GAP_YEARS = 6.0
+ARROW_HEIGHT_MAX_TIER = 0.82  # closest to the price line -- lone/first-in-cluster episodes
+ARROW_HEIGHT_MIN_TIER = 0.32  # furthest from the price line -- last slot in the most crowded cluster
+ARROW_HEIGHT_MAX_TIERS = 6    # cycles if a cluster somehow exceeds this
+
+
+def _cluster_height_tiers(episodes) -> dict:
+    """
+    Groups chronologically-sorted `episodes` into clusters (new cluster
+    starts whenever the gap to the previous episode's peak_date is >=
+    CLUSTER_GAP_YEARS), then assigns each episode in a cluster an
+    evenly-spaced arrow-height multiplier between ARROW_HEIGHT_MAX_TIER
+    and ARROW_HEIGHT_MIN_TIER, sized to that cluster's own episode
+    count -- a lone episode always gets ARROW_HEIGHT_MAX_TIER; a
+    5-episode cluster spreads across all 5 slots in the band.
+    """
+    clusters = []
+    current = []
+    previous_peak_date = None
+
+    for ep in episodes:
+        if previous_peak_date is not None and (ep.peak_date - previous_peak_date) < CLUSTER_GAP_YEARS:
+            current.append(ep)
+        else:
+            if current:
+                clusters.append(current)
+            current = [ep]
+        previous_peak_date = ep.peak_date
+
+    if current:
+        clusters.append(current)
+
+    heights = {}
+    for cluster in clusters:
+        n = len(cluster)
+        for i, ep in enumerate(cluster):
+            slot = i % ARROW_HEIGHT_MAX_TIERS
+            slots = min(n, ARROW_HEIGHT_MAX_TIERS)
+            if slots == 1:
+                multiplier = ARROW_HEIGHT_MAX_TIER
+            else:
+                step = (ARROW_HEIGHT_MAX_TIER - ARROW_HEIGHT_MIN_TIER) / (slots - 1)
+                multiplier = ARROW_HEIGHT_MAX_TIER - step * slot
+            heights[id(ep)] = multiplier
+
+    return heights
+
+
+def _annotate_episode_markers(ax, df, episodes) -> None:
+    """
+    RE-SHILLER-DASH.9 -- Armando: "marques con un punto verde el maximo
+    previo a la caida y con punto rojo el maximo punto de drawdown y
+    abajo en forma de flecha el numero de meses que separan ambos."
+    Scope confirmed directly: "los correspondientes al siglo XX y al
+    XXI" -- reuses NOTABLE_DRAWDOWN_MIN_YEAR (1900, RE-SHILLER-DASH.7),
+    not a second cutoff constant for the same concept.
+
+    Green dot: peak_price (real, via _price_at_date -- NOT
+    episode.peak_price, which is nominal). Red dot: bottom_price (real),
+    reusing COLOR_DRAWDOWN so it reads as the same event as the shaded
+    drawdown band already under it, not a second unrelated red. Arrow +
+    "Nm" label sit below the lower of the two points (a fixed log-scale
+    fraction of whichever of the two prices is lower, not a fixed data
+    offset, so it stays proportionally clear of the price line at both
+    1900-era and modern price levels) -- duration_months is Episode's
+    own already-computed field, nothing recalculated here.
+
+    Height per episode comes from _cluster_height_tiers() -- see its
+    docstring and the module-level comment above it for why this is
+    cluster-sized, not a fixed-length cycle.
+    """
+    qualifying = sorted(
+        (ep for ep in episodes if ep.peak_date >= NOTABLE_DRAWDOWN_MIN_YEAR),
+        key=lambda ep: ep.peak_date,
+    )
+    height_multipliers = _cluster_height_tiers(qualifying)
+
+    for ep in qualifying:
+        peak_price = _price_at_date(df, ep.peak_date)
+        bottom_price = _price_at_date(df, ep.bottom_date)
+        if peak_price is None or bottom_price is None:
+            continue
+
+        ax.scatter([ep.peak_date], [peak_price], color=COLOR_PEAK, s=18, zorder=6, edgecolor="white", linewidth=0.4)
+        ax.scatter([ep.bottom_date], [bottom_price], color=COLOR_DRAWDOWN, s=18, zorder=6, edgecolor="white", linewidth=0.4)
+
+        if ep.duration_months is None:
+            continue
+
+        arrow_y = min(peak_price, bottom_price) * height_multipliers[id(ep)]
+        ax.annotate(
+            "",
+            xy=(ep.bottom_date, arrow_y),
+            xytext=(ep.peak_date, arrow_y),
+            arrowprops=dict(arrowstyle="<->", color=COLOR_MEAN, linewidth=0.7, shrinkA=0, shrinkB=0),
+            zorder=5,
+        )
+        ax.annotate(
+            f"{ep.duration_months}m",
+            xy=((ep.peak_date + ep.bottom_date) / 2, arrow_y * 0.90),
+            fontsize=5.6,
+            color="#666666",
+            ha="center",
+            va="top",
+            fontfamily="DejaVu Sans",
+            zorder=5,
+        )
+
+
 def chart_price(df, episodes, latest_label: str) -> str:
     """
     RE-SHILLER-DASH.2 -- plots "Price" (real, inflation-adjusted, no
     dividends), not "P" (raw nominal) as v1 mistakenly labeled and
     used. See module docstring for the verification behind this.
+
+    RE-SHILLER-DASH.9 -- adds peak/bottom dots + duration arrow for
+    every episode from 1900 on, via _annotate_episode_markers(). Drawn
+    after _shade_episodes() so the dots/arrows sit on top of the
+    shading, not under it.
     """
     fig, ax = plt.subplots(figsize=(9.2, 3.3))
     _shade_episodes(ax, episodes)
     ax.plot(df["Date"], df["Price"], color=COLOR_LINE, linewidth=1.1, zorder=3)
     ax.set_yscale("log")
+    _annotate_episode_markers(ax, df, episodes)
     latest = df.iloc[-1]
     ax.scatter([latest["Date"]], [latest["Price"]], color=COLOR_TODAY, s=22, zorder=4)
     _annotate_latest(ax, latest["Date"], latest["Price"], latest_label)
@@ -945,9 +1125,12 @@ def render_html(data: dict) -> str:
   <p class="legend">
     <span class="sw" style="background:{COLOR_DRAWDOWN};opacity:.4"></span>Fase de caída (pico -&gt; fondo)
     &nbsp;&nbsp;<span class="sw" style="background:{COLOR_RECOVERY};opacity:.4"></span>Fase de recuperación (fondo -&gt; recuperación)
+    &nbsp;&nbsp;<span class="sw" style="background:{COLOR_PEAK}"></span>Máximo previo a la caída
+    &nbsp;&nbsp;<span class="sw" style="background:{COLOR_DRAWDOWN}"></span>Punto de máximo drawdown
     &nbsp;&nbsp;<span class="sw" style="background:{COLOR_TODAY}"></span>Hoy
   </p>
   <p class="note">Precio real (ajustado por inflación), sin dividendos reinvertidos, escala logarítmica -- necesaria para que un siglo y medio de crecimiento compuesto quepa en una sola gráfica legible. Las {data['n_episodes']} zonas sombreadas son los episodios que run_drawdown_engine() detecta en toda la serie, los mismos que usa el resto del sistema -- no una segunda detección. Nota técnica: la detección de episodios en sí (fechas de pico/fondo/recuperación, % de caída) se calcula sobre el precio nominal, sin ajustar por inflación -- esta gráfica solo cambia qué línea de precio se dibuja, no cómo se detectan los episodios.</p>
+  <p class="note">Puntos verde/rojo + número de meses: máximo previo y punto de máximo drawdown, con la duración pico -&gt; fondo entre ambos, para los episodios del siglo XX y XXI (desde 1900 -- mismo criterio que "Los peores episodios, con nombre" más abajo).</p>
   <p class="note">Último dato disponible: {fecha} -- {_fmt_num(data['latest_price_real'], 0)}.</p>
 </section>
 
